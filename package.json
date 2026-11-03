@@ -6,7 +6,8 @@
   "scripts": {
     "build:overlay": "esbuild src/renderer/js/renderer.js --bundle --outfile=src/renderer/js/bundle.js --format=iife --target=chrome128 --minify --legal-comments=none",
     "build:control": "esbuild src/control/control.js --bundle --outfile=src/control/control.bundle.js --format=iife --target=chrome120 --minify --legal-comments=none",
-    "build": "npm run build:overlay && npm run build:control",
+    "build:native:mac": "mkdir -p bin && clang -O2 -fobjc-arc -framework Foundation -framework AppKit -framework ApplicationServices src/native/macos/NotificationInterceptor.m -o bin/macos-interceptor",
+    "build": "npm run build:native:mac && npm run build:overlay && npm run build:control",
     "start": "npm run build && electron .",
     "dev": "npm run build && electron . --inspect",
     "test": "node --test test/*.test.js test/*.test.mjs",
@@ -40,12 +41,16 @@
     "productName": "Cute Pet Companion",
     "files": [
       "src/**/*",
+      "bin/**/*",
       "!src/renderer/legacy/**",
       "!src/renderer/vendor/**",
       "assets/**/*",
       "package.json"
     ],
     "asar": true,
+    "asarUnpack": [
+      "bin/**/*"
+    ],
     "mac": {
       "target": [
         {

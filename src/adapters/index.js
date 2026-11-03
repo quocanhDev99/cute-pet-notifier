@@ -9,6 +9,7 @@ const { CalendarAdapter } = require('./calendar-adapter');
 const { SlackAdapter } = require('./slack-adapter');
 const { GatewayAdapter } = require('./gateway-adapter');
 const { MacNotificationCenterAdapter } = require('./macos-nc-adapter');
+const { WindowsNotificationAdapter } = require('./windows-nc-adapter');
 const { SystemEventsAdapter, WebhookAdapter, unsupportedAdapters } = require('./system-adapters');
 const { STATUS } = require('./base-adapter');
 
@@ -19,6 +20,7 @@ class AdapterHub extends EventEmitter {
     this.list = [
       new WebhookAdapter(ctx, port),
       new MacNotificationCenterAdapter(ctx, platform),
+      new WindowsNotificationAdapter(ctx, platform),
       new SystemEventsAdapter(ctx, powerMonitor),
       new GitHubAdapter(ctx),
       new CalendarAdapter(ctx),

@@ -134,13 +134,6 @@ class UnsupportedAdapter extends ApplicationAdapter {
 function unsupportedAdapters(ctx, platform) {
   return [
     new UnsupportedAdapter(ctx, {
-      id: 'windows_toast', name: 'Windows Toast Listener', icon: '🪟',
-      description: 'Đọc Windows Toast qua UserNotificationListener (WinRT).',
-      reason: platform === 'win32'
-        ? 'UserNotificationListener yêu cầu app được đóng gói MSIX với capability "userNotificationListener". Sẽ khả dụng ở bản cài đặt MSIX (Phase 7).'
-        : 'Chỉ có trên Windows 10/11.'
-    }),
-    new UnsupportedAdapter(ctx, {
       id: 'gmail', name: 'Gmail', icon: '✉️',
       description: 'Thư mới trong Gmail.',
       reason: 'Kết nối trực tiếp chưa triển khai: Gmail push cần Google Cloud Pub/Sub + public HTTPS + History API. Thay thế: trigger Gmail của Composio qua Cloud Gateway — lưu ý đó là POLLING (Composio managed OAuth tối thiểu 15 phút), sẽ được gắn nhãn near_realtime_poll, không phải realtime.'

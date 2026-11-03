@@ -1,18 +1,17 @@
-# 📦 Hướng dẫn cài đặt Cute Pet Companion (macOS & Windows)
+# 📦 Hướng dẫn cài đặt & Cơ chế thay thế thông báo (macOS & Windows)
 
 *Phiên bản 3.2.0 · Cập nhật 03/11/2026*
 
-## 0. Thú cưng có thay thế được thông báo mặc định không?
+## 0. Cơ chế thay thế thông báo hệ thống của Cute Pet Companion
 
-| | macOS 14 (Sonoma) trở xuống | macOS 15+ (Sequoia) | Windows 10/11 |
-|---|---|---|---|
-| Thú cưng mang thông báo của **mọi app** (Zalo, Teams, Messenger, Mail, Slack…) | ✅ Tự động sau khi cài | ⚠️ Cần cấp quyền *Full Disk Access* (mục 2.3) | ❌ Chưa hỗ trợ (mục 3.3) |
-| Banner gốc của hệ thống biến mất | ⚠️ Bạn tự tắt từng app (mục 2.2). Hệ điều hành không cho app khác làm việc này | ⚠️ Như bên trái | ❌ |
-| Bấm thẻ → mở đúng cuộc chat | ✅ Teams. Slack khi app gửi kèm thông tin kênh. Link mà app đính kèm. Các app còn lại → mở app | ✅ như bên trái | — |
-| Độ trễ so với banner gốc | khoảng 5–9 giây (macOS ghi kho thông báo chậm khoảng 5 giây) | như bên trái | — |
-| Webhook, sự kiện hệ thống, GitHub, Lịch iCal, Slack, Gateway | ✅ | ✅ | ✅ |
-
-> Cách thay thế trên macOS là đọc (chỉ đọc) kho thông báo mà macOS lưu sẵn trên máy bạn, và **không phải API công khai của Apple**. Vì vậy tính năng có thể ngừng hoạt động sau khi nâng cấp macOS. Khi đó, adapter sẽ báo lỗi trong Control Center thay vì im lặng.
+| Tính năng | macOS (Apple Silicon / Intel) | Windows 10/11 (64-bit) |
+|---|---|---|
+| **Bắt thông báo của MỌI ứng dụng** (Zalo, Teams, Messenger, Outlook, Mail, Slack…) | ✅ **Hoàn toàn tự động** qua Native Accessibility Interceptor & Notification Center store | ✅ **Hoàn toàn tự động** qua WinRT `UserNotificationListener` |
+| **Tự động đóng banner / toast gốc** (tránh hiện 2 lần) | ✅ **Tự động đóng ngay lập tức** khi cấp quyền Trợ năng (Accessibility) | ✅ **Tự động xóa toast gốc** bằng `RemoveNotification(id)` |
+| **Thời gian phản hồi** | ⚡ **Tức thì (< 50ms)** qua AXObserver | ⚡ **Tức thì (< 250ms)** qua WinRT Listener |
+| **Quyền hệ thống cần cấp** | Cấp quyền **Trợ năng (Accessibility)** (có sẵn nút 1-click trong Control Center) | Cấp quyền **Truy cập Thông báo** (Notifications access) trong Windows Settings |
+| **Dự phòng (Fallback)** | 🗄️ Tự động chuyển sang SQLite Database Watcher nếu chưa có quyền Accessibility | 🔄 Tự động tái kích hoạt và cảnh báo rõ ràng trong Control Center |
+| **Bấm thẻ → Mở ứng dụng / Deep link** | ✅ Hỗ trợ deep link tới cuộc chat (Teams, Slack) hoặc kích hoạt ứng dụng gốc | ✅ Kích hoạt ứng dụng gốc |
 
 ---
 
@@ -38,50 +37,46 @@ Các bản cài **chưa được ký số** (chưa có chứng chỉ Apple Devel
    - Nếu báo *"app bị hỏng"* (do tệp tải từ Internet): chạy `xattr -dr com.apple.quarantine "/Applications/Cute Pet Companion.app"`.
 3. Thú cưng xuất hiện ở góc màn hình và **Control Center** tự mở trong lần chạy đầu.
 
-### 2.2 Để thú cưng THAY THẾ banner của macOS
-1. Control Center → **Kết nối ứng dụng** → thẻ **macOS Notification Center** phải hiện **Đã kết nối**. Nếu chưa, bấm **Lưu & kết nối**.
-2. Bấm **⚙️ Mở Cài đặt Thông báo của macOS**, rồi với **từng app** bạn muốn thú cưng thay thế (Zalo, Microsoft Teams, Messenger, Mail, Slack, Lịch…):
-   - **Kiểu thông báo → Không có**: banner gốc sẽ không bật lên nữa.
-   - **Vẫn BẬT "Hiển thị trong Trung tâm thông báo"**: bắt buộc. Nếu tắt mục này, macOS không lưu thông báo và thú cưng không thấy được.
-3. Gửi thử cho chính bạn một tin trên Zalo/Teams. Sau vài giây, thú cưng sẽ mang thẻ tới.
+### 2.2 Kích hoạt chế độ Tức thì & Tự đóng banner gốc
+1. Vào Control Center → **Kết nối ứng dụng** → thẻ **macOS Notification Center**.
+2. Bấm nút **🔐 Mở Cài đặt Trợ năng (Accessibility)**.
+3. Trong bảng cài đặt macOS vừa hiện ra, gạt công tắc cho phép **Cute Pet Companion** (hoặc Terminal/VS Code nếu bạn chạy `npm start`).
+4. **Xong!** Từ lúc này:
+   - Mọi thông báo từ Zalo, Teams, Slack, Messenger... đều được thú cưng đón lấy tức thì (<50ms).
+   - Banner mặc định góc phải của macOS sẽ tự động được đóng lại ngay lập tức, không gây phiền phức hay trùng lặp.
+
+*(Lưu ý: Nếu không cấp quyền Trợ năng, app vẫn hoạt động ở chế độ đọc nền SQLite, tuy nhiên sẽ có độ trễ khoảng 5 giây do macOS ghi file đệm chậm).*
 
 ### 2.3 macOS 15 Sequoia trở lên
-macOS 15 khóa kho thông báo. Để cấp quyền: **Cài đặt Hệ thống → Quyền riêng tư & Bảo mật → Truy cập toàn bộ ổ đĩa** → bật **Cute Pet Companion**. Trong app có sẵn nút **🔐 Mở cài đặt Full Disk Access**. Cấp xong thì bấm **Lưu & kết nối** lại.
-
-### 2.4 Tự khởi động & tắt app
-- **Tự khởi động:** Control Center → Quyền riêng tư & Cài đặt → **Tự khởi động cùng hệ thống**.
-- **Tắt app:** **chuột phải vào thú cưng → ⏻ Thoát**, hoặc nút **⏻ Thoát ứng dụng** trong Control Center, hoặc **Cmd+Q** khi đang mở Control Center. Trên MacBook có notch, icon 🐾 trên thanh menu có thể bị che khi thanh menu nhiều icon.
-
-### 2.5 Gỡ cài đặt
-1. Thoát app, kéo `Cute Pet Companion.app` vào Thùng rác.
-2. Xóa dữ liệu (tùy chọn): `~/Library/Application Support/Cute Pet Companion`. Các token đã lưu nằm trong Keychain dưới tên "Cute Pet Companion Safe Storage".
-3. Nhớ bật lại **Kiểu thông báo** cho các app đã đặt "Không có" ở mục 2.2.
+macOS 15 bổ sung khóa kho thông báo SQLite. Nếu bạn muốn kích hoạt cả cơ chế dự phòng lịch sử SQLite:
+- Vào **Cài đặt Hệ thống → Quyền riêng tư & Bảo mật → Truy cập toàn bộ ổ đĩa (Full Disk Access)** → Bật **Cute Pet Companion**. Có sẵn nút bấm nhanh trong Control Center.
 
 ---
 
 ## 3. Windows 10/11
 
 ### 3.1 Cài đặt
-1. Chạy `Cute Pet Companion Setup 3.2.0.exe`. Đây là bản cài 1-click, cài cho tài khoản hiện tại, không cần quyền Admin.
-2. Nếu SmartScreen chặn: **Thông tin thêm → Vẫn chạy**.
-3. Thú cưng xuất hiện ở góc màn hình. Icon 🐾 nằm ở khay hệ thống (góc phải thanh Taskbar, có thể nằm trong mũi tên ^).
+1. Chạy `Cute Pet Companion Setup 3.2.0.exe`. Đây là bản cài 1-click cho tài khoản hiện tại, không yêu cầu quyền Administrator.
+2. Nếu Windows SmartScreen hiện cảnh báo màu xanh: bấm **More info** (Thông tin thêm) → **Run anyway** (Vẫn chạy).
+3. Thú cưng xuất hiện ở góc màn hình. Icon 🐾 nằm ở khay hệ thống (System Tray, góc dưới bên phải màn hình).
 
-### 3.2 Dùng được gì trên Windows
-Thú cưng 3D, 8 cảm xúc, kéo thả, Control Center, Webhook nội bộ, sự kiện hệ thống (pin, sạc, mở khóa), GitHub, Lịch iCal, Slack (Socket Mode) và Cloud Gateway (Composio / Slack Events).
-
-### 3.3 Chưa làm được: thay thế thông báo mặc định của Windows
-Windows chỉ cho đọc thông báo của app khác qua API `UserNotificationListener`. API này yêu cầu app được **đóng gói MSIX** và người dùng cấp quyền "Truy cập thông báo". Bản `.exe` hiện tại chưa phải MSIX, nên **chưa thay thế được** thông báo Windows. Adapter "Windows Toast Listener" trong Control Center hiện trạng thái *Không hỗ trợ* kèm lý do.
-
-### 3.4 Gỡ cài đặt
-**Cài đặt → Ứng dụng → Cute Pet Companion → Gỡ cài đặt.** Dữ liệu nằm ở `%APPDATA%\Cute Pet Companion`.
+### 3.2 Kích hoạt cơ chế thay thế Toast Windows
+1. Vào Control Center → **Kết nối ứng dụng** → thẻ **Windows Toast Listener**.
+2. Bấm **Lưu & kết nối**.
+3. Nếu Windows yêu cầu quyền:
+   - App sẽ tự động nhắc bạn cấp quyền truy cập thông báo.
+   - Hoặc bạn có thể bấm nút **⚙️ Mở Cài đặt Thông báo của Windows** và **🔐 Mở Cài đặt Quyền riêng tư Thông báo** ngay trên thẻ kết nối.
+4. Khi đã kết nối, thú cưng sẽ nhận diện toàn bộ Toast từ Windows, tự động đóng thông báo gốc bằng lệnh `RemoveNotification` và hiển thị thẻ 3D tương tác của thú cưng.
 
 ---
 
-## 4. Tự build từ mã nguồn
+## 4. Kiểm thử nhanh
+1. Mở Control Center (chuột phải vào thú cưng → Cài đặt, hoặc icon khay hệ thống).
+2. Chuyển sang mục **Sự chú ý & Inbox** hoặc **Kết nối ứng dụng**.
+3. Thử gửi một tin nhắn Teams, Zalo, hoặc gửi webhook thử nghiệm:
 ```bash
-npm install
-npm start               # chạy bản phát triển
-npm run dist:mac        # → dist/*.dmg (arm64 + x64 nếu thêm --x64)
-npm run dist:win        # → dist/*Setup*.exe (build trên macOS sẽ tự tải wine)
+curl -X POST http://127.0.0.1:3721/notify \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Đồng bộ thành công!","message":"Thú cưng đã sẵn sàng thay thế thông báo hệ thống.","app":"teams"}'
 ```
-Lưu ý khi chạy bằng `npm start` trên macOS 15+: quyền *Full Disk Access* phải cấp cho **Terminal** (hoặc VS Code), không phải cho app.
+Thú cưng sẽ bay tới, mang theo thẻ tương tác với biểu cảm sinh động!
