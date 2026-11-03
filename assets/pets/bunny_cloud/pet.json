@@ -1,0 +1,77 @@
+{
+  "id": "bunny_cloud",
+  "name": "Thỏ Cloud",
+  "species": "netherland_dwarf",
+  "model": null,
+  "thumbnail": "thumbnail.png",
+  "defaultEmotion": "happy",
+  "supportedEmotions": [
+    "happy",
+    "excited",
+    "love",
+    "surprised",
+    "angry",
+    "sad",
+    "thinking",
+    "sleeping"
+  ],
+  "sounds": {},
+  "scale": 1.0,
+  "runtime": "procedural_rig",
+  "semanticMap": {
+    "root": [
+      "Root"
+    ],
+    "body": [
+      "Spine",
+      "Body",
+      "Chest"
+    ],
+    "head": [
+      "Head"
+    ],
+    "neck": [
+      "Neck"
+    ],
+    "limbs_front": [
+      "Arm_L",
+      "Arm_R",
+      "Paw_L",
+      "Paw_R"
+    ],
+    "limbs_hind": [
+      "Leg_L",
+      "Leg_R",
+      "Foot_L",
+      "Foot_R"
+    ],
+    "ears": [
+      "Ear_L",
+      "Ear_R"
+    ],
+    "tail": [
+      "Tail",
+      "Tail_Puff"
+    ],
+    "accessories": [
+      "Sprout_Clip",
+      "Sprout"
+    ]
+  },
+  "clipAliases": {
+    "idle": [
+      "idle"
+    ],
+    "hold_card": [
+      "hold_card"
+    ],
+    "grabbed": [
+      "grabbed"
+    ],
+    "land": [
+      "land"
+    ]
+  },
+  "morphMap": {},
+  "notes": "semanticMap / clipAliases / morphMap are optional overrides for the production model.glb; empty morphMap uses the defaults from BLENDER_GUIDE §6 (eye_happy, eye_blink, eye_wide, eye_squint, mouth_smile, mouth_open, mouth_pout, cheek_puff)."
+}

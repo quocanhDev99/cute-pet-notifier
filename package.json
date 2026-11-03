@@ -1,0 +1,90 @@
+{
+  "name": "cute-pet-notifier",
+  "version": "3.2.0",
+  "description": "3D desktop pet companion that turns notifications into emotional interactions (macOS & Windows)",
+  "main": "src/main/index.js",
+  "scripts": {
+    "build:overlay": "esbuild src/renderer/js/renderer.js --bundle --outfile=src/renderer/js/bundle.js --format=iife --target=chrome128 --minify --legal-comments=none",
+    "build:control": "esbuild src/control/control.js --bundle --outfile=src/control/control.bundle.js --format=iife --target=chrome120 --minify --legal-comments=none",
+    "build": "npm run build:overlay && npm run build:control",
+    "start": "npm run build && electron .",
+    "dev": "npm run build && electron . --inspect",
+    "test": "node --test test/*.test.js test/*.test.mjs",
+    "test:notify": "node scripts/send-test-notify.js",
+    "dist": "npm run build && electron-builder",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:win": "npm run build && electron-builder --win",
+    "gateway": "node gateway/server.js"
+  },
+  "keywords": [
+    "desktop-pet",
+    "shimeji",
+    "notifications",
+    "electron",
+    "cute"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "esbuild": "^0.28.2",
+    "three": "^0.187.0"
+  },
+  "dependencies": {
+    "ws": "^8.22.1"
+  },
+  "productName": "Cute Pet Companion",
+  "build": {
+    "appId": "com.cutepet.companion",
+    "productName": "Cute Pet Companion",
+    "files": [
+      "src/**/*",
+      "!src/renderer/legacy/**",
+      "!src/renderer/vendor/**",
+      "assets/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "category": "public.app-category.productivity",
+      "extendInfo": {
+        "LSUIElement": true
+      },
+      "icon": "build/icon.icns"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false
+    },
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "icon": "build/icon.png",
+    "dmg": {
+      "title": "Cute Pet Companion",
+      "icon": "build/icon.icns"
+    }
+  }
+}

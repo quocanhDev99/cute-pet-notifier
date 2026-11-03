@@ -1,0 +1,335 @@
+/* ==========================================================================
+   Cute Pet Companion — Overlay (pet dock + 3D acrylic cards)
+   ========================================================================== */
+:root {
+  --font: ui-rounded, "SF Pro Rounded", "Nunito", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --accent: #FF8A65;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  width: 100%; height: 100%;
+  background: transparent;
+  overflow: hidden;
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+/* ---------------- Dock layout ---------------- */
+.dock {
+  --margin: 24px;
+  --pet-scale: 1;
+  --pet: calc(210px * var(--pet-scale));
+  --card-w: 320px;
+  position: fixed;
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  perspective: 1400px;
+  transition: opacity .35s ease, transform .45s cubic-bezier(.2,.9,.3,1.2);
+}
+.dock.hidden { opacity: 0; pointer-events: none; visibility: hidden; }
+.dock.leaving { opacity: 0; transform: translateY(30px) scale(.9); }
+.dock.size-sm { --pet: calc(170px * var(--pet-scale)); --card-w: 270px; }
+.dock.size-lg { --pet: calc(250px * var(--pet-scale)); --card-w: 380px; }
+
+.dock.pos-bottom-right, .dock.pos-middle-right, .dock.pos-top-right { right: var(--margin); }
+.dock.pos-bottom-left, .dock.pos-middle-left, .dock.pos-top-left { left: var(--margin); }
+.dock.pos-bottom-right, .dock.pos-bottom-left, .dock.pos-bottom-center { bottom: var(--margin); }
+.dock.pos-top-right, .dock.pos-top-left, .dock.pos-top-center { top: var(--margin); align-items: flex-start; }
+.dock.pos-middle-right, .dock.pos-middle-left { top: 50%; transform: translateY(-50%); align-items: center; }
+.dock.pos-top-center, .dock.pos-bottom-center { left: 50%; transform: translateX(-50%); }
+
+.dock.side-right { flex-direction: row-reverse; }
+
+.pet-slot {
+  position: relative;
+  width: var(--pet);
+  height: calc(var(--pet) * 1.08);
+  flex: 0 0 auto;
+  z-index: 3;
+  filter: drop-shadow(0 10px 18px rgba(120, 60, 90, .18));
+}
+.pet-stage { position: absolute; inset: 0; }
+.pet-stage canvas { width: 100%; height: 100%; display: block; }
+
+.card-slot { position: relative; z-index: 2; transform-style: preserve-3d; }
+.dock:not(.has-card) .card-slot { display: none; }
+
+/* Billboard Hugger: pet overlaps the card edge so a paw grips it */
+.dock.mode-billboard.side-left .pet-slot { margin-left: calc(var(--pet) * -0.28); }
+.dock.mode-billboard.side-right .pet-slot { margin-right: calc(var(--pet) * -0.28); }
+.dock.mode-billboard .card-slot { margin-bottom: calc(var(--pet) * 0.2); }
+
+/* Peeker: pet pops up from behind the card's top edge */
+.dock.mode-peeker { flex-direction: column-reverse !important; align-items: center !important; }
+.dock.mode-peeker .pet-slot { margin-bottom: calc(var(--pet) * -0.3); z-index: 1; filter: none; }
+.dock.mode-peeker .card-slot { z-index: 4; }
+
+/* Courier: pet runs in from the screen edge with an envelope */
+.dock.mode-courier.side-left .pet-slot { animation: none; }
+.dock.courier-enter.side-left .pet-slot { animation: courier-in-right .9s cubic-bezier(.25,.8,.35,1) both; }
+.dock.courier-enter.side-right .pet-slot { animation: courier-in-left .9s cubic-bezier(.25,.8,.35,1) both; }
+.dock.mode-courier .card-slot { margin-bottom: calc(var(--pet) * 0.18); }
+.dock.side-left.mode-courier .pet-slot { margin-left: calc(var(--pet) * -0.18); }
+.dock.side-right.mode-courier .pet-slot { margin-right: calc(var(--pet) * -0.18); }
+@keyframes courier-in-right { from { transform: translateX(140%); } to { transform: translateX(0); } }
+@keyframes courier-in-left { from { transform: translateX(-140%); } to { transform: translateX(0); } }
+
+/* ---------------- Speech bubble ---------------- */
+.pet-bubble {
+  position: absolute;
+  left: 50%; top: -6px;
+  transform: translate(-50%, -100%) scale(.6);
+  opacity: 0;
+  max-width: 230px;
+  padding: 8px 14px;
+  border-radius: 16px;
+  background: #fff;
+  color: #4B3B47;
+  font-size: 13px; font-weight: 800;
+  white-space: nowrap;
+  box-shadow: 0 3px 0 #F0D9E0, 0 10px 24px rgba(120,60,90,.25);
+  transition: transform .3s cubic-bezier(.2,1.4,.4,1), opacity .2s;
+  pointer-events: none;
+  z-index: 5;
+}
+.pet-bubble::after {
+  content: ''; position: absolute; left: 50%; bottom: -7px; transform: translateX(-50%) rotate(45deg);
+  width: 14px; height: 14px; background: inherit; border-radius: 3px;
+}
+.pet-bubble.show { opacity: 1; transform: translate(-50%, -100%) scale(1); }
+.pet-bubble.angry { background: #FFE4E4; color: #B42318; box-shadow: 0 3px 0 #F9C9C9, 0 10px 24px rgba(180,35,24,.25); }
+.pet-bubble.love { background: #FFE9F2; color: #C2185B; }
+
+/* ---------------- 3D Acrylic card ---------------- */
+.card {
+  --rx: 0deg; --ry: 0deg; --mx: 30%; --my: 0%; --breath: 0;
+  --c: #FF8A65; --c2: #FFC1A8;
+  --bg: linear-gradient(150deg, rgba(255,255,255,.97) 0%, rgba(255,247,241,.95) 55%, rgba(255,236,228,.94) 100%);
+  --text: #3A2E39; --muted: #7A6873; --edge1: #F6E1D8; --edge2: #EBCDC1;
+  width: var(--card-w);
+  transform-style: preserve-3d;
+  transform: rotateX(var(--rx)) rotateY(calc(var(--ry) + var(--tilt, 0deg))) translateY(calc(var(--breath) * 1px));
+  transform-origin: center bottom;
+  opacity: 0;
+  transition: transform .25s ease-out, opacity .3s;
+  pointer-events: auto;
+}
+.side-left .card { --tilt: 9deg; transform-origin: right center; }
+.side-right .card { --tilt: -9deg; transform-origin: left center; }
+.mode-peeker .card { --tilt: 0deg; transform-origin: center top; }
+
+.card:not(.in) { opacity: 0; transform: rotateX(-25deg) rotateY(var(--tilt, 0deg)) translateY(30px) scale(.85); }
+.card.in { opacity: 1; animation: card-pop .55s cubic-bezier(.2,1.3,.35,1) backwards; }
+.mode-courier .card.in { animation: card-unfold .6s cubic-bezier(.2,1.2,.35,1) backwards; }
+@keyframes card-pop { from { transform: rotateX(-30deg) rotateY(var(--tilt, 0deg)) translateY(40px) scale(.8); opacity: 0; } }
+@keyframes card-unfold { from { transform: rotateY(calc(var(--tilt, 0deg) * -8)) scale(.15); opacity: 0; } }
+
+.card.out { transition: transform .4s ease-in, opacity .35s; transform: rotateX(70deg) translateY(30px) scale(.9) !important; opacity: 0 !important; animation: none; }
+.card.out-zoom { transition: transform .35s ease-in, opacity .3s; transform: scale(1.08) !important; opacity: 0 !important; animation: none; }
+.card.kicked { animation: kick-fly-left .8s cubic-bezier(.3,.1,.6,1) forwards !important; }
+.side-right .card.kicked { animation-name: kick-fly-right !important; }
+@keyframes kick-fly-left { to { transform: translate(-160%, -120%) rotate(-560deg) scale(.35); opacity: 0; } }
+@keyframes kick-fly-right { to { transform: translate(160%, -120%) rotate(560deg) scale(.35); opacity: 0; } }
+
+.card-inner {
+  position: relative;
+  padding: 16px 18px 18px;
+  border-radius: 24px;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,255,255,.95),
+    inset 0 -2px 0 rgba(0,0,0,.035),
+    0 1.5px 0 var(--edge1), 0 3px 0 var(--edge1), 0 4.5px 0 var(--edge2), 0 6px 0 var(--edge2),
+    0 24px 44px -12px rgba(110, 50, 80, .42),
+    0 8px 16px rgba(110, 50, 80, .12);
+  transform: translateZ(0);
+}
+.card-inner::before {
+  content: '';
+  position: absolute; inset: 0 0 auto 0; height: 5px;
+  background: linear-gradient(90deg, var(--c), var(--c2));
+}
+.card-inner::after {
+  content: '';
+  position: absolute; right: -40px; top: -60px; width: 180px; height: 180px; border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--c) 22%, transparent), transparent 70%);
+  pointer-events: none;
+}
+.card-shine {
+  position: absolute; inset: 0;
+  background: radial-gradient(circle at var(--mx) var(--my), rgba(255,255,255,.75), transparent 45%);
+  mix-blend-mode: soft-light;
+  pointer-events: none;
+}
+
+.card header { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; position: relative; z-index: 1; padding-right: 32px; }
+.card header .icon-btn.close { position: absolute; right: 0; top: 0; }
+.chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 800; letter-spacing: .2px;
+  background: rgba(255,255,255,.8);
+  color: var(--muted);
+  box-shadow: 0 1.5px 0 rgba(0,0,0,.06), inset 0 0 0 1px rgba(0,0,0,.04);
+  white-space: nowrap;
+}
+.chip.emo { background: color-mix(in srgb, var(--c) 16%, white); color: color-mix(in srgb, var(--c) 75%, black); }
+.icon-btn.close {
+  margin-left: auto; width: 26px; height: 26px; border-radius: 50%; border: 0; cursor: pointer;
+  background: rgba(0,0,0,.05); color: var(--muted); font-size: 12px; font-weight: 900;
+  transition: background .2s, transform .2s;
+}
+.icon-btn.close:hover { background: rgba(0,0,0,.1); transform: rotate(90deg); }
+
+.card .title {
+  position: relative; z-index: 1;
+  font-size: 16.5px; font-weight: 900; line-height: 1.25;
+  margin-bottom: 6px;
+  transform: translateZ(18px);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.card .message {
+  position: relative; z-index: 1;
+  font-size: 13.5px; font-weight: 600; line-height: 1.45; color: var(--muted);
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+}
+.card footer { display: flex; align-items: center; gap: 8px; margin-top: 14px; position: relative; z-index: 1; }
+.card .hint { margin-left: auto; min-width: 0; font-size: 11px; font-weight: 700; color: var(--muted); opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .btn { white-space: nowrap; flex: 0 0 auto; }
+
+.btn {
+  border: 0; cursor: pointer;
+  padding: 8px 14px; border-radius: 12px;
+  font: 800 12.5px var(--font);
+  transition: transform .12s, box-shadow .12s, filter .2s;
+}
+.btn.primary {
+  color: #fff;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--c) 85%, white), var(--c));
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--c) 70%, black), 0 6px 14px color-mix(in srgb, var(--c) 40%, transparent);
+}
+.btn.kick {
+  color: #B42318; background: linear-gradient(180deg, #FFF1F0, #FFE0DE);
+  box-shadow: 0 3px 0 #F4B4AE;
+}
+.btn:hover { filter: brightness(1.05); transform: translateY(-1px); }
+.btn:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,.2); }
+
+.progress { position: absolute; left: 18px; right: 18px; bottom: 7px; height: 3.5px; border-radius: 3px; background: rgba(0,0,0,.06); overflow: hidden; }
+.progress i { display: block; height: 100%; background: linear-gradient(90deg, var(--c), var(--c2)); transform-origin: left; border-radius: 3px; }
+
+/* Emotion palettes */
+.emo-happy { --c: #FFAA1D; --c2: #FFD66B; }
+.emo-excited { --c: #FF7A45; --c2: #FFB37A; }
+.emo-love { --c: #FF4F8B; --c2: #FF9EC1; }
+.emo-surprised { --c: #8B5CF6; --c2: #C4B5FD; }
+.emo-angry { --c: #EF4444; --c2: #FB923C; }
+.emo-sad { --c: #3B82F6; --c2: #93C5FD; }
+.emo-thinking { --c: #14B8A6; --c2: #5EEAD4; }
+.emo-sleeping { --c: #6366F1; --c2: #A5B4FC; }
+.card.annoying .card-inner { animation: grumble 3.2s ease-in-out infinite; }
+@keyframes grumble { 0%, 90%, 100% { transform: translateZ(0); } 92% { transform: translateX(-2px); } 94% { transform: translateX(2px); } 96% { transform: translateX(-1px); } }
+
+/* Themes */
+.theme-glass .card {
+  --bg: linear-gradient(150deg, rgba(255,255,255,.72), rgba(255,255,255,.45));
+  --edge1: rgba(255,255,255,.6); --edge2: rgba(255,255,255,.35);
+}
+.theme-glass .card-inner { border: 1px solid rgba(255,255,255,.85); backdrop-filter: blur(18px) saturate(1.6); }
+
+.theme-dark .card {
+  --bg: linear-gradient(150deg, rgba(38,34,64,.96), rgba(24,22,44,.95));
+  --text: #F5F0FF; --muted: #B8B0D6; --edge1: #17152B; --edge2: #100E20;
+}
+.theme-dark .chip { background: rgba(255,255,255,.08); color: #D8D0F5; }
+.theme-dark .chip.emo { background: color-mix(in srgb, var(--c) 25%, #1d1a35); color: color-mix(in srgb, var(--c) 60%, white); }
+.theme-dark .icon-btn.close { background: rgba(255,255,255,.08); color: #D8D0F5; }
+.theme-dark .card-inner { box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 1.5px 0 var(--edge1), 0 3px 0 var(--edge1), 0 4.5px 0 var(--edge2), 0 6px 0 var(--edge2), 0 24px 44px -12px rgba(0,0,0,.6); }
+
+/* Minimal White Theme */
+.theme-minimal .card {
+  --bg: #FFFFFF;
+  --text: #1E293B;
+  --muted: #64748B;
+  --edge1: #E2E8F0;
+  --edge2: #CBD5E1;
+}
+.theme-minimal .card-inner {
+  border: 1px solid #E2E8F0;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.06), 0 16px 28px -6px rgba(0, 0, 0, 0.1);
+  border-radius: 18px;
+}
+.theme-minimal .chip {
+  background: #F1F5F9;
+  color: #475569;
+  box-shadow: none;
+  border: 1px solid #E2E8F0;
+}
+.theme-minimal .chip.emo {
+  background: color-mix(in srgb, var(--c) 14%, #F8FAFC);
+  color: color-mix(in srgb, var(--c) 80%, black);
+  border-color: color-mix(in srgb, var(--c) 30%, transparent);
+}
+
+/* Transparent Acrylic Theme */
+.theme-acrylic .card {
+  --bg: rgba(255, 255, 255, 0.32);
+  --text: #1F1924;
+  --muted: #524755;
+  --edge1: rgba(255, 255, 255, 0.7);
+  --edge2: rgba(255, 255, 255, 0.3);
+}
+.theme-acrylic .card-inner {
+  border: 1.5px solid rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(28px) saturate(1.8);
+  -webkit-backdrop-filter: blur(28px) saturate(1.8);
+  box-shadow: 0 20px 40px -10px rgba(70, 30, 60, 0.15), inset 0 1px 1px rgba(255, 255, 255, 0.8);
+}
+.theme-acrylic .chip {
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(8px);
+}
+
+body.is-dragging, body.is-dragging * {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+
+.size-sm .card .title { font-size: 15px; }
+.size-lg .card .title { font-size: 18px; }
+.size-lg .card .message { font-size: 14.5px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .card.in, .dock.courier-enter .pet-slot { animation-duration: .01s !important; }
+}
+
+/* ---------------- Adaptive presence (Blueprint V3.2 §8) ---------------- */
+.dock.presence-minimal { --pet: calc(120px * var(--pet-scale)); opacity: .92; }
+.dock.presence-minimal .pet-slot { filter: drop-shadow(0 4px 8px rgba(120, 60, 90, .14)); }
+.dock.presence-minimal .card { --card-w: 260px; }
+
+/* ---------------- Priority chips ---------------- */
+.chip.prio { font-size: 10.5px; padding: 3px 8px; }
+.chip.prio-critical { background: #FEE2E2; color: #B42318; box-shadow: 0 1.5px 0 #FBC5C5; animation: prio-pulse 1.4s ease-in-out infinite; }
+.chip.prio-important { background: #FEF3C7; color: #92400E; box-shadow: 0 1.5px 0 #F7DFA0; }
+.chip.prio-low { background: #F1F5F9; color: #64748B; }
+.card.prio-critical .card-inner { box-shadow: 0 0 0 2px rgba(239, 68, 68, .55), inset 0 1.5px 0 rgba(255,255,255,.95), 0 1.5px 0 var(--edge1), 0 3px 0 var(--edge1), 0 4.5px 0 var(--edge2), 0 6px 0 var(--edge2), 0 24px 44px -12px rgba(180, 30, 40, .45); }
+@keyframes prio-pulse { 50% { box-shadow: 0 0 0 4px rgba(239, 68, 68, .18); } }
+
+/* ---------------- Reduced motion (user setting or OS preference) ---------------- */
+body.reduced-motion .card,
+body.reduced-motion .card.in,
+body.reduced-motion .dock { animation-duration: .01s !important; transition-duration: .15s !important; }
+body.reduced-motion .card { --rx: 0deg !important; --ry: 0deg !important; }
+body.reduced-motion .card.annoying .card-inner,
+body.reduced-motion .chip.prio-critical { animation: none !important; }
+body.reduced-motion .card.kicked { animation: none !important; opacity: 0; transition: opacity .2s; }
+
+/* Free-drag position: no corner transforms, pet bottom is the anchor */
+.dock.custom-pos { transform: none !important; align-items: flex-end; }
+.dock.custom-pos.mode-peeker { align-items: center !important; }

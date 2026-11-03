@@ -1,0 +1,143 @@
+{
+  "project": "cute-pet-notifier",
+  "version": "2.0.0",
+  "schemaVersion": 1,
+  "specs": {
+    "preferredImageAspectRatio": "1:1",
+    "preferredTurnaroundAspectRatio": "16:9",
+    "preferredImageResolution": "2048x2048",
+    "modelFormat": "glb",
+    "initialTargetFaces": 5000,
+    "recommendedTriangleRange": "5000-18000"
+  },
+  "notificationStates": {
+    "TASK_DONE": "happy",
+    "NEW_PING": "excited",
+    "KUDOS": "love",
+    "WARNING": "surprised",
+    "OVERDUE": "angry",
+    "ERROR": "sad",
+    "LOADING": "thinking",
+    "IDLE_DND": "sleeping"
+  },
+  "emotionSchema": [
+    {
+      "assetKey": "01_happy",
+      "id": "happy",
+      "label": "Happy",
+      "order": 1
+    },
+    {
+      "assetKey": "02_excited",
+      "id": "excited",
+      "label": "Excited",
+      "order": 2
+    },
+    {
+      "assetKey": "03_love",
+      "id": "love",
+      "label": "Love",
+      "order": 3
+    },
+    {
+      "assetKey": "04_surprised",
+      "id": "surprised",
+      "label": "Surprised",
+      "order": 4
+    },
+    {
+      "assetKey": "05_angry",
+      "id": "angry",
+      "label": "Angry",
+      "order": 5
+    },
+    {
+      "assetKey": "06_sad",
+      "id": "sad",
+      "label": "Sad",
+      "order": 6
+    },
+    {
+      "assetKey": "07_thinking",
+      "id": "thinking",
+      "label": "Thinking",
+      "order": 7
+    },
+    {
+      "assetKey": "08_sleeping",
+      "id": "sleeping",
+      "label": "Sleeping",
+      "order": 8
+    }
+  ],
+  "characters": [
+    {
+      "id": "cat_mochi",
+      "name": "Mèo Mochi",
+      "species": "scottish_fold",
+      "package": "assets/pets/cat_mochi/pet.json",
+      "model3D": "assets/pets/cat_mochi/model.glb",
+      "masterReference": "assets/references/cat_mochi/master.png",
+      "turnaround2D": "assets/references/cat_mochi/turnaround.png",
+      "spriteDirectory": "assets/sprites/cat_mochi",
+      "status": "runtime_integrated",
+      "productionReady": false,
+      "runtime": "procedural_rig",
+      "notes": "Procedural parametric rig is live in the app (8 emotions). Awaiting 2D references + production GLB (blueprint §4–6) before production_ready.",
+      "pilot": true
+    },
+    {
+      "id": "dog_boba",
+      "name": "Chó Boba",
+      "species": "corgi",
+      "package": "assets/pets/dog_boba/pet.json",
+      "model3D": "assets/pets/dog_boba/model.glb",
+      "masterReference": "assets/references/dog_boba/master.png",
+      "turnaround2D": "assets/references/dog_boba/turnaround.png",
+      "spriteDirectory": "assets/sprites/dog_boba",
+      "status": "runtime_integrated",
+      "productionReady": false,
+      "runtime": "procedural_rig",
+      "notes": "Procedural parametric rig is live in the app (8 emotions). Awaiting 2D references + production GLB (blueprint §4–6) before production_ready."
+    },
+    {
+      "id": "bunny_cloud",
+      "name": "Thỏ Cloud",
+      "species": "netherland_dwarf",
+      "package": "assets/pets/bunny_cloud/pet.json",
+      "model3D": "assets/pets/bunny_cloud/model.glb",
+      "masterReference": "assets/references/bunny_cloud/master.png",
+      "turnaround2D": "assets/references/bunny_cloud/turnaround.png",
+      "spriteDirectory": "assets/sprites/bunny_cloud",
+      "status": "runtime_integrated",
+      "productionReady": false,
+      "runtime": "procedural_rig",
+      "notes": "Procedural parametric rig is live in the app (8 emotions). Awaiting 2D references + production GLB (blueprint §4–6) before production_ready."
+    },
+    {
+      "id": "penguin_pip",
+      "name": "Chim cánh cụt Pip",
+      "species": "baby_penguin",
+      "package": "assets/pets/penguin_pip/pet.json",
+      "model3D": "assets/pets/penguin_pip/model.glb",
+      "masterReference": "assets/references/penguin_pip/master.png",
+      "turnaround2D": "assets/references/penguin_pip/turnaround.png",
+      "spriteDirectory": "assets/sprites/penguin_pip",
+      "status": "runtime_integrated",
+      "productionReady": false,
+      "runtime": "procedural_rig",
+      "notes": "Procedural parametric rig is live in the app (8 emotions). Awaiting 2D references + production GLB (blueprint §4–6) before production_ready."
+    }
+  ],
+  "statusLegend": [
+    "planned",
+    "reference_ready",
+    "turnaround_ready",
+    "model_ready",
+    "rigging_ready",
+    "animation_ready",
+    "glb_validated",
+    "runtime_integrated",
+    "production_ready"
+  ]
+}

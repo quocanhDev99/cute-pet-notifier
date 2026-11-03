@@ -1,0 +1,71 @@
+{
+  "id": "penguin_pip",
+  "name": "Chim cánh cụt Pip",
+  "species": "baby_penguin",
+  "model": null,
+  "thumbnail": "thumbnail.png",
+  "defaultEmotion": "happy",
+  "supportedEmotions": [
+    "happy",
+    "excited",
+    "love",
+    "surprised",
+    "angry",
+    "sad",
+    "thinking",
+    "sleeping"
+  ],
+  "sounds": {},
+  "scale": 1.0,
+  "runtime": "procedural_rig",
+  "semanticMap": {
+    "root": [
+      "Root"
+    ],
+    "body": [
+      "Spine",
+      "Body",
+      "Chest"
+    ],
+    "head": [
+      "Head"
+    ],
+    "neck": [
+      "Neck"
+    ],
+    "limbs_front": [
+      "Flipper_L",
+      "Flipper_R",
+      "Wing_L",
+      "Wing_R"
+    ],
+    "limbs_hind": [
+      "Foot_L",
+      "Foot_R",
+      "Leg_L",
+      "Leg_R"
+    ],
+    "ears": [],
+    "tail": [],
+    "accessories": [
+      "Beanie",
+      "Pompom"
+    ]
+  },
+  "clipAliases": {
+    "idle": [
+      "idle"
+    ],
+    "hold_card": [
+      "hold_card"
+    ],
+    "grabbed": [
+      "grabbed"
+    ],
+    "land": [
+      "land"
+    ]
+  },
+  "morphMap": {},
+  "notes": "semanticMap / clipAliases / morphMap are optional overrides for the production model.glb; empty morphMap uses the defaults from BLENDER_GUIDE §6 (eye_happy, eye_blink, eye_wide, eye_squint, mouth_smile, mouth_open, mouth_pout, cheek_puff)."
+}
