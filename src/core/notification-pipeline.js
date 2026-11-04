@@ -171,9 +171,9 @@ class NotificationPipeline extends EventEmitter {
     }
     this.recentKeys.set(item.deduplicationKey, now);
 
-    // Chat mode: "only when I'm mentioned" sends other chat messages to the Inbox.
+    // Chat mode: "only when it's about me" sends other chat messages to the Inbox.
     const chat = opts.bypassAttention ? null : chatDecision(item, s);
-    if (chat && chat.chat && chat.mentioned) item.priority = 'important';
+    if (chat && chat.chat && (chat.mentioned || (chat.show && chat.direct && s.chat && s.chat.mode === 'mentions'))) item.priority = 'important';
     // Attention Gatekeeper
     const decision = opts.bypassAttention
       ? { action: 'show', reason: 'manual_test', priority: item.priority || 'normal', category: 'test', silent: false, motion: 'full', mode: 'none' }

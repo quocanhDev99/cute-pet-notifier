@@ -463,6 +463,15 @@ export class PetStage {
     const A = this.anim;
     const grab = F.grab;
 
+    // Picked up, the pet stretches (squash 1.18) and lifts (+0.5): its head + ears reach y≈3.0,
+    // above the normal frame top (≈2.3), so the head got cut off. Reframe while held: raise
+    // the camera and step back a little so the whole stretched pet stays inside the canvas.
+    if (this.camGrab !== grab) {
+      this.camGrab = grab;
+      this.camera.position.set(0, 1.05 + 0.8 * grab, 5.5 + 1.1 * grab);
+      this.camera.lookAt(0, 0.95 + 0.8 * grab, 0);
+    }
+
     this.look.lerp(this.lookTarget, 1 - Math.exp(-dt * 8));
     this.evade.lerp(this.evadeTarget, 1 - Math.exp(-dt * 6));
 

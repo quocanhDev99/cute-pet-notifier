@@ -1,6 +1,6 @@
 # IMPLEMENTATION_STATUS — Trạng thái từng tính năng
 
-*Cập nhật: 04/11/2026 · Phiên bản 3.4.0 · Quy ước: ✅ Hoàn thành · 🟡 Một phần · ⏳ Chưa làm · ⛔ Không hỗ trợ · 🧪 Chưa kiểm thử thật*
+*Cập nhật: 04/11/2026 · Phiên bản 3.4.2 · Quy ước: ✅ Hoàn thành · 🟡 Một phần · ⏳ Chưa làm · ⛔ Không hỗ trợ · 🧪 Chưa kiểm thử thật*
 
 ## Lõi
 | Tính năng | Trạng thái | Ghi chú |
@@ -10,7 +10,7 @@
 | 🎭 Bé đọc cảm xúc từ nội dung (emoji, VI có/không dấu, EN, phủ định, cường độ) | ✅ | Ngay trên máy; có 3 mức nhạy và ô gõ thử |
 | Pipeline: lọc, bỏ trùng, ưu tiên, gộp, hàng đợi | ✅ | |
 | Attention: 4 mức ưu tiên, cooldown, tắt tiếng app, 7 chế độ tập trung, giờ yên tĩnh, Hộp thư | ✅ | |
-| 💬 Chat: báo tất cả / chỉ khi nhắc tên hoặc @all, tin nhắn riêng 1-1 vẫn báo | ✅ | Với thông báo của máy, việc nhận ra tin 1-1 là đoán theo dạng tin |
+| 💬 Chat: báo tất cả / chỉ tin dành cho tôi (nhắn riêng 1-1, nhắc tên, @all) | ✅ | Với thông báo của máy, tin 1-1 được nhận ra theo dạng tin (tiêu đề nhóm/#kênh, "Người gửi: …"); Slack biết chính xác |
 | 🙈 Privacy Display Mode (4 mức, ẩn theo app, bật nhanh từ menu) | ✅ | Không tự phát hiện chia sẻ màn hình ⏳ |
 | 💆 Nhắc nghỉ mắt (tính theo thời gian dùng máy thật, hoãn khi đang họp hoặc tập trung) | ✅ | |
 | 🗣️ Giọng nói (nhắc nghỉ, nhấc bổng, thả xuống) | ✅ | Giọng của hệ thống; chỉ nói câu cố định |

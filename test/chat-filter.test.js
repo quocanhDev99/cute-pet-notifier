@@ -39,3 +39,26 @@ test('Chat filter: mentions mode → others go to inbox, DMs still show', () => 
   const notChat = chatDecision({ app: 'github', title: 'PR merged', message: 'x' }, S());
   assert.strictEqual(notChat.show, true);
 });
+
+test('Chat filter: 1-1 detection from OS notification shapes', () => {
+  const { isDirect } = require('../src/core/chat-filter');
+  const dm = (title, message) => isDirect({ app: 'teams', title, message });
+  assert.strictEqual(dm('Ban A', 'rảnh không?'), true, 'person title + plain text');
+  assert.strictEqual(dm('Ban A', 'Lưu ý: mai họp lúc 9h'), true, '"Label: …" inside a 1-1 is not a sender');
+  assert.strictEqual(dm('Ban A', 'Note: check this'), true);
+  assert.strictEqual(dm('Ban A', 'Ban A: gửi file rồi nhé'), true, 'app repeats the sender in a 1-1');
+  assert.strictEqual(dm('Ban A', 'Link: https://x.y'), true);
+  assert.strictEqual(dm('VN Team Community', 'Ban K: Sent an image'), false, 'group: "Sender: text"');
+  assert.strictEqual(dm('Nhom Du An — Ban A', 'xong chưa'), false, 'group — sender title');
+  assert.strictEqual(dm('#dev', 'deploy?'), false, 'channel title');
+  assert.strictEqual(dm('Ban B in #web', 'xem giúp'), false);
+  assert.strictEqual(dm('Nhóm Kế Toán', 'nộp báo cáo'), false, 'title says group');
+  assert.strictEqual(dm('Teams', 'Ban A sent you a message'), true, 'app’s own 1-1 marker');
+});
+
+test('Chat filter: mentions mode shows a real 1-1 and prioritises it', () => {
+  const d = chatDecision({ app: 'zalo', title: 'Ban A', message: 'Ghi chú: tối nay gọi lại nha' }, S());
+  assert.deepStrictEqual([d.show, d.direct, d.reason], [true, true, null]);
+  const g = chatDecision({ app: 'zalo', title: 'Gia Dinh', message: 'Ban B: ăn cơm chưa' }, S());
+  assert.deepStrictEqual([g.show, g.reason], [false, 'not_mentioned']);
+});

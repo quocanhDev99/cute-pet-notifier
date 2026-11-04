@@ -54,7 +54,9 @@ html, body {
 .pet-stage { position: absolute; inset: 0; }
 .pet-stage canvas { width: 100%; height: 100%; display: block; }
 
-.card-slot { position: relative; z-index: 2; transform-style: preserve-3d; }
+.card-slot { position: relative; z-index: 2; transform-style: preserve-3d; zoom: var(--card-scale, 1); }
+/* User card size (Thông báo → 📐 Kích thước khung thông báo). zoom scales text, buttons and width
+   together; widths below are divided by it so a big card still fits on screen. */
 .dock:not(.has-card) .card-slot { display: none; }
 
 /* Billboard Hugger: pet overlaps the card edge so a paw grips it */
@@ -198,8 +200,10 @@ html, body {
   font-size: 13.5px; font-weight: 600; line-height: 1.45; color: var(--muted);
   display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
 }
-.card footer { display: flex; align-items: center; gap: 8px; margin-top: 14px; position: relative; z-index: 1; }
-.card .hint { margin-left: auto; min-width: 0; font-size: 11px; font-weight: 700; color: var(--muted); opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; position: relative; z-index: 1; }
+/* Hint sits on its own line under the buttons so it never squeezes or overlaps them
+   (fonts/widths differ between machines). */
+.card .hint { position: relative; z-index: 1; margin: 8px 0 0; font-size: 11px; font-weight: 700; line-height: 1.35; color: var(--muted); opacity: .75; white-space: normal; }
 .card .btn { white-space: nowrap; flex: 0 0 auto; }
 
 .btn {
@@ -340,10 +344,10 @@ body.reduced-motion .card.kicked { animation: none !important; opacity: 0; trans
 body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 
 /* Flexible card width (follows the content) + 5-line message clamp */
-.card { width: max-content; min-width: calc(var(--card-w) * .82); max-width: min(460px, calc(100vw - var(--pet) - 48px)); }
+.card { width: max-content; min-width: calc(var(--card-w) * .82); max-width: min(460px, calc((100vw - var(--pet) - 48px) / var(--card-scale, 1))); }
 .card .title { -webkit-line-clamp: 3; }
 .card .message { -webkit-line-clamp: 5; overflow-wrap: anywhere; }
-.card:has(.rows) { min-width: min(400px, calc(100vw - var(--pet) - 48px)); }
+.card:has(.rows) { min-width: min(400px, calc((100vw - var(--pet) - 48px) / var(--card-scale, 1))); }
 /* Rows: one PR per line, each with its own buttons */
 .card .rows { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; position: relative; z-index: 1; max-height: 300px; overflow-y: auto; }
 .card .row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; background: rgba(255,255,255,.75); box-shadow: 0 0 0 1px var(--edge1) inset; }

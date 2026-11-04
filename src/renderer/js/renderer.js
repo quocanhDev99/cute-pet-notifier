@@ -268,6 +268,7 @@ function applyConfig(payload) {
   dock.classList.toggle('accent-ui', a.cardFollowsTheme !== false);
   dock.style.setProperty('--margin', `${a.margin}px`);
   dock.style.setProperty('--pet-scale', a.petScale);
+  dock.style.setProperty('--card-scale', Number(n.cardScale) || 1);
 
   if (!isDraggingPet) placeDock();
 
@@ -362,8 +363,8 @@ function buildCard(item) {
         ${(item.actions || []).includes('break-start') ? `<button class="btn primary brk" data-brk="break-start">${esc(t('breakStart'))}</button><button class="btn brk ghost" data-brk="break-snooze">${esc(t('breakSnooze'))}</button>` : ''}
         ${(item.actions || []).includes('approve') && item.source === 'composio' && !(item.items || []).length ? `<button class="btn approve">${esc(t('approve'))}</button>` : ''}
         ${item.annoying ? `<button class="btn kick" title="${esc(t('kickTitle'))}">${esc(t('kick'))}</button>` : ''}
-        <span class="hint">${item.annoying ? esc(t('hintAnnoying')) : esc(t('hintPet'))}</span>
       </footer>
+      <p class="hint">${item.annoying ? esc(t('hintAnnoying')) : esc(t('hintPet'))}</p>
       <div class="progress"><i></i></div>
     </div>`;
   return el;
@@ -676,7 +677,9 @@ document.addEventListener('pointermove', (e) => {
     const pw = petSlot.offsetWidth, ph = petSlot.offsetHeight;
     // Keep the pet itself on screen while dragging.
     const newLeft = Math.max(-petOffsetX, Math.min(window.innerWidth - pw - petOffsetX, dockStartLeft + dx));
-    const newTop = Math.max(-petOffsetY, Math.min(window.innerHeight - ph - petOffsetY, dockStartTop + dy));
+    // Leave room above the pet for the speech bubble ("Á á buông tui ra!") at the screen top.
+    const bubbleRoom = 44;
+    const newTop = Math.max(bubbleRoom - petOffsetY, Math.min(window.innerHeight - ph - petOffsetY, dockStartTop + dy));
 
     dock.style.left = `${newLeft}px`;
     dock.style.top = `${newTop}px`;

@@ -26,10 +26,15 @@ const { startNotificationServer } = require('./server');
 const PORT = 3721;
 const ROOT = path.join(__dirname, '../..');
 
+let activateReady = false;
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', () => openControlCenter());
+  // macOS: opening the app again from Finder/Launchpad while it runs fires "activate", not
+  // "second-instance" — show the Control Center so the click does something visible.
+  // Electron also fires "activate" for the very first launch (e.g. login item) → ignore that one.
+  app.on('activate', () => { if (activateReady) openControlCenter(); });
 }
 
 let overlay = null;
@@ -222,7 +227,53 @@ function openControlCenter(section) {
   }
   controlWin.on('closed', () => {
     controlWin = null;
-    if (process.platform === 'darwin' && app.dock) app.dock.hide();
+    /**
+ * macOS install sanity checks (packaged builds only):
+ *  • Intel build on an Apple-chip Mac runs under Rosetta → 3D animation stutters badly
+ *    (measured: 2–5 s main-thread stalls). Tell the user to install the "-arm64" DMG.
+ *  • Running straight from the DMG / Downloads → offer to move into Applications
+ *    (stable path for permissions and updates).
+ */
+function installInfo() {
+  if (process.platform !== 'darwin' || !app.isPackaged) return { rosetta: false, inApplications: true };
+  let inApplications = true;
+  try { inApplications = app.isInApplicationsFolder(); } catch { /* ignore */ }
+  return { rosetta: !!app.runningUnderARM64Translation, inApplications };
+}
+
+async function checkMacInstall() {
+  const info = installInfo();
+  if (info.rosetta) {
+    await dialog.showMessageBox({
+      type: 'warning',
+      title: 'Cute Pet Companion',
+      message: L('Bạn đang dùng bản cho Mac Intel trên máy chip Apple', 'You are running the Intel build on an Apple-chip Mac'),
+      detail: L(
+        'macOS phải dịch app qua Rosetta nên hoạt họa của bé sẽ chậm và giật.\n\nHãy tải và cài file có đuôi "-arm64.dmg" (dành cho chip Apple M1/M2/M3/M4), rồi xoá bản này.',
+        'macOS translates the app through Rosetta, so the pet\'s animation will be slow and choppy.\n\nPlease download and install the file ending in "-arm64.dmg" (for Apple M1/M2/M3/M4), then delete this copy.'
+      ),
+      buttons: [L('Đã hiểu', 'OK')]
+    }).catch(() => {});
+  }
+  if (!info.inApplications) {
+    const r = await dialog.showMessageBox({
+      type: 'question',
+      title: 'Cute Pet Companion',
+      message: L('Chuyển app vào thư mục Applications?', 'Move the app to the Applications folder?'),
+      detail: L(
+        'App đang chạy từ file cài đặt hoặc thư mục Tải về. Chuyển vào Applications để quyền Trợ năng và các bản cập nhật hoạt động ổn định.',
+        'The app is running from the installer or Downloads. Moving it to Applications keeps permissions and updates working reliably.'
+      ),
+      buttons: [L('Chuyển vào Applications', 'Move to Applications'), L('Để sau', 'Not now')],
+      defaultId: 0, cancelId: 1
+    }).catch(() => ({ response: 1 }));
+    if (r.response === 0) {
+      try { app.moveToApplicationsFolder(); } catch (err) { console.error('[Main] move to Applications failed:', err && err.message); }
+    }
+  }
+}
+
+if (process.platform === 'darwin' && app.dock) app.dock.hide();
   });
 }
 
@@ -332,6 +383,7 @@ function getState() {
     chatNameSuggestion: systemFullName(),
     // What macOS says about THIS app build (the helper reports the same via the adapter).
     appAxTrusted: process.platform === 'darwin' ? systemPreferences.isTrustedAccessibilityClient(false) : null,
+    install: installInfo(),
     pipeline: pipeline.snapshot(),
     effective: effectiveState(),
     focusModes: FOCUS_MODES,
@@ -551,6 +603,9 @@ async function boot() {
   screen.on('display-added', fitOverlayToDisplay);
   screen.on('display-removed', fitOverlayToDisplay);
 
+  checkMacInstall();
+  setTimeout(() => { activateReady = true; }, 3000);
+
   // First run: greet & open Control Center so new users see where everything is.
   const firstRunFlag = path.join(app.getPath('userData'), '.welcomed');
   if (!fs.existsSync(firstRunFlag)) {
@@ -559,6 +614,52 @@ async function boot() {
       pipeline.ingest({ title: 'Mèo Mochi chào sen! 🐾', message: 'Mình sẽ mang thông báo tới cho bạn. Mở Control Center từ icon dấu chân trên thanh menu nhé!', app: 'default', forceEmotion: 'love', priority: 'important' }, 'system', { bypassDedupe: true, defaults: { deliveryMode: 'native_os' } });
       openControlCenter();
     }, 1500);
+  }
+}
+
+/**
+ * macOS install sanity checks (packaged builds only):
+ *  • Intel build on an Apple-chip Mac runs under Rosetta → 3D animation stutters badly
+ *    (measured: 2–5 s main-thread stalls). Tell the user to install the "-arm64" DMG.
+ *  • Running straight from the DMG / Downloads → offer to move into Applications
+ *    (stable path for permissions and updates).
+ */
+function installInfo() {
+  if (process.platform !== 'darwin' || !app.isPackaged) return { rosetta: false, inApplications: true };
+  let inApplications = true;
+  try { inApplications = app.isInApplicationsFolder(); } catch { /* ignore */ }
+  return { rosetta: !!app.runningUnderARM64Translation, inApplications };
+}
+
+async function checkMacInstall() {
+  const info = installInfo();
+  if (info.rosetta) {
+    await dialog.showMessageBox({
+      type: 'warning',
+      title: 'Cute Pet Companion',
+      message: L('Bạn đang dùng bản cho Mac Intel trên máy chip Apple', 'You are running the Intel build on an Apple-chip Mac'),
+      detail: L(
+        'macOS phải dịch app qua Rosetta nên hoạt họa của bé sẽ chậm và giật.\n\nHãy tải và cài file có đuôi "-arm64.dmg" (dành cho chip Apple M1/M2/M3/M4), rồi xoá bản này.',
+        'macOS translates the app through Rosetta, so the pet\'s animation will be slow and choppy.\n\nPlease download and install the file ending in "-arm64.dmg" (for Apple M1/M2/M3/M4), then delete this copy.'
+      ),
+      buttons: [L('Đã hiểu', 'OK')]
+    }).catch(() => {});
+  }
+  if (!info.inApplications) {
+    const r = await dialog.showMessageBox({
+      type: 'question',
+      title: 'Cute Pet Companion',
+      message: L('Chuyển app vào thư mục Applications?', 'Move the app to the Applications folder?'),
+      detail: L(
+        'App đang chạy từ file cài đặt hoặc thư mục Tải về. Chuyển vào Applications để quyền Trợ năng và các bản cập nhật hoạt động ổn định.',
+        'The app is running from the installer or Downloads. Moving it to Applications keeps permissions and updates working reliably.'
+      ),
+      buttons: [L('Chuyển vào Applications', 'Move to Applications'), L('Để sau', 'Not now')],
+      defaultId: 0, cancelId: 1
+    }).catch(() => ({ response: 1 }));
+    if (r.response === 0) {
+      try { app.moveToApplicationsFolder(); } catch (err) { console.error('[Main] move to Applications failed:', err && err.message); }
+    }
   }
 }
 

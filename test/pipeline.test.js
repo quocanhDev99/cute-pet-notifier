@@ -124,6 +124,7 @@ test('Chat "mentions" mode: group chatter → Inbox, mentions & DMs → card', (
   assert.strictEqual(r2.item.priority, 'important');
   const r3 = p.ingest({ title: 'Ban A', message: 'rảnh không?', app: 'zalo' }, 'macos_nc');
   assert.ok(!r3.inboxed, 'direct message still shows');
+  assert.strictEqual(r3.item.priority, 'important', '1-1 is treated like a mention');
   s.chat.mode = 'all';
   const r4 = p.ingest({ title: 'Nhom Ha Tang', message: 'Ban B: build xanh', app: 'teams' }, 'macos_nc');
   assert.ok(!r4.inboxed);

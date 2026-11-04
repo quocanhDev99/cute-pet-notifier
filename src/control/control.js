@@ -135,6 +135,16 @@ function syncInputs(root = document) {
   });
 }
 
+// App logos load from Composio's CDN; offline or blocked → show a neutral icon instead of a broken image.
+document.addEventListener('error', (e) => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement) || img.dataset.fallback) return;
+  img.dataset.fallback = '1';
+  const span = document.createElement('span');
+  span.textContent = '🧩';
+  img.replaceWith(span);
+}, true);
+
 document.addEventListener('input', (e) => {
   const el = e.target.closest('[data-setting]');
   if (!el || el.type === 'checkbox' || el.type === 'radio' || el.tagName === 'SELECT') return;
@@ -291,7 +301,7 @@ const H = {
 const PRIORITY_LABEL = { critical: '🚨 Khẩn cấp', important: '⭐ Quan trọng', normal: '• Bình thường', low: '💤 Ít quan trọng' };
 const FRIENDLY_REASON = {
   low_priority: 'Ít quan trọng', cooldown: 'Nhiều tin liên tiếp', app_muted: 'Ứng dụng đã tắt tiếng', presence_hidden: 'Lúc thú cưng đang ẩn',
-  presence_minimal: 'Chế độ tối giản', queue_overflow: 'Quá nhiều tin cùng lúc', manual_test: 'Thử nghiệm', not_mentioned: 'Không nhắc tên bạn'
+  presence_minimal: 'Chế độ tối giản', queue_overflow: 'Quá nhiều tin cùng lúc', manual_test: 'Thử nghiệm', not_mentioned: 'Tin nhóm không nhắc tên bạn'
 };
 const friendlyReason = (r) => FRIENDLY_REASON[r] || (/^mode_/.test(r || '') ? 'Đang ở chế độ tập trung' : '');
 const STATUS_CLASS = { 'Connected': 'ok', 'Disconnected': 'off', 'Requires Authorization': 'warn', 'Permission Limited': 'warn', 'Unsupported': 'na', 'Error': 'err' };
@@ -385,6 +395,7 @@ const pages = {
     const apps = myApps();
     return `
       ${H.head('Xin chào! 👋', 'Thú cưng đang trông thông báo giúp bạn.')}
+      ${S.install && S.install.rosetta ? `<div class="warn-box" style="margin:0 0 16px"><b>🐢 Bạn đang dùng bản cho Mac Intel trên máy chip Apple</b><span>Hoạt họa sẽ chậm và giật vì macOS phải dịch app qua Rosetta. Hãy cài file có đuôi <b style="display:inline">-arm64.dmg</b> rồi xoá bản này.</span></div>` : ''}
       <section class="hero panel">
         <div class="hero-stage">${previewControls({ emotions: false })}</div>
         <div class="hero-info">
@@ -653,6 +664,7 @@ const notifySubs = {
             ${themes.map(([id, name]) => `<button class="theme-card" data-choice="notifications.theme" data-value="${id}"><div class="theme-swatch t-${id}"><i></i><i></i><i></i></div><b>${name}</b></button>`).join('')}
           </div>
           <div class="seg">${[['sm', 'Nhỏ'], ['md', 'Vừa'], ['lg', 'Lớn']].map(([v, l]) => `<button data-choice="notifications.size" data-value="${v}">${l}</button>`).join('')}</div>
+          ${H.slider('notifications.cardScale', '📐 Kích thước khung thông báo', 0.8, 1.5, 0.05, 'x')}
           ${H.slider('notifications.duration', '⏱️ Thẻ hiện trong', 3000, 30000, 500, 'sec')}
         </section>
         <section class="panel">
@@ -723,7 +735,7 @@ const notifySubs = {
         <p class="muted">Áp dụng cho Teams, Slack, Zalo, Messenger, Tin nhắn, Telegram, Discord, WhatsApp…</p>
         <div class="choice-list two-col">
           <button class="choice" data-choice="chat.mode" data-value="all"><b>🔔 Báo tất cả tin nhắn</b><small>Mọi tin nhắn được gửi tới đều hiện thẻ.</small></button>
-          <button class="choice" data-choice="chat.mode" data-value="mentions"><b>📣 Chỉ khi nhắc tới tôi</b><small>Chỉ hiện khi có tên bạn, @all / @everyone, hoặc app báo "nhắc đến bạn". Tin khác vào Hộp thư.</small></button>
+          <button class="choice" data-choice="chat.mode" data-value="mentions"><b>📣 Chỉ tin dành cho tôi</b><small>Hiện khi có người nhắn riêng (1-1) với bạn, nhắc tên bạn, @all / @everyone, hoặc app báo "nhắc đến bạn". Tin nhóm khác vào Hộp thư.</small></button>
         </div>
         <div class="chat-mentions" ${S.settings.chat.mode === 'mentions' ? '' : 'hidden'}>
           <label class="field"><b>Tên của bạn trong chat</b>
@@ -731,7 +743,7 @@ const notifySubs = {
             <input id="chat-names" type="text" autocomplete="off" spellcheck="false" value="${esc((S.settings.chat.names || []).join(', '))}" placeholder="${esc(S.chatNameSuggestion ? `${S.chatNameSuggestion}, @${S.chatNameSuggestion.split(' ')[0]}` : 'Tên Của Bạn, @Ten')}">
           </label>
           ${S.chatNameSuggestion && !(S.settings.chat.names || []).length ? `<div class="btn-row tight"><button class="btn btn-ghost small" data-action="chat-suggest">＋ Dùng "${esc(S.chatNameSuggestion)}"</button></div>` : ''}
-          ${H.toggle('chat.includeDirect', 'Tin nhắn riêng (1-1) vẫn báo', 'Với Slack biết chính xác; với thông báo của máy là đoán theo dạng tin ("Người gửi: nội dung" thường là tin nhóm).')}
+          ${H.toggle('chat.includeDirect', '💬 Báo khi có người nhắn riêng (1-1)', 'Bé nhận ra tin 1-1 khi tiêu đề là tên người gửi và nội dung không có dạng "Người gửi: …" (dạng của tin nhóm). Slack thì biết chính xác. Tin 1-1 được ưu tiên như khi nhắc tên bạn.')}
         </div>
       </section>
 `;

@@ -136,7 +136,7 @@ function startNotificationServer(host) {
           'Cache-Control': 'no-store',
           'X-Frame-Options': 'DENY',
           'Referrer-Policy': 'no-referrer',
-          'Content-Security-Policy': "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'"
+          'Content-Security-Policy': "default-src 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'"
         });
         res.end(html);
         return;

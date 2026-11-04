@@ -73,3 +73,7 @@ Không có streak, không phạt khi không tương tác, không ép vuốt ve. 
 | Giọng nói chỉ đọc câu cố định, không bao giờ đọc nội dung thông báo | ✅ | xem mã `speak()` trong renderer |
 | App và `nc-bridge` ký bằng chứng chỉ cục bộ cố định (`build/signing/`, không có trong git); keychain chỉ được thêm vào search list trong lúc ký | ✅ | `scripts/sign-mac.sh` |
 | Câu mẫu và test không dùng tên người thật | ✅ | |
+
+
+## Cập nhật v3.4.2
+- CSP của Control Center cho phép `img-src https:` để hiện logo ứng dụng từ CDN của Composio. Chỉ áp dụng cho **ảnh** (`referrerpolicy="no-referrer"`, không gửi token hay cookie). `script-src` và `connect-src` vẫn chỉ `'self'`. Overlay giữ nguyên CSP chặt (không tải ảnh ngoài).

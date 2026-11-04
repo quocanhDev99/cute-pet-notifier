@@ -1,6 +1,6 @@
 # KNOWN_LIMITATIONS — Hạn chế còn tồn tại
 
-*Cập nhật: 04/11/2026 · v3.4.0. Danh sách công khai để người dùng và đội ngũ nắm rõ.*
+*Cập nhật: 04/11/2026 · v3.4.2. Danh sách công khai để người dùng và đội ngũ nắm rõ.*
 
 ## Nhân vật & hoạt họa
 1. **Chưa có `model.glb` production cho nhân vật nào.** Cả 4 nhân vật đang chạy bằng rig procedural. Đường nạp GLB đã có, nhưng chưa thử với một file GLB thật.
@@ -10,10 +10,15 @@
 3. **Khi bật Focus của macOS:** macOS không hiện banner, nên app chỉ đọc được kho thông báo (trễ khoảng 5 giây).
 4. **Một số app tự bật lại banner gốc** sau khi đã tắt (Chrome, Brave, Tin nhắn). Cần tắt tay trong *Cài đặt → Thông báo*.
 5. **Bấm thẻ mở đúng cuộc chat** chỉ chắc chắn ở chế độ bắt banner tức thì (đã cấp quyền Trợ năng). Ở chế độ đọc kho thông báo, chỉ Teams và Slack có thông tin để mở đúng chat.
-6. **App chưa có chứng chỉ Apple Developer.** App được ký bằng chứng chỉ tự ký nên quyền giữ được qua các bản cập nhật trên máy này. Khi cài trên máy khác, Gatekeeper vẫn cảnh báo (chuột phải → Mở).
+6. **App chưa có chứng chỉ Apple Developer.** App được ký bằng chứng chỉ tự ký nên quyền giữ được qua các bản cập nhật trên máy này. Khi cài trên máy khác, Gatekeeper vẫn cảnh báo (*Quyền riêng tư & Bảo mật → Open Anyway*, xem INSTALL.md).
+
+## Hiệu năng
+17. **Cài nhầm bản Intel (`-x64`) trên máy chip Apple** làm hoạt họa rất chậm, giật (Rosetta; đo được khựng 2–5 giây). App cảnh báo khi mở và trên Trang chủ. Trên Apple M2, bản `-arm64` chạy ổn định ~73 khung hình/giây (màn hình 75 Hz), không có khung khựng khi thẻ hiện.
+18. **Thẻ hiện lần lượt từng cái.** Thẻ tới khi bé đang cầm thẻ khác sẽ chờ thẻ trước đóng, nên có thể trông như "trễ".
+19. **Độ trễ theo nguồn:** chưa cấp quyền Trợ năng thì thông báo của máy trễ khoảng 5 giây; Gmail/Jira/Bitbucket qua Composio là kiểm tra định kỳ (mặc định 2 phút).
 
 ## Chat & cảm xúc
-7. **Tin nhắn riêng 1-1 với thông báo của máy là đoán** (dạng "Người gửi: nội dung" thường là tin nhóm). Slack thì biết chính xác.
+7. **Tin nhắn riêng 1-1 với thông báo của máy là đoán** theo dạng tin: tiêu đề là tên nhóm/#kênh, hoặc nội dung "Người gửi: …" thì là tin nhóm. Nhóm chỉ có tên thường (vd "Ban A, Ban B") mà app không ghi người gửi có thể bị coi là 1-1. Slack thì biết chính xác.
 8. **Đọc cảm xúc dựa trên từ điển và emoji, không phải AI.** Câu mỉa mai hay câu mơ hồ có thể bị đoán sai. Không đủ chắc thì bé giữ cảm xúc mặc định.
 9. **Giọng nói dùng giọng của hệ thống.** Chất lượng tùy máy, tiếng Việt là giọng "Linh". Bé không bao giờ đọc nội dung thông báo.
 

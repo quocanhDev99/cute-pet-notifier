@@ -1,7 +1,7 @@
 # TEST_RESULTS — Nhật ký kiểm thử
 
 ## v3.4.0 — 04/11/2026 · Apple M2, macOS 14.6.1 · Node v22.11.0 · Electron 33.4.11
-`npm test` → **73/73 pass** (≈ 2.5 s), 17 file:
+`npm test` → **75/75 pass** (≈ 2.5 s), 17 file:
 
 | File | Phạm vi |
 |---|---|
@@ -9,7 +9,7 @@
 | attention.test.js | ưu tiên, Inbox, cooldown, chế độ tập trung, hidden/gaming, tắt tiếng |
 | pipeline.test.js | lọc input, hàng đợi, dedupe, gộp, DND, idempotency, rows/actions allowlist, chế độ chat "mentions" |
 | privacy.test.js | **chuỗi bí mật** không có trong event, history, Inbox và file trên đĩa; masked/anonymous; quy tắc "chặt hơn thắng" |
-| chat-filter.test.js | nhắc tên (không dấu, @tên 1 chữ, không nhầm "mai" thường ngày / email), @all, câu báo của app, tin 1-1 |
+| chat-filter.test.js | nhắc tên (không dấu, @tên 1 chữ, không nhầm "mai" thường ngày / email), @all, câu báo của app, nhận ra tin 1-1 theo dạng thông báo (tiêu đề nhóm/#kênh, "Người gửi: …", nhãn "Lưu ý:" không phải người gửi) |
 | mood-reader.test.js | emoji, VI có/không dấu, EN, phủ định, "!!!"/CHỮ HOA, câu trung tính, độ nhạy |
 | break-reminder.test.js | 60 phút dùng máy, rời máy thì đếm lại, chờ hết họp, hẹn 10 phút, nghỉ, tắt |
 | bitbucket-review.test.js | thẻ gộp nhiều PR, approve từng dòng, từ chối id giả |

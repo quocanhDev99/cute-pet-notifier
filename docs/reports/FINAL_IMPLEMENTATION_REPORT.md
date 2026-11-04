@@ -1,12 +1,24 @@
 # FINAL_IMPLEMENTATION_REPORT
 
+## v3.4.2 — 04/11/2026 (thay đổi từ v3.4.1)
+- **📐 Kích thước khung thông báo:** thanh kéo ×0.80–×1.50 trong *Thông báo → Hiển thị → Kiểu thẻ*; chữ, nút và độ rộng thẻ co giãn cùng nhau, thẻ lớn vẫn vừa màn hình.
+- **Logo ứng dụng** trong *Kết nối* hiện đúng (trước bị chặn bởi chính sách bảo mật ảnh); mất mạng thì hiện 🧩 thay vì ảnh vỡ.
+- **Minh hoạ 3 kiểu xuất hiện** (Ôm bảng / Ló đầu / Đưa thư) hiện lại.
+- **Mở lại app** từ Finder/Launchpad khi app đang chạy sẽ mở Control Center.
+
+## v3.4.1 — 04/11/2026 (thay đổi từ v3.4.0)
+- **Chat:** chế độ "Chỉ tin dành cho tôi" nhận ra cả tin nhắn riêng 1-1 (ưu tiên như khi nhắc tên).
+- **Thẻ thông báo:** dòng gợi ý "Vuốt đầu bé…" nằm riêng một dòng, không còn chen vào hàng nút.
+- **Nhấc bé lên:** không còn bị mất đầu (khung camera tự nới khi bé bị cầm).
+- **Cài đặt macOS:** file Intel đổi tên thành `-x64.dmg`; app cảnh báo nếu chạy bản Intel trên máy chip Apple, và đề nghị chuyển vào Applications nếu đang chạy từ file cài / Tải về.
+
 ## v3.4.0 — 04/11/2026 (thay đổi từ v3.2)
 - **Control Center** gọn lại còn 6 tab thân thiện + tab "Theo dõi" kỹ thuật (bật trong Nâng cao). Có 6 màu giao diện, thẻ thông báo đổi màu theo.
 - **Kết nối động:** dùng Composio Connect (`ck_`, MCP) hoặc REST (`ak_`) thay cho danh sách cố định. Đã có Gmail, Outlook, Lịch, GitHub, **Jira** (việc mới, đổi trạng thái, "giao bởi" từ changelog) và **Bitbucket** (PR chờ review, Approve trên thẻ).
-- **Chat:** báo tất cả, hoặc chỉ khi nhắc tên / @all. **Bé đọc cảm xúc** từ nội dung. **Privacy Display Mode** 4 mức. **Nhắc nghỉ mắt** có giọng nói. **Bé nói** khi bị nhấc bổng và kéo thả.
+- **Chat:** báo tất cả, hoặc chỉ tin dành cho bạn (nhắn riêng 1-1, nhắc tên, @all). **Bé đọc cảm xúc** từ nội dung. **Privacy Display Mode** 4 mức. **Nhắc nghỉ mắt** có giọng nói. **Bé nói** khi bị nhấc bổng và kéo thả.
 - **Ổn định:** click-through dựa vào vị trí con trỏ do main process đọc; trợ lý nc-bridge tự khởi động lại cho tới khi nhận quyền; app được ký bằng chứng chỉ cục bộ cố định.
 - **Đã gỡ:** khung YouTube thu nhỏ (theo yêu cầu).
-- **Kiểm thử:** 73/73 test. Chi tiết trong TEST_RESULTS.md. Hạn chế trong KNOWN_LIMITATIONS.md.
+- **Kiểm thử:** 75/75 test. Chi tiết trong TEST_RESULTS.md. Hạn chế trong KNOWN_LIMITATIONS.md.
 
 ---
 

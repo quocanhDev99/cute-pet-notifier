@@ -2,7 +2,7 @@
 
 **Một thú cưng 3D sống ở góc màn hình, thay thế các thông báo khô khan của máy tính.** Tin nhắn Teams/Zalo/Slack, email, PR cần review, việc Jira mới giao… đều được bé mang tới bằng một tấm thẻ dễ thương, kèm cảm xúc hợp với nội dung tin. Bé biết khi nào nên im lặng, và biết nhắc bạn nghỉ mắt.
 
-*Phiên bản 3.4.0 · macOS (Apple Silicon & Intel) · Windows 10/11 (chưa kiểm thử trên máy thật)*
+*Phiên bản 3.4.2 · macOS (Apple Silicon & Intel) · Windows 10/11 (chưa kiểm thử trên máy thật)*
 
 ---
 
@@ -11,7 +11,7 @@
 | | Tính năng | Bạn được gì |
 |---|---|---|
 | 🍎 | **Thay thông báo của máy Mac** | Banner góc phải của macOS được thay bằng thẻ của bé. Bấm thẻ là mở đúng app (với Teams/Slack thì mở đúng cuộc chat khi có thông tin). |
-| 💬 | **Chỉ báo khi được nhắc tên** | Chọn "báo tất cả tin nhắn" hoặc "chỉ khi có tên bạn / @all". Tin khác vẫn được giữ trong Hộp thư. |
+| 💬 | **Chỉ báo tin dành cho bạn** | Chọn "báo tất cả tin nhắn" hoặc "chỉ tin dành cho tôi": tin nhắn riêng 1-1, tin có tên bạn hoặc @all. Tin nhóm khác vẫn được giữ trong Hộp thư. |
 | 🔍 | **PR Bitbucket chờ review** | Thẻ liệt kê từng PR, có nút **↗ Mở** và **✅ Approve** ngay trên thẻ. |
 | 🧩 | **Việc Jira mới giao** | Báo khi có việc mới giao cho bạn (kèm **người giao**) hoặc khi việc đổi trạng thái. |
 | ✉️ | **Gmail, Outlook, GitHub, Lịch…** | Kết nối hơn 1000 ứng dụng qua Composio, không cần lập trình. |
@@ -27,7 +27,7 @@
 
 ## 2. Cài đặt trong 5 phút (macOS)
 
-1. **Cài app:** mở `Cute Pet Companion-3.4.0-arm64.dmg` (máy chip Apple) hoặc `Cute Pet Companion-3.4.0.dmg` (máy Intel), rồi kéo app vào **Applications**. Lần đầu mở: **chuột phải → Mở**.
+1. **Cài app:** mở `Cute Pet Companion-3.4.2-arm64.dmg` (máy chip Apple) hoặc `Cute Pet Companion-3.4.2-x64.dmg` (máy Intel). Chọn sai file thì bé sẽ chạy chậm, giật, rồi kéo app vào **Applications**. Lần đầu mở, macOS báo *"Apple could not verify…"*: bấm **Done** → **Cài đặt hệ thống → Quyền riêng tư & Bảo mật → Open Anyway** (hoặc chạy `xattr -dr com.apple.quarantine "/Applications/Cute Pet Companion.app"`).
 2. **Cho bé thay thông báo của máy:** vào Control Center → **🔌 Kết nối** → thẻ **🍎 Thay thế thông báo của máy Mac**:
    - **Bước 1:** bấm **Mở Cài đặt**, rồi bật **Cute Pet Companion** trong *Quyền riêng tư & Bảo mật → Trợ năng*.
    - **Bước 2 (tùy chọn):** bấm **🤫 Bật** để tắt hẳn banner gốc của macOS. Muốn trả lại thì bấm **↺ Hoàn tác**.
@@ -48,7 +48,7 @@ Mở bằng icon 🐾 trên thanh menu, nhấp đúp vào bé, hoặc chuột ph
 |---|---|
 | 🏠 **Trang chủ** | Bé đang làm gì, trạng thái thay thông báo, cách bé xuất hiện, tin gần đây, Hộp thư |
 | 🐱 **Thú cưng** | Chọn nhân vật, tính cách, 🎭 bé đọc cảm xúc (có ô **gõ thử**), âm thanh, 🗣️ bé nói chuyện |
-| 🔔 **Thông báo** | 🎨 Hiển thị · 💬 Tin nhắn (báo tất cả / chỉ khi nhắc tên) · 🎯 Tập trung (chế độ, không làm phiền, 💆 nhắc nghỉ mắt) · ⭐ Ưu tiên |
+| 🔔 **Thông báo** | 🎨 Hiển thị · 💬 Tin nhắn (báo tất cả / chỉ tin 1-1 & nhắc tên) · 🎯 Tập trung (chế độ, không làm phiền, 💆 nhắc nghỉ mắt) · ⭐ Ưu tiên |
 | 📥 **Hộp thư** | Các tin bị giữ lại |
 | 🔌 **Kết nối** | Thay thông báo của Mac, ứng dụng của tôi, thêm ứng dụng mới |
 | ⚙️ **Cài đặt** | Màu giao diện, ngôn ngữ, 🙈 nội dung trên thẻ, quyền riêng tư, chế độ nâng cao |
@@ -102,7 +102,7 @@ Danh sách đầy đủ các hạn chế: **[docs/reports/KNOWN_LIMITATIONS.md](
 ```bash
 npm install
 npm start            # build overlay + control center bundle rồi mở Electron
-npm test             # 73 test (Node ≥ 22): engine, pipeline, privacy, chat, mood, Composio, gateway, adapters…
+npm test             # 75 test (Node ≥ 22): engine, pipeline, privacy, chat, mood, Composio, gateway, adapters…
 npm run pack:mac     # app đã ký (arm64) trong dist/mac-arm64
 npm run dist:mac     # DMG arm64 + x64, ký bằng chứng chỉ cục bộ cố định
 npx electron-builder --win nsis --x64   # file .exe cho Windows (build được trên máy Mac)

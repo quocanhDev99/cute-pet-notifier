@@ -1,6 +1,6 @@
 # 📦 Hướng dẫn cài đặt & Cơ chế thay thế thông báo (macOS & Windows)
 
-*Phiên bản 3.4.0 · Cập nhật 04/11/2026*
+*Phiên bản 3.4.2 · Cập nhật 04/11/2026*
 
 ## 0. Cơ chế thay thế thông báo hệ thống của Cute Pet Companion
 
@@ -20,9 +20,12 @@ Tạo bằng `npm run dist:mac` (macOS, đã ký) và `npx electron-builder --wi
 
 | Hệ điều hành | Tệp |
 |---|---|
-| macOS chip Apple (M1/M2/M3…) | `Cute Pet Companion-3.4.0-arm64.dmg` |
-| macOS chip Intel | `Cute Pet Companion-3.4.0.dmg` |
-| Windows 10/11 (64-bit) | `Cute Pet Companion Setup 3.4.0.exe` |
+| macOS chip Apple (M1/M2/M3/M4) | `Cute Pet Companion-3.4.2-arm64.dmg` |
+| macOS chip Intel | `Cute Pet Companion-3.4.2-x64.dmg` |
+| Windows 10/11 (64-bit) | `Cute Pet Companion Setup 3.4.2.exe` |
+
+> **Không biết máy mình chip gì?** Bấm menu  → *Giới thiệu về máy Mac này*. Dòng *Chip* ghi "Apple M…" thì dùng file `-arm64`. Dòng *Bộ xử lý* ghi "Intel" thì dùng file `-x64`.
+> Nếu cài **nhầm bản Intel trên máy chip Apple**, macOS phải dịch app qua Rosetta nên hoạt họa rất chậm, giật (đo được có lúc khựng 2–5 giây). App sẽ hiện cảnh báo khi mở; hãy cài lại đúng file `-arm64`.
 
 Bản macOS được ký bằng **chứng chỉ tự ký cố định**, nên quyền Trợ năng giữ nguyên qua các bản cập nhật. Tuy vậy app **chưa được Apple notarize**, và bản Windows chưa có chứng chỉ ký code, nên lần mở đầu tiên hệ điều hành sẽ cảnh báo. Xem cách mở bên dưới. Bản Windows **chưa được chạy thử trên máy Windows thật**.
 
@@ -32,9 +35,11 @@ Bản macOS được ký bằng **chứng chỉ tự ký cố định**, nên qu
 
 ### 2.1 Cài đặt
 1. Mở tệp `.dmg`, kéo **Cute Pet Companion** vào thư mục **Applications**.
-2. Mở app lần đầu: vào Applications, **chuột phải** vào app → **Mở** → **Mở**.
-   - Nếu macOS báo *"không thể mở vì không xác minh được nhà phát triển"*: vào **Cài đặt Hệ thống → Quyền riêng tư & Bảo mật**, kéo xuống, bấm **Vẫn mở**.
-   - Nếu báo *"app bị hỏng"* (do tệp tải từ Internet): chạy `xattr -dr com.apple.quarantine "/Applications/Cute Pet Companion.app"`.
+2. **Mở app lần đầu.** macOS sẽ báo *"Apple could not verify… / Không thể mở"*, vì app chưa được Apple notarize. App không bị hỏng. Bấm **Done** (đừng bấm *Move to Trash*), rồi chọn **một** trong hai cách:
+   - **Cách A, không cần gõ lệnh:** vào **Cài đặt hệ thống → Quyền riêng tư & Bảo mật**, kéo xuống phần *Bảo mật*, thấy dòng *"Cute Pet Companion" was blocked…* thì bấm **Open Anyway / Vẫn mở** và nhập mật khẩu máy. Mở lại app rồi bấm **Open**.
+   - **Cách B, một lệnh trong Terminal:** `xattr -dr com.apple.quarantine "/Applications/Cute Pet Companion.app"`, sau đó mở app bình thường.
+   - Trên macOS 14 trở về trước, cách **chuột phải vào app → Mở → Mở** vẫn dùng được. Từ macOS 15 (Sequoia), hộp thoại không còn nút *Mở*, nên phải dùng Cách A hoặc B.
+   - Việc này chỉ cần làm **một lần**.
 3. Thú cưng xuất hiện ở góc màn hình và **Control Center** tự mở trong lần chạy đầu.
 
 ### 2.2 Thay thế thông báo của máy (2 bước)
@@ -60,7 +65,7 @@ macOS 15 bổ sung khóa kho thông báo SQLite. Nếu bạn muốn kích hoạt
 ## 3. Windows 10/11
 
 ### 3.1 Cài đặt
-1. Chạy `Cute Pet Companion Setup 3.4.0.exe`. Đây là bản cài 1-click cho tài khoản hiện tại, không yêu cầu quyền Administrator.
+1. Chạy `Cute Pet Companion Setup 3.4.2.exe`. Đây là bản cài 1-click cho tài khoản hiện tại, không yêu cầu quyền Administrator.
 2. Nếu Windows SmartScreen hiện cảnh báo màu xanh: bấm **More info** (Thông tin thêm) → **Run anyway** (Vẫn chạy).
 3. Thú cưng xuất hiện ở góc màn hình. Icon 🐾 nằm ở khay hệ thống (System Tray, góc dưới bên phải màn hình).
 
@@ -79,7 +84,8 @@ macOS 15 bổ sung khóa kho thông báo SQLite. Nếu bạn muốn kích hoạt
 |---|---|---|
 | Thay thông báo của Mac | 🔌 Kết nối → 🍎 Thay thế thông báo | Bật *Cute Pet Companion* trong Trợ năng (thẻ sẽ chỉ thêm trợ lý *nc-bridge* nếu macOS yêu cầu) |
 | Gmail, Jira, Bitbucket, Outlook, GitHub… | 🔌 Kết nối → Dán khóa Composio (`ck_…` từ Connect, hoặc `ak_…` của Project) → ＋ Kết nối | Kiểm tra mỗi 2 phút (đổi được: 1/2/5/15 phút) |
-| Chỉ báo chat khi được nhắc tên | 🔔 Thông báo → 💬 Tin nhắn | Điền tên của bạn (tên 1 chữ cần @, vd `@Mai`) |
+| Thẻ thông báo to / nhỏ hơn | 🔔 Thông báo → 🎨 Hiển thị → *📐 Kích thước khung thông báo* | Kéo từ ×0.80 tới ×1.50 |
+| Chỉ báo chat khi nhắn riêng 1-1 hoặc nhắc tên | 🔔 Thông báo → 💬 Tin nhắn → *Chỉ tin dành cho tôi* | Điền tên của bạn (tên 1 chữ cần @, vd `@Mai`). Tin 1-1 tự được báo |
 | Bé đọc cảm xúc tin nhắn | 🐱 Thú cưng → 🎭 Bé đọc cảm xúc | Có ô "Gõ thử một tin nhắn" |
 | Ẩn nội dung khi chia sẻ màn hình | ⚙️ Cài đặt → 🙈 Nội dung trên thẻ, hoặc chuột phải vào bé | 4 mức: đầy đủ / che bớt / chỉ tên app / ẩn hoàn toàn |
 | Nhắc nghỉ mắt | 🔔 Thông báo → 🎯 Tập trung → 💆 Nhắc nghỉ mắt | Mặc định 60 phút dùng máy thật; bé nói lời nhắc |

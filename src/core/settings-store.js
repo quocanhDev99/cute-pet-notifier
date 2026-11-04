@@ -19,6 +19,7 @@ const DEFAULT_SETTINGS = Object.freeze({
     presentationMode: 'billboard',
     theme: 'pastel',
     size: 'md',
+    cardScale: 1,
     duration: 9000,
     maxQueue: 20,
     dedupeSeconds: 30,
@@ -121,6 +122,7 @@ const ENUMS = {
 
 const RANGES = {
   'notifications.duration': [3000, 60000],
+  'notifications.cardScale': [0.8, 1.5],
   'integrations.pollSeconds': [60, 900],
   'wellbeing.breakEveryMinutes': [20, 240],
   'wellbeing.breakMinutes': [1, 30],

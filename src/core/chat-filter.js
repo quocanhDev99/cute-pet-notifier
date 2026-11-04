@@ -3,7 +3,7 @@
  *   all       — every chat message shows a card (default).
  *   mentions  — only messages that mention you by name, @all/@everyone/@channel/@here, or that
  *               the app itself marks as a mention ("mentioned you", "đã nhắc đến bạn"…);
- *               1-1 direct messages still show when chat.includeDirect is on.
+ *               1-1 direct messages also show (chat.includeDirect, on by default).
  * Everything else goes to the Inbox (reason "not_mentioned") — nothing is lost.
  *
  * Name matching is accent/case-insensitive. Multi-word names ("Mai Pham") match as a phrase;
@@ -18,7 +18,25 @@ const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const ALL_RE = /(^|[\s(,.;:!?])@(all|everyone|channel|here|team|tat ca|moi nguoi|ca nhom)(?=$|[\s),.;:!?])/;
 const APP_MENTION_RE = /\b(mentioned you|mentioned everyone|tagged you|replied to you|reacted to your|da nhac den ban|nhac den ban|da nhac ban|da gan the ban|da tra loi ban|tra loi tin nhan cua ban)\b/;
 // "Sender: text" bodies are typical for group conversations in OS notifications.
-const GROUP_BODY_RE = /^[^:\n]{1,40}:\s/;
+const SENDER_PREFIX_RE = /^([^:\n]{1,40}):\s/;
+// Prefixes that look like "Label: …" inside a 1-1 message, not a sender name.
+const LABEL_WORDS = new Set(['note', 'notes', 'fyi', 'ps', 're', 'fw', 'fwd', 'update', 'todo', 'link', 'url', 'error', 'warning', 'info', 'tip', 'q', 'a', 'luu y', 'chu y', 'nhac', 'nhac nho', 'cap nhat', 'ghi chu', 'tom tat', 'ket qua', 'loi', 'van de', 'cau hoi', 'tra loi', 'vi du', 'gio', 'dia chi', 'thoi gian', 'deadline', 'task', 'bug', 'pr']);
+// Titles that name a channel / group rather than a person.
+const GROUP_TITLE_RE = /(^#|\s(in|trong)\s#|\bgroup\b|\bnhom\b|\bchannel\b|\bkenh\b|\(\d+\)$)/;
+// Apps' own 1-1 markers ("sent you a message", "đã gửi cho bạn"…).
+const DIRECT_HINT_RE = /\b(sent you|messaged you|direct message|tin nhan rieng|da gui cho ban|gui cho ban|nhan tin cho ban|new message from)\b/;
+
+/** "Khanh: hi" → "Khanh" when the prefix looks like a person's name, else null. */
+function senderPrefix(message) {
+  const m = SENDER_PREFIX_RE.exec(String(message || ''));
+  if (!m) return null;
+  const raw = m[1].trim();
+  const f = fold(raw);
+  if (!raw || LABEL_WORDS.has(f) || /https?$|\d{2,}|[\/\\@#]/.test(f)) return null;
+  const words = raw.split(/\s+/);
+  if (words.length > 5) return null;
+  return raw;
+}
 
 function isChat(item) { return item.category === 'chat' || CHAT_APPS.has(String(item.app || '').toLowerCase()); }
 
@@ -40,11 +58,23 @@ function mentionInfo(item, names = []) {
   return { mentioned: false, by: null };
 }
 
-/** true / false when known; for OS notifications a best-effort guess. */
+/**
+ * Is this a 1-1 (direct) conversation? Exact when the source says so (Slack), otherwise a
+ * best-effort guess from the shape of OS notifications:
+ *   1-1   → title = the person, body = the text            ("Ban A" / "rảnh không?")
+ *   group → title = the group, body = "Sender: text"        ("Nhom Du An" / "Ban A: …")
+ *           or "Group — Sender" titles, "#channel" titles.
+ */
 function isDirect(item) {
   if (typeof item.chatDirect === 'boolean') return item.chatDirect;
-  if (GROUP_BODY_RE.test(String(item.message || ''))) return false;
-  if (/ — /.test(String(item.title || ''))) return false; // "Group — subtitle" from Notification Center
+  const title = String(item.title || '');
+  const ft = fold(title);
+  if (DIRECT_HINT_RE.test(fold(`${title}\n${item.message || ''}`))) return true;
+  if (/ — /.test(title)) return false; // "Group — subtitle" from Notification Center
+  if (GROUP_TITLE_RE.test(ft)) return false;
+  const sender = senderPrefix(item.message);
+  // "Ban A" / "Ban A: hi" — some apps repeat the sender's name in a 1-1 chat.
+  if (sender) return fold(sender) === ft;
   return true;
 }
 
@@ -57,6 +87,7 @@ function chatDecision(item, settings) {
   const m = mentionInfo(item, cfg.names || []);
   const direct = isDirect(item);
   if (cfg.mode !== 'mentions') return { chat: true, show: true, ...m, direct, reason: null };
+  // "Only when it's about me": mentions, and 1-1 messages (someone is talking to you directly).
   const show = m.mentioned || (cfg.includeDirect !== false && direct);
   return { chat: true, show, ...m, direct, reason: show ? null : 'not_mentioned' };
 }
