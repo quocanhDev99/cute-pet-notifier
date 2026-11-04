@@ -25,7 +25,7 @@ let S = null; // full app state from /api/state
 let route = 'home';
 let sub = '';
 let stage = null;
-let previewEmotion = 'idle';
+let previewEmotion = null; // null/'idle' → the chosen attitude's resting pose
 const thumbs = {};
 const catalogState = { q: '', category: '', items: null, loading: false, error: '' };
 
@@ -61,6 +61,15 @@ function toast(msg, kind = '') {
   setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 3200);
 }
 
+/** "5 phút trước · 14:32 04/11/2026" — relative + the exact arrival date/time. */
+function arrivedAt(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts);
+  const loc = S && S.settings.appearance.language === 'en' ? 'en-GB' : 'vi-VN';
+  const abs = `${d.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' })} ${d.toLocaleDateString(loc, { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+  return Date.now() - ts < 86400000 ? `${timeAgo(ts)} · ${abs}` : abs;
+}
+
 function timeAgo(ts) {
   if (!ts) return '—';
   const s = Math.round((Date.now() - ts) / 1000);
@@ -94,6 +103,7 @@ function queueSave(patch, immediate = false) {
   pendingPatch = deepMerge(pendingPatch, patch);
   deepMerge(S.settings, patch);
   applyPreviewSettings();
+  if (patch.personality && stage) { setPreviewEmotion('idle'); stage.play('wave'); } // show the new attitude (the desktop pet follows via settings)
   clearTimeout(saveTimer);
   saveTimer = setTimeout(flushSave, immediate ? 0 : 280);
 }
@@ -224,11 +234,15 @@ function applyPreviewSettings() {
 function setPreviewEmotion(id) {
   previewEmotion = id;
   ensureStage();
-  stage.setEmotion(id);
-  stage.setAnnoying(presetFor(S.settings.personality).annoyingEmotions.includes(id));
+  // "Waiting" previews the personality's resting pose, exactly as the desktop pet shows it.
+  const preset = presetFor(S.settings.personality);
+  const shown = id === 'idle' ? (preset.restEmotion || 'idle') : id;
+  stage.setEmotion(shown);
+  if (shown !== 'idle') stage.hold('mood'); else stage.release('mood'); // keep the pose animating
+  stage.setAnnoying(preset.annoyingEmotions.includes(shown));
   document.querySelectorAll('[data-preview-emotion]').forEach(b => b.classList.toggle('active', b.dataset.previewEmotion === id));
   const label = document.getElementById('preview-label');
-  if (label) label.textContent = id === 'idle' ? '🐾 Đang chờ bạn' : `${emo(id).emoji} ${emo(id).label}`;
+  if (label) label.textContent = id === 'idle' ? `${preset.emoji} ${preset.name} · lúc rảnh` : `Thử phản ứng: ${emo(id).emoji} ${emo(id).label}`;
 }
 
 function bubble(text) {
@@ -253,7 +267,8 @@ const previewControls = ({ emotions = true } = {}) => `
   <div class="preview-wrap">
     <div class="preview-host" id="preview-host"><div class="preview-bubble"></div><div class="preview-floor"></div></div>
     <div class="preview-label" id="preview-label"></div>
-    ${emotions ? `<div class="emotion-pad">
+    ${emotions ? `<h4 class="pad-title">🎭 Thử phản ứng <small>chỉ xem trước bé phản ứng thế nào khi có thông báo — không đổi cấu hình</small></h4>
+    <div class="emotion-pad">
       ${S.emotions.map(e => `<button class="emo-btn" data-preview-emotion="${e.id}" title="${esc(e.meaning)}"><span>${e.emoji}</span><small>${e.label}</small></button>`).join('')}
     </div>` : ''}
     <div class="action-row">
@@ -446,14 +461,14 @@ const pages = {
           </article>`).join('')}
       </div>
       <div class="grid-2 wide-left">
-        <section class="panel">${previewControls()}</section>
+        <section class="panel">${previewControls({ emotions: false })}</section>
         <section class="panel">
-          <h3>💖 Tính cách</h3>
+          <h3>💖 Thái độ <small class="muted">chọn là bé ngoài màn hình đổi ngay</small></h3>
           <div class="preset-list">
             ${Object.values(S.presets).map(p => `
               <button class="preset row ${S.settings.personality === p.id ? 'selected' : ''}" data-choice="personality" data-value="${p.id}">
                 <span class="preset-emoji">${p.emoji}</span>
-                <span><b>${esc(p.name)}</b><small>${esc(p.description)}</small></span>
+                <span><b>${esc(p.name)} <i class="muted">${esc(p.nameEn || '')}</i></b><small>${esc(p.description)}</small><small class="rest">Lúc rảnh: ${p.restEmotion && p.restEmotion !== 'idle' ? `${emo(p.restEmotion).emoji} ${emo(p.restEmotion).label}` : '🐾 đứng yên nhẹ nhàng'}</small></span>
               </button>`).join('')}
           </div>
         </section>
@@ -674,6 +689,7 @@ const notifySubs = {
           </div>
           ${H.slider('appearance.petScale', '🔍 Kích thước bé', 0.6, 1.6, 0.05, 'x')}
           ${H.toggle('appearance.dragEnabled', 'Cho phép kéo bé đi chỗ khác', 'Nhấn giữ vào bé rồi thả ở bất kỳ đâu.')}
+          ${H.toggle('appearance.showBadge', 'Hiện số thông báo chưa xem trên bé', 'Chấm đỏ có số như icon ứng dụng — bấm vào để mở Hộp thư.')}
           ${H.toggle('appearance.residentPet', 'Bé luôn ngồi trên màn hình', 'Tắt để bé chỉ xuất hiện khi có thông báo.')}
           ${hasCustomPos ? '<div class="btn-row"><button class="btn btn-ghost small" data-action="reset-position">↺ Đưa bé về góc đã chọn</button></div>' : ''}
         </section>
@@ -1115,7 +1131,7 @@ function historyRows(list, { simple = false } = {}) {
     <div class="h-row">
       <span class="h-emo emo-bg-${h.emotion}">${emo(h.emotion).emoji}</span>
       <div class="h-main"><b>${esc(h.title)}</b><small>${esc(h.message || '')}</small></div>
-      <div class="h-meta"><span class="pill small">${esc(h.app)}</span><small>${simple ? '' : `${esc(h.matchedBy)} · `}${timeAgo(h.receivedAt)}</small></div>
+      <div class="h-meta"><span class="pill small">${esc(h.app)}</span><small>${simple ? '' : `${esc(h.matchedBy)} · `}<time title="${esc(new Date(h.receivedAt).toLocaleString())}">${arrivedAt(h.receivedAt)}</time></small></div>
     </div>`).join('');
 }
 
@@ -1126,7 +1142,7 @@ function inboxRows(list) {
       <span class="h-emo emo-bg-${h.emotion}">${emo(h.emotion).emoji}</span>
       <div class="h-main"><b>${esc(h.title)}</b><small>${esc(h.message || '')}</small></div>
       <div class="h-meta">
-        <small>${esc(h.app)} · ${timeAgo(h.receivedAt)}${friendlyReason(h.reason) ? ` · ${esc(friendlyReason(h.reason))}` : ''}</small>
+        <small>${esc(h.app)} · ${arrivedAt(h.receivedAt)}${friendlyReason(h.reason) ? ` · ${esc(friendlyReason(h.reason))}` : ''}</small>
         <span class="row-actions">${h.url ? `<a class="link" href="${esc(h.url)}" target="_blank" rel="noopener">Mở ↗</a>` : ''}<button class="icon-btn" data-action="inbox-del" data-arg="${esc(h.id)}" title="Xóa">✕</button></span>
       </div>
     </div>`).join('');
@@ -1229,7 +1245,7 @@ function render() {
   syncInputs();
   if (document.getElementById('preview-host')) {
     mountPreview('preview-host');
-    setPreviewEmotion(previewEmotion);
+    setPreviewEmotion(previewEmotion ?? 'idle');
   }
   updateBadges();
   if (route === 'monitor' && sub === 'rules') bindRules();
@@ -1545,7 +1561,15 @@ const actions = {
 
 document.addEventListener('click', (e) => {
   const p = e.target.closest('[data-preview-emotion]');
-  if (p) { setPreviewEmotion(p.dataset.previewEmotion); if (p.dataset.previewEmotion !== 'idle') sound.emotion(p.dataset.previewEmotion, 'meow'); return; }
+  if (p) {
+    const id = p.dataset.previewEmotion;
+    setPreviewEmotion(id);
+    if (id !== 'idle') sound.emotion(id, 'meow');
+    // Preview only: after a moment the pet goes back to its attitude's resting pose.
+    clearTimeout(setPreviewEmotion.back);
+    if (id !== 'idle') setPreviewEmotion.back = setTimeout(() => { if (previewEmotion === id) setPreviewEmotion('idle'); }, 3500);
+    return;
+  }
   const a = e.target.closest('[data-action]');
   if (a && actions[a.dataset.action]) {
     if (a.tagName === 'LABEL' || e.target.closest('input[type=file]')) return; // file pickers

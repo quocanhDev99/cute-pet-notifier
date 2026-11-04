@@ -52,7 +52,8 @@
     ],
     "asar": true,
     "asarUnpack": [
-      "bin/**/*"
+      "bin/**/*",
+      "src/native/windows/**/*"
     ],
     "mac": {
       "target": [

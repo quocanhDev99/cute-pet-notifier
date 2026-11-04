@@ -18,6 +18,9 @@ const privacy = require('./privacy');
 const { PRESENTATION_MODES, isEmotion } = require('../shared/emotion-constants');
 
 const DELIVERY_MODES = ['realtime_push', 'near_realtime_poll', 'scheduled_sync', 'native_os', 'manual'];
+/** A card on screen gives way to a newer notification after this long (it used to block for the
+ *  whole card duration, ~9 s, which made bursts of chat messages feel badly delayed). */
+const MIN_VISIBLE_MS = 2500;
 
 function cleanText(v, max) {
   if (v === undefined || v === null) return '';
@@ -249,8 +252,18 @@ class NotificationPipeline extends EventEmitter {
   }
 
   pump() {
-    if (this.current || this.queue.length === 0) return;
+    if (this.queue.length === 0) return;
+    if (this.current && !this.mayPreempt()) return;
+    if (this.current) {
+      // A newer message is waiting: cut the current card short instead of making the new one wait
+      // up to a full card duration. The cut card stays readable in the Inbox (nothing is lost).
+      const prev = this.current;
+      this.stats.preempted = (this.stats.preempted || 0) + 1;
+      if (this.inbox) this.inbox.add({ ...prev, reason: 'replaced' });
+      this.emit('preempted', prev);
+    }
     const item = this.queue.shift();
+    item.displayedAt = Date.now();
     this.current = item;
     this.lastEmotion = item.emotion;
     this.stats.displayed++;
@@ -259,6 +272,25 @@ class NotificationPipeline extends EventEmitter {
     clearTimeout(this.safetyTimer);
     this.safetyTimer = setTimeout(() => this.finished(item.id), item.duration + 60000);
     if (this.safetyTimer.unref) this.safetyTimer.unref();
+    if (this.queue.length) this.mayPreempt(); // more waiting → schedule the next hand-over
+  }
+
+  /**
+   * Can the card on screen give way to the next queued one? Only after it was visible for
+   * MIN_VISIBLE_MS (so it can be glanced at), and never for a lower-priority item. If it is too
+   * early, re-check once that minimum is reached.
+   */
+  mayPreempt() {
+    const cur = this.current;
+    const next = this.queue[0];
+    if (!cur || !next) return false;
+    if ((PRIORITY_RANK[next.priority] || 2) < (PRIORITY_RANK[cur.priority] || 2)) return false;
+    const shownFor = Date.now() - (cur.displayedAt ?? Date.now());
+    if (shownFor >= MIN_VISIBLE_MS) return true;
+    clearTimeout(this.preemptTimer);
+    this.preemptTimer = setTimeout(() => this.pump(), MIN_VISIBLE_MS - shownFor + 10);
+    if (this.preemptTimer.unref) this.preemptTimer.unref();
+    return false;
   }
 
   /** Renderer reports the moment the card was actually painted. */

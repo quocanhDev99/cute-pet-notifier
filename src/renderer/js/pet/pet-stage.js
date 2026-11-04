@@ -7,6 +7,9 @@ import { AnimationController } from './animation-controller.js';
 import { resolveSemanticBones, resolveClip, morphWeightsFor } from './semantic-map.js';
 import { EffectsSystem } from './fx.js';
 
+/** Frame rate while the pet only holds a resting mood (no card, no interaction). */
+const MOOD_FPS = 24;
+
 const EYE_TYPES = ['open', 'arcHappy', 'arcClosed', 'star', 'heart'];
 
 /**
@@ -396,6 +399,13 @@ export class PetStage {
 
   loop(now) {
     if (this.disposed || this.paused) { this.running = false; return; }
+    // A resting mood (angry puffs, sparkles, zzz…) keeps animating, but at a gentle frame rate so a
+    // pet that just sits there doesn't cost a full-speed render loop. Skipped frames don't advance
+    // lastFrame, so the animation keeps real-time speed.
+    if (this.holds.size === 1 && this.holds.has('mood') && now <= this.lastFrame + 1000 / MOOD_FPS && now > this.awakeUntil && !this.anim.busy) {
+      requestAnimationFrame(this.loop);
+      return;
+    }
     const rawDt = (now - this.lastFrame) / 1000;
     this.lastFrame = now;
     const settled = !this.holds.size && now > this.awakeUntil && !this.anim.busy && !(this.fx && this.fx.busy && this.fx.active.size === 0);

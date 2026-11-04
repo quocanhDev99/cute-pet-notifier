@@ -35,7 +35,8 @@ const DEFAULT_SETTINGS = Object.freeze({
     customPosition: { x: null, y: null },
     language: 'vi',
     uiTheme: 'peach',
-    cardFollowsTheme: true
+    cardFollowsTheme: true,
+    showBadge: true  // unread counter bubble on the pet
   },
   sounds: {
     enabled: true,
@@ -95,6 +96,7 @@ const DEFAULT_SETTINGS = Object.freeze({
     webhook: { enabled: true },
     gateway: { enabled: false, url: '' },
     macos_nc: { enabled: true, suppressNativeBanner: true, skipConnectedSlack: true, skipAppleSystem: true }, // the app's purpose on macOS: replace system banners
+    windows_nc: { enabled: true, suppressNativeToast: true, skipSystemUpdates: false }, // same purpose on Windows: replace system toasts
     github: { enabled: false, pollSeconds: 60, participatingOnly: true },
     calendar: { enabled: false, leadMinutes: 5, pollMinutes: 10 },
     slack: { enabled: false, notifyOn: 'mentions' },

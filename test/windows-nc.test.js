@@ -4,7 +4,7 @@ const { WindowsNotificationAdapter } = require('../src/adapters/windows-nc-adapt
 const { STATUS } = require('../src/adapters/base-adapter');
 
 function mockCtx() {
-  const store = { adapters: { windows_toast: { enabled: true } } };
+  const store = { adapters: { windows_nc: { enabled: true } } };
   return {
     settings: {
       get: () => store,

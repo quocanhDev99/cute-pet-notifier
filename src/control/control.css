@@ -178,6 +178,10 @@ main { overflow-y: auto; padding: 38px 40px 60px; scroll-behavior: smooth; }
 .emo-btn small { font-size: 11px; font-weight: 800; color: var(--ink-2); }
 .emo-btn:hover span { transform: scale(1.18) rotate(-6deg); }
 .emo-btn.active { background: linear-gradient(180deg, var(--t1), var(--t2)); box-shadow: 0 0 0 2px var(--p-ring) inset, 0 3px 0 var(--t-sh); transform: translateY(-1px); }
+.pad-title { margin: 14px 0 8px; font-size: 14px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.pad-title small { font-weight: 500; font-size: 11.5px; color: var(--muted, #8a7b85); }
+.preset small.rest { margin-top: 3px; font-weight: 600; opacity: .85; }
+.preset b i.muted { font-style: normal; font-weight: 500; font-size: 11.5px; opacity: .6; margin-left: 4px; }
 .action-row { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
 .action-row .chip-btn.active { background: var(--t2); }
 
@@ -576,3 +580,5 @@ html, body { background: var(--bg); }
 .mute-list { gap: 8px; margin: 4px 0 8px; }
 .mute-list + .muted { margin-top: 14px; }
 .panel > .muted + .choice-list, .panel > p.muted { line-height: 1.6; }
+
+html[lang="en"] .preset b i.muted { display: none; }

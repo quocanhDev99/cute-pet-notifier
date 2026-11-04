@@ -18,7 +18,9 @@ const { EMOTION_IDS, NOTIFICATION_EVENT_MAPPINGS, isEmotion } = require('../shar
 const PERSONALITY_PRESETS = Object.freeze({
   sweet_friendly: {
     id: 'sweet_friendly',
-    name: 'Sweet & Friendly',
+    restEmotion: 'happy', // pose while waiting with no card on screen
+    name: 'Ngọt ngào',
+    nameEn: 'Sweet & Friendly',
     emoji: '🥰',
     description: 'Luôn chào đón, ưu tiên vui vẻ & yêu thương, rất thích được vuốt ve.',
     defaultEmotion: 'happy',
@@ -30,7 +32,9 @@ const PERSONALITY_PRESETS = Object.freeze({
   },
   sarcastic_sassy: {
     id: 'sarcastic_sassy',
-    name: 'Sarcastic & Sassy',
+    restEmotion: 'thinking', // pose while waiting with no card on screen
+    name: 'Cà khịa',
+    nameEn: 'Sarcastic & Sassy',
     emoji: '😏',
     description: 'Hay cà khịa, lườm liếc xéo xắc với tin phiền phức.',
     defaultEmotion: 'thinking',
@@ -42,7 +46,9 @@ const PERSONALITY_PRESETS = Object.freeze({
   },
   grumpy_dramatic: {
     id: 'grumpy_dramatic',
-    name: 'Grumpy & Dramatic',
+    restEmotion: 'angry', // pose while waiting with no card on screen
+    name: 'Cáu kỉnh',
+    nameEn: 'Grumpy & Dramatic',
     emoji: '😾',
     description: 'Dễ nổi quạu, phản ứng cực mạnh với deadline và họp hành.',
     defaultEmotion: 'thinking',
@@ -54,7 +60,9 @@ const PERSONALITY_PRESETS = Object.freeze({
   },
   calm_gentle: {
     id: 'calm_gentle',
-    name: 'Calm & Gentle',
+    restEmotion: 'idle', // pose while waiting with no card on screen
+    name: 'Điềm đạm',
+    nameEn: 'Calm & Gentle',
     emoji: '🍵',
     description: 'Điềm đạm, cử động chậm rãi, ưu tiên suy tư và vui vẻ nhẹ nhàng.',
     defaultEmotion: 'happy',
@@ -66,8 +74,10 @@ const PERSONALITY_PRESETS = Object.freeze({
   },
   energetic_playful: {
     id: 'energetic_playful',
-    name: 'Energetic & Playful',
-    emoji: '⚡',
+    restEmotion: 'excited', // pose while waiting with no card on screen
+    name: 'Hào hứng',
+    nameEn: 'Energetic & Playful',
+    emoji: '🤩',
     description: 'Tinh nghịch, nhảy nhót, tai và đuôi chuyển động nhanh nhẹn.',
     defaultEmotion: 'excited',
     remap: { thinking: 'excited', sleeping: 'excited' },

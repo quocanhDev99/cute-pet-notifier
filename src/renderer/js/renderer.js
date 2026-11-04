@@ -13,6 +13,7 @@ const cardSlot = dock.querySelector('.card-slot');
 const petSlot = dock.querySelector('.pet-slot');
 const stageEl = dock.querySelector('.pet-stage');
 const bubbleEl = dock.querySelector('.pet-bubble');
+const badgeEl = dock.querySelector('.pet-badge');
 
 const EMO = Object.fromEntries(EMOTION_SCHEMA.map(e => [e.id, e]));
 const APP_META = {
@@ -133,7 +134,19 @@ function residentEmotion() {
   if (!cfg) return 'idle';
   if (eff.presence === 'minimal' || cfg.settings.dnd.enabled || eff.mode.petEmotion === 'sleeping') return 'sleeping';
   if (eff.mode.petEmotion === 'thinking') return 'thinking';
-  return 'idle';
+  return (preset && preset.restEmotion) || 'idle'; // the personality shows even when nothing is happening
+}
+
+/** Non-idle resting poses (angry puffs, sparkles…) must keep animating, otherwise the pet looks frozen. */
+function syncMoodHold() {
+  if (!stage) return;
+  if (residentEmotion() !== 'idle') stage.hold('mood'); else stage.release('mood');
+}
+
+/** A grumpy pet resting in an "annoyed" pose should also refuse petting. */
+function residentAnnoying() {
+  const e = residentEmotion();
+  return !!(preset && preset.annoyingEmotions && preset.annoyingEmotions.includes(e));
 }
 
 function applyPresence() {
@@ -293,8 +306,9 @@ function applyConfig(payload) {
   stage.setPetSensitivity(s.sounds.petSensitivity);
 
   applyPresence();
+  syncMoodHold();
   if (!current) {
-    stage.setAnnoying(false);
+    stage.setAnnoying(residentAnnoying());
     stage.setEmotion(residentEmotion());
     dndSleeping = residentEmotion() === 'sleeping';
     const line = t('focusLine')[eff.mode.id];
@@ -331,12 +345,22 @@ function onStageFrame({ breath, t: frameTime }) {
 
 /* ------------------------------------------------------------------ notifications */
 
+/** "14:32 · 04/11/2026" — when the notification arrived (source time when the app reports one). */
+function formatArrival(ts) {
+  const d = new Date(Number(ts) || Date.now());
+  const loc = getLang() === 'en' ? 'en-GB' : 'vi-VN';
+  const time = d.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' });
+  const date = d.toLocaleDateString(loc, { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return { text: `${time} · ${date}`, iso: d.toISOString() };
+}
+
 function buildCard(item) {
   const base = APP_META[item.app] || { label: item.app && item.app !== 'default' ? item.app : t('defaultApp'), icon: '🔔' };
   const app = { ...base, label: item.appName || (getLang() === 'en' && I18N.en.apps[item.app]) || base.label };
   const emo = EMO[item.emotion] || EMO.happy;
   const emoLabel = (getLang() === 'en' && I18N.en.emo[item.emotion]) || emo.label;
   const prio = t('priority')[item.priority];
+  const arrival = formatArrival(item.sourceCreatedAt || item.desktopReceivedAt || item.receivedAt);
   const el = document.createElement('div');
   el.className = `card emo-${item.emotion}${item.annoying ? ' annoying' : ''} prio-${item.priority || 'normal'}`;
   el.innerHTML = `
@@ -348,6 +372,7 @@ function buildCard(item) {
         ${prio ? `<span class="chip prio prio-${esc(item.priority)}">${esc(prio)}</span>` : ''}
         <button class="icon-btn close" title="${esc(t('close'))}">✕</button>
       </header>
+      <time class="card-time" datetime="${arrival.iso}">🕒 ${esc(arrival.text)}</time>
       <h3 class="title">${esc(item.title)}</h3>
       ${item.message ? `<p class="message">${esc(item.message).replace(/\n/g, '<br>')}</p>` : ''}
       ${(item.items || []).length ? `<ul class="rows">${item.items.map(r => `
@@ -411,15 +436,16 @@ function showNotification(item) {
   requestAnimationFrame(() => requestAnimationFrame(() => { if (api) api.onAction('rendered', { id: item.id, renderedAt: Date.now() }); }));
 
   if (mode === 'courier') {
-    // Pet runs in carrying an envelope, presents it, then the card unfolds (≈1.42 s choreography).
+    // Pet runs in carrying an envelope, presents it, then the card unfolds (≈0.65 s: it used to be
+    // 1.42 s, which read as notification lag).
     dock.classList.add('courier-enter');
     stage.setEmotion('excited');
     stage.setHold('courierRun', side());
     setTimeout(() => {
       dock.classList.remove('courier-enter');
       stage.setHold('courierPresent', side());
-      setTimeout(reveal, 520);
-    }, 900);
+      setTimeout(reveal, 200);
+    }, 450);
   } else {
     requestAnimationFrame(reveal);
   }
@@ -510,7 +536,7 @@ function finishCard(how) {
     placeDock();
     if (eff.hidden) applyPresence();
     stage.setHold(null);
-    stage.setAnnoying(false);
+    stage.setAnnoying(residentAnnoying());
     stage.release('card');
     if (item.pet && item.pet !== cfg.settings.activePet) stage.setSpecies(cfg.settings.activePet);
     stage.setReducedMotion(eff.reducedMotion);
@@ -582,7 +608,7 @@ document.addEventListener('mousemove', (e) => {
     if (mouseCaptured) setCapture(false);
   } else {
     const under = document.elementFromPoint(e.clientX, e.clientY);
-    const overCard = (current && current.el.contains(under));
+    const overCard = (current && current.el.contains(under)) || (!badgeEl.hidden && badgeEl.contains(under));
     let overPet = false;
     const r = stageEl.getBoundingClientRect();
     const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
@@ -613,6 +639,19 @@ let lastDragTime = 0;
 let dragSayInterval = null;
 let petOffsetX = 0;
 let petOffsetY = 0;
+
+/* ------------------------------------------------------------------ Unread badge */
+let badgeCount = 0;
+function renderBadge() {
+  const on = !!(cfg && cfg.settings.appearance.showBadge !== false) && badgeCount > 0;
+  const prev = badgeEl.textContent;
+  badgeEl.hidden = !on;
+  badgeEl.textContent = badgeCount > 99 ? '99+' : String(badgeCount);
+  badgeEl.classList.toggle('wide', badgeCount > 9);
+  if (on && prev !== badgeEl.textContent) { badgeEl.classList.remove('bump'); void badgeEl.offsetWidth; badgeEl.classList.add('bump'); }
+}
+badgeEl.addEventListener('pointerdown', (e) => e.stopPropagation()); // not a drag of the pet
+badgeEl.addEventListener('click', (e) => { e.stopPropagation(); if (api) api.openControlCenter('inbox'); });
 
 petSlot.addEventListener('pointerdown', (e) => {
   if (e.button !== 0) return; // Left mouse button only
@@ -722,7 +761,8 @@ if (navigator.getBattery && api) {
 /* ------------------------------------------------------------------ IPC */
 
 if (api) {
-  api.onConfig(applyConfig);
+  api.onConfig((p) => { applyConfig(p); renderBadge(); });
+  if (api.onBadge) api.onBadge(({ count }) => { badgeCount = Math.max(0, Number(count) || 0); renderBadge(); });
   api.onNotification(showNotification);
   api.onEmotion(({ emotion }) => {
     if (!current && stage) { stage.setEmotion(emotion); dndSleeping = emotion === 'sleeping'; if (dndSleeping) say(t('dndSleeping')); }

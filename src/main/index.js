@@ -148,7 +148,7 @@ function createOverlay() {
   overlay.setIgnoreMouseEvents(true, { forward: true });
   overlay.loadFile(path.join(__dirname, '../renderer/index.html'));
   overlay.once('ready-to-show', () => overlay.showInactive());
-  overlay.webContents.on('did-finish-load', () => overlay.webContents.send('overlay:config', overlayPayload()));
+  overlay.webContents.on('did-finish-load', () => { overlay.webContents.send('overlay:config', overlayPayload()); pushBadge(true); });
   overlay.webContents.on('console-message', (_e, _level, message) => console.log(`[Overlay] ${message}`));
   overlay.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   overlay.webContents.on('will-navigate', (e) => e.preventDefault());
@@ -161,6 +161,16 @@ function fitOverlayToDisplay() {
 
 function sendOverlay(channel, data) {
   if (overlay && !overlay.isDestroyed()) overlay.webContents.send(channel, data);
+}
+
+/** Unread counter on the pet (like an app-icon badge): unread Inbox items + cards still queued. */
+let lastBadge = -1;
+function pushBadge(force = false) {
+  if (!inbox || !pipeline) return;
+  const count = inbox.unreadCount() + pipeline.queue.length;
+  if (!force && count === lastBadge) return;
+  lastBadge = count;
+  sendOverlay('pet:badge', { count });
 }
 
 /* ------------------------------------------------------------------ */
@@ -457,7 +467,7 @@ function registerIpc() {
     if (action === 'rendered') {
       const at = Number(msg.renderedAt);
       const r = pipeline.markRendered(id, Number.isFinite(at) && at <= Date.now() + 1000 ? at : Date.now());
-      if (r) bus.emit('event', 'latency', r);
+      if (r) { bus.emit('event', 'latency', r); log(`[latency] ${r.source} desktop→render ${r.desktopToRender}ms, end-to-end ${r.endToEnd ?? '-'}ms`); }
     }
   });
   ipcMain.on('system:battery', (e, info) => {
@@ -465,7 +475,7 @@ function registerIpc() {
     const sys = hub.get('system');
     if (sys && info && typeof info === 'object') sys.reportBattery({ level: Number(info.level), charging: !!info.charging });
   });
-  ipcMain.on('overlay:open-control', (e) => { if (overlay && e.sender === overlay.webContents) openControlCenter(); });
+  ipcMain.on('overlay:open-control', (e, section) => { if (overlay && e.sender === overlay.webContents) openControlCenter(section === 'inbox' ? 'inbox' : undefined); });
   // Right-click on the pet: always-reachable menu (the tray icon can be hidden behind the MacBook notch).
   ipcMain.on('overlay:context-menu', (e) => {
     if (!overlay || e.sender !== overlay.webContents) return;
@@ -504,13 +514,16 @@ async function boot() {
 
   hub.on('notification', (payload, source, meta) => {
     const r = pipeline.ingest(payload, source, { defaults: meta || {} });
+    pushBadge();
     // Technical log only — no notification content (privacy).
     log(`[${source}] ${r.item.id} ${r.item.deliveryMode} → ${r.item.emotion}/${r.item.priority || '-'} (${r.reason || r.item.matchedBy})`);
   });
   hub.on('status', (d) => bus.emit('event', 'adapter', d));
 
+  inbox.on('change', () => pushBadge());
   pipeline.on('display', (item) => {
     sendOverlay('notification:show', item);
+    pushBadge();
     bus.emit('event', 'display', { id: item.id, title: item.title, emotion: item.emotion, app: item.app });
   });
   pipeline.on('inbox', (item, decision) => {
@@ -677,5 +690,11 @@ app.whenReady().then(() => {
   boot();
 });
 
-app.on('before-quit', () => { if (hub) hub.stopAll(); });
+app.on('before-quit', () => {
+  if (!hub) return;
+  // Windows: turn native banners back on synchronously — the async path could be cut off by exit.
+  const win = hub.get('windows_nc');
+  if (win && win.shutdownSync) win.shutdownSync();
+  hub.stopAll();
+});
 app.on('window-all-closed', (e) => { e.preventDefault(); /* tray app keeps running */ });

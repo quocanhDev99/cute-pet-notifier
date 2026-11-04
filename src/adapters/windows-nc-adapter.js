@@ -1,31 +1,36 @@
 /**
  * Windows UserNotificationListener adapter (WinRT).
- * Captures real-time notifications from any Windows app and suppresses
- * native toasts via listener.RemoveNotification() so user gets no duplicate banners.
+ * Captures real-time notifications from any Windows app and replaces the native toast:
+ *  - per-app "Show notification banners" and "Play a sound" are switched off (ShowBanner=0,
+ *    SoundFile='', plus the global notification-sound switch) so Windows neither pops a banner nor
+ *    plays a sound, while notifications still land in Action Center where the listener reads them;
+ *  - the captured toast is then removed from Action Center (no duplicates).
+ * Original values are backed up and restored on disable / quit / next start.
  */
 const path = require('path');
 const fs = require('fs');
-const { spawn, execFile } = require('child_process');
+const { spawn, execFile, execFileSync } = require('child_process');
 const readline = require('readline');
 const { ApplicationAdapter, STATUS } = require('./base-adapter');
 
 class WindowsNotificationAdapter extends ApplicationAdapter {
   constructor(ctx, platform = process.platform) {
     super(ctx, {
-      id: 'windows_toast',
+      id: 'windows_nc',
       name: 'Windows Toast Listener (thay thế thông báo hệ thống)',
       icon: '🪟',
       description: 'Bắt thông báo của MỌI ứng dụng trên Windows (Zalo, Teams, Outlook, Chrome, Telegram…) qua WinRT và để thú cưng mang tới thay cho toast mặc định.',
-      help: 'Sử dụng Windows.UI.Notifications.Management.UserNotificationListener để đọc và tự động đóng toast gốc của Windows. Hoàn toàn cục bộ, không gửi dữ liệu ra ngoài máy.',
+      help: 'Sử dụng Windows.UI.Notifications.Management.UserNotificationListener để đọc thông báo, tắt banner gốc của từng ứng dụng và tự động đóng toast. Hoàn toàn cục bộ, không gửi dữ liệu ra ngoài máy.',
       deliveryMode: 'native_os',
       provider: 'windows',
       fields: [
-        { key: 'suppressNativeToast', label: 'Tự động đóng toast gốc của Windows (tránh trùng lặp)', type: 'boolean', default: true },
+        { key: 'suppressNativeToast', label: 'Thay thế hoàn toàn thông báo của Windows: tắt banner và âm thanh gốc, chỉ dùng của thú cưng', type: 'boolean', default: true },
         { key: 'skipSystemUpdates', label: 'Bỏ qua thông báo Windows Update / Bảo mật', type: 'boolean', default: false }
       ],
       actions: [
         { id: 'open-notification-settings', label: '⚙️ Mở Cài đặt Thông báo của Windows' },
-        { id: 'open-privacy-settings', label: '🔐 Mở Cài đặt Quyền riêng tư Thông báo' }
+        { id: 'open-privacy-settings', label: '🔐 Mở Cài đặt Quyền riêng tư Thông báo' },
+        { id: 'restore-banners', label: '↺ Bật lại banner & âm thanh gốc của Windows' }
       ]
     });
 
@@ -36,6 +41,47 @@ class WindowsNotificationAdapter extends ApplicationAdapter {
 
     if (platform !== 'win32') {
       this.setStatus(STATUS.UNSUPPORTED, 'Chỉ có trên Windows 10 (bản 1607 trở lên) và Windows 11.');
+    } else {
+      // A crash can leave banners switched off; if the listener isn't started shortly, put them back.
+      const t = setTimeout(() => { if (!this.process) this.restoreBanners(); }, 8000);
+      if (t.unref) t.unref();
+    }
+  }
+
+  /** In a packaged build the script is unpacked next to app.asar (see build.asarUnpack);
+   *  powershell.exe cannot read files that live inside the asar archive. */
+  scriptPath() {
+    const rootDir = path.resolve(__dirname, '../..').replace(/app\.asar(?=$|[\\/])/, 'app.asar.unpacked');
+    return path.join(rootDir, 'src', 'native', 'windows', 'NotificationListener.ps1');
+  }
+
+  /** Original per-app ShowBanner values, written by the listener before it changes any. */
+  bannerBackupPath() { return this.ctx.dataDir ? path.join(this.ctx.dataDir, 'windows-banners.json') : ''; }
+
+  /** Turn Windows banners back on exactly as they were. `sync` is used while the app is quitting. */
+  restoreBanners({ sync = false } = {}) {
+    const backup = this.bannerBackupPath();
+    if (this.platform !== 'win32' || !backup || !fs.existsSync(backup)) return;
+    const args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', this.scriptPath(), '-BannerBackup', backup, '-RestoreBanners'];
+    try {
+      if (sync) execFileSync('powershell.exe', args, { windowsHide: true, timeout: 8000 });
+      else {
+        this.pendingRestore = new Promise((resolve) => execFile('powershell.exe', args, { windowsHide: true, timeout: 15000 }, (err) => {
+          if (err) this.ctx.log(`[windows_nc] restore banners failed: ${err.message}`);
+          this.pendingRestore = null;
+          resolve();
+        }));
+      }
+    } catch (err) { this.ctx.log(`[windows_nc] restore banners failed: ${err.message}`); }
+  }
+
+  killListener() {
+    if (this.rl) { this.rl.close(); this.rl = null; }
+    if (this.process) {
+      const p = this.process;
+      this.process = null;
+      p.removeAllListeners('close');
+      try { p.kill(); } catch {}
     }
   }
 
@@ -45,50 +91,41 @@ class WindowsNotificationAdapter extends ApplicationAdapter {
       return false;
     }
 
-    this.disconnect();
+    this.killListener();
+    if (this.pendingRestore) await this.pendingRestore; // never suppress while a restore is still running
 
-    const rootDir = path.resolve(__dirname, '../..');
-    const exePath = path.join(rootDir, 'bin', 'windows-listener.exe');
-    const psScript = path.join(rootDir, 'src', 'native', 'windows', 'NotificationListener.ps1');
-
-    let cmd = 'powershell.exe';
-    let args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', psScript];
-
-    if (fs.existsSync(exePath)) {
-      cmd = exePath;
-      args = [];
-    } else if (!fs.existsSync(psScript)) {
+    const psScript = this.scriptPath();
+    if (!fs.existsSync(psScript)) {
       this.setStatus(STATUS.ERROR, 'Không tìm thấy script lắng nghe thông báo Windows.');
       return false;
     }
 
-    try {
-      this.process = spawn(cmd, args, {
-        windowsHide: true,
-        stdio: ['pipe', 'pipe', 'pipe']
-      });
+    const suppress = this.config.suppressNativeToast !== false;
+    if (!suppress) this.restoreBanners({ sync: true }); // user wants native toasts back
+    const args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', psScript,
+      '-Suppress', suppress ? '1' : '0', '-ParentPid', String(process.pid)];
+    if (suppress && this.bannerBackupPath()) args.push('-BannerBackup', this.bannerBackupPath());
 
-      this.rl = readline.createInterface({ input: this.process.stdout });
+    try {
+      const proc = spawn('powershell.exe', args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+      this.process = proc;
+      this.rl = readline.createInterface({ input: proc.stdout });
 
       this.rl.on('line', (line) => {
         const trimmed = line.trim();
         if (!trimmed.startsWith('{')) return;
-        try {
-          const ev = JSON.parse(trimmed);
-          this.handleEvent(ev);
-        } catch { /* ignore non-json lines */ }
+        try { this.handleEvent(JSON.parse(trimmed)); } catch { /* ignore non-json lines */ }
       });
 
-      this.process.stderr.on('data', (data) => {
+      proc.stderr.on('data', (data) => {
         const msg = data.toString().trim();
-        if (msg) this.ctx.log(`[windows_toast] stderr: ${msg}`);
+        if (msg) this.ctx.log(`[windows_nc] stderr: ${msg}`);
       });
 
-      this.process.on('close', (code) => {
-        this.ctx.log(`[windows_toast] process exited with code ${code}`);
-        if (this.status === STATUS.CONNECTED) {
-          this.setStatus(STATUS.DISCONNECTED, `Tiến trình đã dừng (mã thoát ${code})`);
-        }
+      proc.on('close', (code) => {
+        this.ctx.log(`[windows_nc] process exited with code ${code}`);
+        if (this.process === proc) this.process = null;
+        if (this.status === STATUS.CONNECTED) this.setStatus(STATUS.DISCONNECTED, `Tiến trình đã dừng (mã thoát ${code})`);
       });
 
       this.setStatus(STATUS.CONNECTED, 'Đang kết nối tới Windows Notification Listener...');
@@ -111,15 +148,11 @@ class WindowsNotificationAdapter extends ApplicationAdapter {
     } else if (ev.type === 'notification') {
       if (this.seenIds.has(ev.id)) return;
       this.seenIds.add(ev.id);
-      if (this.seenIds.size > 500) {
-        this.seenIds.delete(this.seenIds.keys().next().value);
-      }
+      if (this.seenIds.size > 500) this.seenIds.delete(this.seenIds.keys().next().value);
 
-      const cfg = this.config;
-      if (cfg.skipSystemUpdates && /windows update|security/i.test(`${ev.appName} ${ev.title}`)) {
-        return;
-      }
+      if (this.config.skipSystemUpdates && /windows update|security/i.test(`${ev.appName} ${ev.title}`)) return;
 
+      if (process.env.CPC_TRACE) this.ctx.log(`[windows_nc] capture→node +${Date.now() - (ev.timestamp || Date.now())}ms`);
       this.publish(ev);
     } else if (ev.type === 'error') {
       this.setStatus(STATUS.ERROR, ev.message);
@@ -144,6 +177,12 @@ class WindowsNotificationAdapter extends ApplicationAdapter {
 
   async runAction(id) {
     if (this.platform !== 'win32') return { ok: false, error: 'Chỉ hỗ trợ Windows' };
+    if (id === 'restore-banners') {
+      this.killListener();
+      this.restoreBanners({ sync: true });
+      this.setStatus(STATUS.DISCONNECTED, 'Đã bật lại banner & âm thanh gốc của Windows.');
+      return { ok: true };
+    }
     const cmds = {
       'open-notification-settings': 'ms-settings:notifications',
       'open-privacy-settings': 'ms-settings:privacy-notifications'
@@ -155,23 +194,17 @@ class WindowsNotificationAdapter extends ApplicationAdapter {
   }
 
   async disconnect() {
-    if (this.process) {
-      try {
-        this.process.stdin.write(JSON.stringify({ action: 'quit' }) + '\n');
-      } catch {}
-      setTimeout(() => {
-        if (this.process) this.process.kill();
-        this.process = null;
-      }, 500);
-    }
-    if (this.rl) {
-      this.rl.close();
-      this.rl = null;
-    }
+    this.killListener();
+    this.restoreBanners();
     this.setStatus(this.platform === 'win32' ? STATUS.DISCONNECTED : STATUS.UNSUPPORTED, this.platform === 'win32' ? '' : 'Chỉ có trên Windows 10/11.');
     return true;
+  }
+
+  /** Called from app 'before-quit': banners must be back before the process exits. */
+  shutdownSync() {
+    this.killListener();
+    this.restoreBanners({ sync: true });
   }
 }
 
 module.exports = { WindowsNotificationAdapter };
-

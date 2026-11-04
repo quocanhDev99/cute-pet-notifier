@@ -5,12 +5,14 @@
  * the user's privacy settings; otherwise kept in memory only.
  */
 const fs = require('fs');
+const { EventEmitter } = require('events');
 const path = require('path');
 
 const KEEP_FIELDS = ['id', 'source', 'app', 'title', 'message', 'url', 'emotion', 'priority', 'category', 'deliveryMode', 'reason', 'receivedAt', 'sourceEventId', 'read'];
 
-class InboxStore {
+class InboxStore extends EventEmitter {
   constructor(dir, { getSettings }) {
+    super();
     this.file = dir ? path.join(dir, 'inbox.json') : null;
     this.getSettings = getSettings;
     this.items = [];
@@ -67,7 +69,9 @@ class InboxStore {
     };
   }
 
+  /** Every mutation goes through persist(): tell listeners (unread badge) the inbox changed. */
   persist() {
+    this.emit('change', this.unreadCount());
     if (!this.file) return;
     try {
       if (!this.persistEnabled()) { if (fs.existsSync(this.file)) fs.rmSync(this.file, { force: true }); return; }

@@ -13,7 +13,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   savePosition: (pos) => ipcRenderer.send('pet:save-position', pos),
   onAction: (action, data) => ipcRenderer.send('notification:action', { action, ...(data || {}) }),
   reportBattery: (info) => ipcRenderer.send('system:battery', info),
-  openControlCenter: () => ipcRenderer.send('overlay:open-control'),
+  openControlCenter: (section) => ipcRenderer.send('overlay:open-control', section),
+  onBadge: (cb) => ipcRenderer.on('pet:badge', (_e, d) => cb(d)),
   showContextMenu: () => ipcRenderer.send('overlay:context-menu'),
   onBreakStart: (cb) => ipcRenderer.on('break:start', (_e, d) => cb(d)),
   onActionResult: (cb) => ipcRenderer.on('notification:action-result', (_e, d) => cb(d))

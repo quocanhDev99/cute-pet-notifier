@@ -130,3 +130,36 @@ test('Chat "mentions" mode: group chatter → Inbox, mentions & DMs → card', (
   assert.ok(!r4.inboxed);
   assert.ok(shown.length >= 1);
 });
+
+test('a waiting notification replaces the card on screen after the minimum visible time', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  const s = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+  const inbox = { items: [], add(i) { this.items.push(i); } };
+  const p = new NotificationPipeline({ getSettings: () => s, inbox });
+  const shown = [];
+  p.on('display', (i) => shown.push(i.title));
+
+  p.ingest({ title: 'one', app: 'a' });
+  p.ingest({ title: 'two', app: 'b' });
+  p.ingest({ title: 'three', app: 'c' });
+  assert.deepStrictEqual(shown, ['one'], 'the first card is not cut immediately');
+
+  t.mock.timers.tick(2600);
+  assert.deepStrictEqual(shown, ['one', 'two'], 'second replaces the first after ~2.5 s, not after the full duration');
+  assert.deepStrictEqual(inbox.items.map(i => i.title), ['one'], 'the cut card is kept in the Inbox');
+
+  t.mock.timers.tick(2600);
+  assert.deepStrictEqual(shown, ['one', 'two', 'three'], 'the chain continues for the rest of the queue');
+});
+
+test('a lower-priority notification never cuts a more important card short', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  const s = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+  const p = new NotificationPipeline({ getSettings: () => s });
+  const shown = [];
+  p.on('display', (i) => shown.push(i.title));
+  p.ingest({ title: 'urgent', app: 'a', priority: 'critical' });
+  p.ingest({ title: 'chit-chat', app: 'b', priority: 'normal' });
+  t.mock.timers.tick(5000);
+  assert.deepStrictEqual(shown, ['urgent']);
+});

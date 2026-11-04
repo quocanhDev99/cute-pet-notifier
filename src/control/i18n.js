@@ -240,7 +240,7 @@ Object.assign(EN, {
   'Đưa thư': 'Courier', 'Bé chạy vào mang phong bì rồi mở thẻ.': 'The pet runs in with an envelope and opens the card.',
   'Pastel': 'Pastel', 'Trắng tối giản': 'Minimal white', 'Tối': 'Dark', 'Kính mờ': 'Frosted glass', 'Trong suốt': 'Transparent',
   'Cách bé mang thông báo tới': 'How the pet delivers notifications', 'Kiểu thẻ': 'Card style', 'Nhỏ': 'Small', 'Vừa': 'Medium', 'Lớn': 'Large', 'Thẻ hiện trong': 'Card shows for',
-  'Vị trí của bé': 'Pet position', 'Kích thước bé': 'Pet size', 'Cho phép kéo bé đi chỗ khác': 'Let me drag the pet around', 'Nhấn giữ vào bé rồi thả ở bất kỳ đâu.': 'Press and hold the pet, then drop it anywhere.',
+  'Vị trí của bé': 'Pet position', 'Kích thước bé': 'Pet size', 'Cho phép kéo bé đi chỗ khác': 'Let me drag the pet around', 'Nhấn giữ vào bé rồi thả ở bất kỳ đâu.': 'Press and hold the pet, then drop it anywhere.', 'Hiện số thông báo chưa xem trên bé': 'Show the unread count on the pet', 'Thái độ': 'Attitude', 'chọn là bé ngoài màn hình đổi ngay': 'the desktop pet changes right away', 'Thử phản ứng': 'Try a reaction', 'chỉ xem trước bé phản ứng thế nào khi có thông báo — không đổi cấu hình': 'preview only: how the pet reacts to a notification; nothing is saved', 'Ngọt ngào': 'Sweet & Friendly', 'Cà khịa': 'Sarcastic & Sassy', 'Điềm đạm': 'Calm & Gentle', '🐾 đứng yên nhẹ nhàng': '🐾 stands calmly', 'hôm qua': 'yesterday', 'hôm nay': 'today', 'Chấm đỏ có số như icon ứng dụng — bấm vào để mở Hộp thư.': 'A red counter like an app icon badge — click it to open the Inbox.', 'Theo tính cách': 'Follow personality', '🐾 Theo tính cách': '🐾 Follow personality', 'Bé tự đổi dáng theo tính cách đã chọn': 'The pet poses according to the chosen personality',
   'Bé luôn ngồi trên màn hình': 'Pet always stays on screen', 'Tắt để bé chỉ xuất hiện khi có thông báo.': 'Turn off to show the pet only when a notification arrives.', 'Đưa bé về góc đã chọn': 'Move the pet back to its corner',
   'Bé ngồi ở góc màn hình, dõi theo chuột, thích được vuốt ve.': 'Sits in a corner, follows your cursor, loves being petted.', 'Bé thu nhỏ, cuộn tròn ngủ; thẻ vẫn hiện nhẹ nhàng.': 'Shrinks and naps; cards still appear gently.',
   'Bé ẩn hoàn toàn. Tin vào Hộp thư, trừ tin khẩn cấp.': 'Fully hidden. Messages go to the Inbox, except urgent ones.',
@@ -328,6 +328,10 @@ Object.assign(EN, {
 });
 
 const PATTERNS = [
+  [/^Lúc rảnh: (.+)$/, (m) => `When idle: ${tr(m[1])}`],
+  [/^Thử phản ứng: (.+)$/, (m) => `Trying: ${tr(m[1])}`],
+  [/^(.+) · lúc rảnh$/, (m) => `${tr(m[1])} · idle pose`],
+  [/^Thông báo lúc (.+)$/, (m) => `Notification at ${m[1]}`],
   [/^(\d+)s trước$/, (m) => `${m[1]}s ago`],
   [/^(\d+) phút trước$/, (m) => `${m[1]} min ago`],
   [/^(\d+) giờ trước$/, (m) => `${m[1]} h ago`],
