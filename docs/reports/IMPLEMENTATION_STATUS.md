@@ -1,6 +1,6 @@
 # IMPLEMENTATION_STATUS — Trạng thái từng tính năng
 
-*Cập nhật: 04/11/2026 · Phiên bản 3.4.2 · Quy ước: ✅ Hoàn thành · 🟡 Một phần · ⏳ Chưa làm · ⛔ Không hỗ trợ · 🧪 Chưa kiểm thử thật*
+*Cập nhật: 04/11/2026 · Phiên bản 3.5.0 · Quy ước: ✅ Hoàn thành · 🟡 Một phần · ⏳ Chưa làm · ⛔ Không hỗ trợ · 🧪 Chưa kiểm thử thật*
 
 ## Lõi
 | Tính năng | Trạng thái | Ghi chú |

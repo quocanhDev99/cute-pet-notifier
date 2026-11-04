@@ -1,7 +1,7 @@
 # TEST_RESULTS — Nhật ký kiểm thử
 
-## v3.4.2 — 04/11/2026 · Windows 11 Pro (26300) · Node v24.19.0 · Electron 33.4.11
-`npm test` → **83 test: 79 pass, 0 fail, 4 skipped** (bỏ qua 4 test chỉ chạy trên macOS), ≈ 0.6 s.
+## v3.5.0 — 04/11/2026 · Windows 11 Pro (26300) · Node v24.19.0 · Electron 33.4.11
+`npm test` → **84 test: 80 pass, 0 fail, 4 skipped** (bỏ qua 4 test chỉ chạy trên macOS), ≈ 0.6 s.
 
 Test mới trong đợt này: tin mới thay thẻ sau 2,5 s + thẻ bị thay vào Inbox; tin kém ưu tiên không chen tin quan trọng; thái độ quyết định phản ứng (cả 5 thái độ) nhưng không đổi độ ưu tiên; quy tắc tùy chỉnh / `forceEmotion` vẫn thắng; người quen (khớp không dấu, dòng "Tên: …", không khớp tên một phần, manager → Quan trọng, ignored → Inbox).
 

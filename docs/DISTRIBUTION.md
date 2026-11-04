@@ -1,6 +1,6 @@
 # 📦 Phát hành & chia sẻ file cài đặt
 
-*Phiên bản 3.4.2 · Cập nhật 04/11/2026*
+*Phiên bản 3.5.0 · Cập nhật 04/11/2026*
 
 Tài liệu này dành cho người **build và chia sẻ** app. Người dùng cuối chỉ cần đọc [INSTALL.md](INSTALL.md).
 
@@ -12,17 +12,19 @@ Các file nằm trong thư mục `dist/` của dự án:
 
 | File | Dành cho | Dung lượng | SHA-256 |
 |---|---|---|---|
-| `Cute Pet Companion-3.4.2-arm64.dmg` | Mac chip Apple (M1/M2/M3/M4) | ~101 MB | `b6201dfa17b9f0e4737be5ba84ee7fc2a1383bd3bfc08e9e169f567bf2789b7d` |
-| `Cute Pet Companion-3.4.2-x64.dmg` | Mac chip Intel | ~108 MB | `14fd1f3467360b16e0d8fca6199d117dba40cb1e2d626b1c4b968a4723ec5190` |
-| `Cute Pet Companion Setup 3.4.2.exe` | Windows 10/11 64-bit | ~83 MB | `3f8916cf8491ba679ac7f46c56464f8b6c360c854a0dfc638fc2400017e47b4d` |
+| `Cute Pet Companion Setup 3.5.0.exe` | Windows 10/11 64-bit | ~79 MB | `80a34ddd881f075bffd63f545571fb978f72e9b9b3615e6bf0750f62416a0052` |
+| `Cute Pet Companion-3.5.0-arm64.dmg` | Mac chip Apple (M1/M2/M3/M4) | — | **Chưa build** — phải build trên máy Mac (xem mục 2) |
+| `Cute Pet Companion-3.5.0-x64.dmg` | Mac chip Intel | — | **Chưa build** — phải build trên máy Mac (xem mục 2) |
+
+> Bản 3.5.0 cho Windows được build trên Windows 11 ngày 04/11/2026. Bản Mac 3.5.0 chưa có: `nc-bridge` (Swift) và chữ ký chỉ làm được trên macOS. Bản Mac mới nhất hiện có là **3.4.2** (`…-3.4.2-arm64.dmg` SHA-256 `b6201dfa17b9f0e4737be5ba84ee7fc2a1383bd3bfc08e9e169f567bf2789b7d`, `…-3.4.2-x64.dmg` SHA-256 `14fd1f3467360b16e0d8fca6199d117dba40cb1e2d626b1c4b968a4723ec5190`).
 
 **Người nhận kiểm tra file tải về có đúng không:**
-- macOS: `shasum -a 256 "Cute Pet Companion-3.4.2-arm64.dmg"`
-- Windows (PowerShell): `Get-FileHash ".\Cute Pet Companion Setup 3.4.2.exe"`
+- macOS: `shasum -a 256 "Cute Pet Companion-3.5.0-arm64.dmg"`
+- Windows (PowerShell): `Get-FileHash ".\Cute Pet Companion Setup 3.5.0.exe"`
 
 Kết quả phải khớp với cột SHA-256 ở bảng trên.
 
-> Các file `*-3.2.0*`, `*-3.3.0*`, `*-3.4.0*` và `*-3.4.1*` trong `dist/` là bản cũ. Đừng chia sẻ chúng. Từ 3.4.1, file cho Mac Intel có đuôi **`-x64`** (trước đây không có đuôi nên người dùng máy chip Apple hay tải nhầm).
+> Các file `*-3.2.0*` … `*-3.4.2*` trong `dist/` là bản cũ (riêng file `Setup 3.4.2.exe` trong `dist/` đã bị build đè nhiều lần trong lúc phát triển, **không** khớp SHA-256 của bản 3.4.2 đã phát hành). Đừng chia sẻ chúng. Từ 3.4.1, file cho Mac Intel có đuôi **`-x64`** (trước đây không có đuôi nên người dùng máy chip Apple hay tải nhầm).
 
 ---
 
@@ -31,13 +33,15 @@ Kết quả phải khớp với cột SHA-256 ở bảng trên.
 Cần **Node ≥ 22** (`~/.nvm/versions/node/v22.11.0/bin`) và Xcode Command Line Tools (để biên dịch `nc-bridge`).
 
 ```bash
-npm test                                    # 75/75 phải pass
+npm test                                    # 84 test: 80 pass, 4 bỏ qua trên Windows (chỉ chạy trên macOS)
 npm run dist:mac                            # 2 file .dmg đã ký (arm64 + x64)
 npx electron-builder --win nsis --x64       # file .exe cho Windows (build được ngay trên máy Mac)
-shasum -a 256 dist/*3.4.2*.dmg "dist/Cute Pet Companion Setup 3.4.2.exe"
+shasum -a 256 dist/*3.5.0*.dmg "dist/Cute Pet Companion Setup 3.5.0.exe"
 ```
 
-- **Nâng phiên bản:** sửa `"version"` trong `package.json`. Tên file và màn hình *Cài đặt → Phiên bản* tự đổi theo. Mỗi lần gửi lại file đã thay đổi cho người khác, hãy **nâng phiên bản** (vd 3.4.2 → 3.4.3) để không lẫn với file cũ cùng tên.
+Trên **Windows** (chỉ ra được file `.exe`): `npm test` rồi `npm run dist:win`, kiểm tra bằng `Get-FileHash "dist\Cute Pet Companion Setup 3.5.0.exe"`.
+
+- **Nâng phiên bản:** sửa `"version"` trong `package.json`. Tên file và màn hình *Cài đặt → Phiên bản* tự đổi theo. Mỗi lần gửi lại file đã thay đổi cho người khác, hãy **nâng phiên bản** (vd 3.5.0 → 3.5.1) để không lẫn với file cũ cùng tên.
 - **Chữ ký macOS:**
   - `npm run dist:mac` tự chạy `scripts/sign-mac.sh`, ký app và trợ lý `nc-bridge` bằng chứng chỉ cục bộ trong `build/signing/`.
   - Chứng chỉ chỉ có trên máy build và **không được đưa lên git**. Hãy sao lưu thư mục này. Nếu mất chứng chỉ, bản sau sẽ có chữ ký khác, và người dùng phải cấp lại quyền Trợ năng một lần.
@@ -45,7 +49,7 @@ shasum -a 256 dist/*3.4.2*.dmg "dist/Cute Pet Companion Setup 3.4.2.exe"
 - **Kiểm tra chữ ký:** `codesign --verify --deep --strict "dist/mac-arm64/Cute Pet Companion.app"`
 
 ### Kiểm tra trước khi chia sẻ
-- [ ] `npm test` đạt 75/75.
+- [ ] `npm test` không có test nào fail.
 - [ ] Đã cài thử file `.dmg` mới trên máy mình và app mở được.
 - [ ] Trong bộ cài không có dữ liệu riêng tư. Lệnh dưới đây không in ra gì là đạt:
   ```bash
@@ -61,8 +65,8 @@ Bộ cài **không** chứa khóa Composio, token, email, cài đặt hay Hộp 
 
 ### Cách 1: GitHub Releases (khuyến nghị)
 1. Mở `https://github.com/quocanhDev99/cute-pet-notifier/releases/new`.
-2. *Tag:* `v3.4.2` · *Title:* `Cute Pet Companion 3.4.2`.
-3. Kéo **3 file** ở mục 1 vào ô *Attach binaries*.
+2. *Tag:* `v3.5.0` · *Title:* `Cute Pet Companion 3.5.0`.
+3. Kéo các file đã build ở mục 1 vào ô *Attach binaries* (hiện chỉ có file Windows; thêm 2 file `.dmg` khi đã build trên Mac).
 4. Phần mô tả: dán mẫu ở mục 4 bên dưới.
 5. Bấm **Publish release**, rồi gửi link trang release cho người dùng.
 
@@ -70,12 +74,13 @@ Nếu repo đang **private**, chỉ người được mời vào repo mới tả
 
 Nếu đã cài GitHub CLI (`brew install gh` rồi `gh auth login`), có thể đăng bằng lệnh:
 ```bash
-gh release create v3.4.2 "dist/Cute Pet Companion-3.4.2-arm64.dmg" "dist/Cute Pet Companion-3.4.2-x64.dmg" \
-  "dist/Cute Pet Companion Setup 3.4.2.exe" --title "Cute Pet Companion 3.4.2" --notes "Hướng dẫn cài đặt: docs/INSTALL.md"
+gh release create v3.5.0 "dist/Cute Pet Companion Setup 3.5.0.exe" \
+  --title "Cute Pet Companion 3.5.0" --notes "Hướng dẫn cài đặt: docs/INSTALL.md"
+# Khi đã có bản Mac: gh release upload v3.5.0 "dist/Cute Pet Companion-3.5.0-arm64.dmg" "dist/Cute Pet Companion-3.5.0-x64.dmg"
 ```
 
 ### Cách 2: Google Drive / OneDrive (nhóm nhỏ)
-1. Tải 3 file lên một thư mục.
+1. Tải các file đã build lên một thư mục.
 2. Bấm **Chia sẻ** → *Bất kỳ ai có đường liên kết* → quyền **Người xem**.
 3. Gửi link kèm mẫu hướng dẫn ở mục 4.
 
@@ -83,12 +88,20 @@ gh release create v3.4.2 "dist/Cute Pet Companion-3.4.2-arm64.dmg" "dist/Cute Pe
 
 ## 4. Mẫu tin nhắn gửi người nhận
 
-> **Cute Pet Companion 3.4.2** 🐾. Thú cưng 3D thay thông báo của máy tính.
+> **Cute Pet Companion 3.5.0** 🐾. Thú cưng 3D thay thông báo của máy tính.
+>
+> **Mới trong 3.5.0:**
+> - Windows: thay thế hoàn toàn thông báo của hệ thống (tắt banner và âm thanh gốc, tự bật lại khi tắt tính năng hoặc thoát app); chữ tiếng Việt hiển thị đúng; bấm "Mở app" đưa đúng ứng dụng lên.
+> - 💖 Thái độ: chọn một thái độ (Ngọt ngào, Cà khịa, Cáu kỉnh, Điềm đạm, Hào hứng) là bé ngoài màn hình đổi ngay, và mọi thông báo được đón đúng thái độ đó.
+> - 👥 Người quen: thêm người yêu, gia đình, sếp… để bé phản ứng riêng với từng người; nhóm 🔕 Bỏ qua đưa tin vào Hộp thư.
+> - 🔴 Chấm đỏ đếm số thông báo chưa xem trên bé, 🕒 ngày giờ trên thẻ.
+> - Nhanh hơn: tin mới thay thẻ cũ sau 2,5 giây thay vì chờ 9 giây; chế độ "Đưa thư" hiện thẻ sau ~0,65 giây.
+> - Sửa: bé không còn đứng hình ở các dáng có hiệu ứng.
 >
 > **Tải đúng file:**
 > - Mac chip Apple (M1/M2/M3/M4): `…-arm64.dmg`. **Đừng** dùng file `-x64` trên máy này: bé sẽ chạy chậm, giật
 > - Mac Intel: `…-x64.dmg`
-> - Windows: `…Setup 3.4.2.exe`
+> - Windows: `…Setup 3.5.0.exe`
 > - Không rõ chip gì: menu  → *Giới thiệu về máy Mac này* → dòng *Chip*
 >
 > **macOS**
