@@ -1,6 +1,6 @@
 # 📦 Hướng dẫn cài đặt & Cơ chế thay thế thông báo (macOS & Windows)
 
-*Phiên bản 3.2.0 · Cập nhật 03/11/2026*
+*Phiên bản 3.4.0 · Cập nhật 04/11/2026*
 
 ## 0. Cơ chế thay thế thông báo hệ thống của Cute Pet Companion
 
@@ -16,15 +16,15 @@
 ---
 
 ## 1. Tệp cài đặt
-Tạo bằng `npm run dist:mac` / `npm run dist:win`, nằm trong thư mục `dist/`:
+Tạo bằng `npm run dist:mac` (macOS, đã ký) và `npx electron-builder --win nsis --x64` (Windows), nằm trong thư mục `dist/`. Cách build, kiểm tra và chia sẻ: [DISTRIBUTION.md](DISTRIBUTION.md).
 
 | Hệ điều hành | Tệp |
 |---|---|
-| macOS chip Apple (M1/M2/M3…) | `Cute Pet Companion-3.2.0-arm64.dmg` |
-| macOS chip Intel | `Cute Pet Companion-3.2.0.dmg` |
-| Windows 10/11 (64-bit) | `Cute Pet Companion Setup 3.2.0.exe` |
+| macOS chip Apple (M1/M2/M3…) | `Cute Pet Companion-3.4.0-arm64.dmg` |
+| macOS chip Intel | `Cute Pet Companion-3.4.0.dmg` |
+| Windows 10/11 (64-bit) | `Cute Pet Companion Setup 3.4.0.exe` |
 
-Các bản cài **chưa được ký số** (chưa có chứng chỉ Apple Developer / Windows code signing), nên lần mở đầu tiên hệ điều hành sẽ cảnh báo. Xem cách mở bên dưới.
+Bản macOS được ký bằng **chứng chỉ tự ký cố định**, nên quyền Trợ năng giữ nguyên qua các bản cập nhật. Tuy vậy app **chưa được Apple notarize**, và bản Windows chưa có chứng chỉ ký code, nên lần mở đầu tiên hệ điều hành sẽ cảnh báo. Xem cách mở bên dưới. Bản Windows **chưa được chạy thử trên máy Windows thật**.
 
 ---
 
@@ -37,28 +37,19 @@ Các bản cài **chưa được ký số** (chưa có chứng chỉ Apple Devel
    - Nếu báo *"app bị hỏng"* (do tệp tải từ Internet): chạy `xattr -dr com.apple.quarantine "/Applications/Cute Pet Companion.app"`.
 3. Thú cưng xuất hiện ở góc màn hình và **Control Center** tự mở trong lần chạy đầu.
 
-### 2.2a Thay thế hoàn toàn (khuyến nghị): ⚡ Tức thì hoặc 🤫 Im lặng tuyệt đối
-Control Center → **Kết nối ứng dụng → macOS Notification Center**. Có hai cách:
+### 2.2 Thay thế thông báo của máy (2 bước)
+Control Center → **🔌 Kết nối** → thẻ **🍎 Thay thế thông báo của máy Mac** (công tắc đầu thẻ phải ở **Đang bật**):
 
-| | ⚡ Tức thì (mặc định) | 🤫 Im lặng tuyệt đối |
-|---|---|---|
-| Cách làm | Bấm **🔐 Cấp quyền Trợ năng**, bật *Cute Pet Companion* trong *Trợ năng* | Bấm **🤫 Thay thế tất cả** |
-| Banner gốc | Bị ẩn ngay khi vừa xuất hiện (có thể chớp rất nhanh) | Không bao giờ xuất hiện |
-| Độ trễ của thú cưng | Gần như tức thì | khoảng 5–9 giây |
-| Bấm thẻ | Mở **đúng cuộc chat của mọi app**: app "bấm hộ" vào thông báo gốc | Mở đúng chat Teams/Slack nếu có thông tin, còn lại mở app |
-| Hoàn tác | Tắt tùy chọn "⚡ Tức thì" | Bấm **↺ Khôi phục banner gốc** (cài đặt gốc đã được sao lưu) |
+1. **Cho phép thú cưng đọc thông báo** → bấm **Mở Cài đặt**, bật *Cute Pet Companion* trong *Quyền riêng tư & Bảo mật → Trợ năng*. Nếu thẻ báo *"bật thêm trợ lý nc-bridge"*: bấm **📂 Mở Cài đặt + chỉ file**, kéo file `nc-bridge` (Finder vừa mở) vào danh sách Trợ năng rồi bật công tắc của nó. Lý do: macOS cấp quyền riêng cho tiến trình phụ đọc và ẩn banner. Xong bước này thông báo tới gần như tức thì và banner gốc bị ẩn ngay khi vừa xuất hiện; bấm thẻ sẽ mở đúng cuộc trò chuyện.
+2. *(Tùy chọn)* **Không bao giờ thấy banner gốc** → bấm **🤫 Bật**. Banner của macOS bị tắt cho mọi app (cài đặt gốc được sao lưu, bấm **↺ Hoàn tác** để trả lại). Một số app đang mở (Chrome, Brave, Tin nhắn) có thể tự bật lại — khi đó tắt thủ công trong *Cài đặt → Thông báo*.
 
-Lưu ý: khi đang bật **Focus / Không làm phiền**, macOS không hiện banner nên chế độ ⚡ không có gì để bắt. Lúc đó app tự chuyển sang đọc kho thông báo (trễ khoảng 5 giây).
+Lưu ý: khi đang bật **Focus / Không làm phiền** của macOS, macOS không hiện banner nên app chuyển sang đọc kho thông báo (trễ khoảng 5 giây).
 
-### 2.2 Kích hoạt chế độ Tức thì & Tự đóng banner gốc
-1. Vào Control Center → **Kết nối ứng dụng** → thẻ **macOS Notification Center**.
-2. Bấm nút **🔐 Mở Cài đặt Trợ năng (Accessibility)**.
-3. Trong bảng cài đặt macOS vừa hiện ra, gạt công tắc cho phép **Cute Pet Companion** (hoặc Terminal/VS Code nếu bạn chạy `npm start`).
-4. **Xong!** Từ lúc này:
-   - Mọi thông báo từ Zalo, Teams, Slack, Messenger... đều được thú cưng đón lấy tức thì (<50ms).
-   - Banner mặc định góc phải của macOS sẽ tự động được đóng lại ngay lập tức, không gây phiền phức hay trùng lặp.
-
-*(Lưu ý: Nếu không cấp quyền Trợ năng, app vẫn hoạt động ở chế độ đọc nền SQLite, tuy nhiên sẽ có độ trễ khoảng 5 giây do macOS ghi file đệm chậm).*
+### 2.2b Thêm ứng dụng khác (Gmail, Notion, Jira, Teams… — tùy chọn)
+Control Center → **🔌 Kết nối → ➕ Thêm ứng dụng**:
+- GitHub, Lịch (iCal), Slack, Pin & hệ thống: bấm **＋ Thêm**, làm theo 1–2 bước trong hộp thoại.
+- Hơn 1000 ứng dụng khác qua **Composio**: tạo tài khoản miễn phí tại composio.dev, lấy *API key*, dán vào ô **Dán khóa vào đây**. Sau đó tìm ứng dụng → **＋ Kết nối** → đăng nhập trên trình duyệt → quay lại bấm **🔔 Chọn sự kiện**. Khóa được mã hóa bằng Keychain của máy.
+- Để sự kiện từ Composio tới máy, cần một **Gateway** HTTPS (thư mục `gateway/`, xem `gateway/README.md`) và đặt URL webhook của project Composio trỏ tới `https://<gateway>/webhooks/composio`. Cấu hình Gateway nằm ở **⚙️ Cài đặt → Nâng cao → Hiện tab "Theo dõi"** → **📊 Theo dõi → Kết nối (kỹ thuật)**.
 
 ### 2.3 macOS 15 Sequoia trở lên
 macOS 15 bổ sung khóa kho thông báo SQLite. Nếu bạn muốn kích hoạt cả cơ chế dự phòng lịch sử SQLite:
@@ -69,23 +60,43 @@ macOS 15 bổ sung khóa kho thông báo SQLite. Nếu bạn muốn kích hoạt
 ## 3. Windows 10/11
 
 ### 3.1 Cài đặt
-1. Chạy `Cute Pet Companion Setup 3.2.0.exe`. Đây là bản cài 1-click cho tài khoản hiện tại, không yêu cầu quyền Administrator.
+1. Chạy `Cute Pet Companion Setup 3.4.0.exe`. Đây là bản cài 1-click cho tài khoản hiện tại, không yêu cầu quyền Administrator.
 2. Nếu Windows SmartScreen hiện cảnh báo màu xanh: bấm **More info** (Thông tin thêm) → **Run anyway** (Vẫn chạy).
 3. Thú cưng xuất hiện ở góc màn hình. Icon 🐾 nằm ở khay hệ thống (System Tray, góc dưới bên phải màn hình).
 
 ### 3.2 Kích hoạt cơ chế thay thế Toast Windows
-1. Vào Control Center → **Kết nối ứng dụng** → thẻ **Windows Toast Listener**.
-2. Bấm **Lưu & kết nối**.
+1. Vào Control Center → **🔌 Kết nối** → thẻ **🪟 Thay thế thông báo của Windows**.
+2. Gạt công tắc sang **Đang bật**.
 3. Nếu Windows yêu cầu quyền:
    - App sẽ tự động nhắc bạn cấp quyền truy cập thông báo.
-   - Hoặc bạn có thể bấm nút **⚙️ Mở Cài đặt Thông báo của Windows** và **🔐 Mở Cài đặt Quyền riêng tư Thông báo** ngay trên thẻ kết nối.
+   - Hoặc bấm **Mở Cài đặt** ngay trên thẻ.
 4. Khi đã kết nối, thú cưng sẽ nhận diện toàn bộ Toast từ Windows, tự động đóng thông báo gốc bằng lệnh `RemoveNotification` và hiển thị thẻ 3D tương tác của thú cưng.
 
 ---
 
+## 5. Cài đặt nhanh sau khi cài app (5 phút)
+| Việc | Ở đâu | Ghi chú |
+|---|---|---|
+| Thay thông báo của Mac | 🔌 Kết nối → 🍎 Thay thế thông báo | Bật *Cute Pet Companion* trong Trợ năng (thẻ sẽ chỉ thêm trợ lý *nc-bridge* nếu macOS yêu cầu) |
+| Gmail, Jira, Bitbucket, Outlook, GitHub… | 🔌 Kết nối → Dán khóa Composio (`ck_…` từ Connect, hoặc `ak_…` của Project) → ＋ Kết nối | Kiểm tra mỗi 2 phút (đổi được: 1/2/5/15 phút) |
+| Chỉ báo chat khi được nhắc tên | 🔔 Thông báo → 💬 Tin nhắn | Điền tên của bạn (tên 1 chữ cần @, vd `@Mai`) |
+| Bé đọc cảm xúc tin nhắn | 🐱 Thú cưng → 🎭 Bé đọc cảm xúc | Có ô "Gõ thử một tin nhắn" |
+| Ẩn nội dung khi chia sẻ màn hình | ⚙️ Cài đặt → 🙈 Nội dung trên thẻ, hoặc chuột phải vào bé | 4 mức: đầy đủ / che bớt / chỉ tên app / ẩn hoàn toàn |
+| Nhắc nghỉ mắt | 🔔 Thông báo → 🎯 Tập trung → 💆 Nhắc nghỉ mắt | Mặc định 60 phút dùng máy thật; bé nói lời nhắc |
+| Bé nói chuyện | 🐱 Thú cưng → 🎵 Âm thanh → 🗣️ Bé nói chuyện | Giọng hệ thống (vi: Linh, en: Samantha); không đọc nội dung thông báo |
+| Màu giao diện (thẻ đổi theo) | ⚙️ Cài đặt → 🎨 Màu giao diện | 6 màu, có Đêm (tối) |
+
+### Về chữ ký của app và quyền Trợ năng
+Từ bản 3.4.0, app và trợ lý `nc-bridge` được ký bằng **một chứng chỉ cục bộ cố định**. Vì vậy quyền Trợ năng **giữ nguyên qua các lần cập nhật**. Lần đầu chuyển từ bản cũ (chưa ký) sang bản đã ký, bạn cần cấp quyền lại **một lần cuối**: trong *Trợ năng*, xóa (**–**) các mục *Cute Pet Companion* và *nc-bridge* cũ, rồi bấm **Mở Cài đặt** trong app và bật lại.
+
+### Jira & Bitbucket hoạt động thế nào
+- **Bitbucket:** PR **đang mở mà bạn là reviewer và chưa approve** (25 repo cập nhật gần nhất). Khi mở app: 1 thẻ liệt kê các PR đang chờ, mỗi PR có **↗ Mở** và **✅ Approve** (bấm là approve, chỉ hiện "Đã approve" sau khi Bitbucket xác nhận). PR mới gửi tới bạn → 1 thẻ riêng.
+- **Jira:** việc **mới giao cho bạn** (ghi "Giao bởi" từ lịch sử thay đổi của Jira; nếu Jira không ghi lại thì ghi "không có thông tin", không suy đoán từ người tạo) và việc **đổi trạng thái**. Sửa nhỏ không báo.
+- Cả hai là **kiểm tra định kỳ** qua Composio Connect (không phải tức thì). Lỗi gần nhất (nếu có) hiện ở 🔌 Kết nối.
+
 ## 4. Kiểm thử nhanh
 1. Mở Control Center (chuột phải vào thú cưng → Cài đặt, hoặc icon khay hệ thống).
-2. Chuyển sang mục **Sự chú ý & Inbox** hoặc **Kết nối ứng dụng**.
+2. Ở **🏠 Trang chủ** bấm **🚀 Gửi thử 1 thông báo**, hoặc xem tin được giữ lại ở **📥 Hộp thư**.
 3. Thử gửi một tin nhắn Teams, Zalo, hoặc gửi webhook thử nghiệm:
 ```bash
 curl -X POST http://127.0.0.1:3721/notify \

@@ -1,48 +1,36 @@
-# IMPLEMENTATION_STATUS — Trạng thái từng tính năng (Blueprint V3.2)
+# IMPLEMENTATION_STATUS — Trạng thái từng tính năng
 
-*Cập nhật: 03/11/2026 · Quy ước: `Completed` · `Partially Completed` · `Not Implemented` · `Blocked` · `Not Tested` · `Unsupported`*
+*Cập nhật: 04/11/2026 · Phiên bản 3.4.0 · Quy ước: ✅ Hoàn thành · 🟡 Một phần · ⏳ Chưa làm · ⛔ Không hỗ trợ · 🧪 Chưa kiểm thử thật*
 
-## P0 — MVP
+## Lõi
+| Tính năng | Trạng thái | Ghi chú |
+|---|---|---|
+| Thú cưng 3D (4 nhân vật, rig tham số, AnimationController 5 lớp) | ✅ | Chưa có `model.glb` production (xem KNOWN_LIMITATIONS) |
+| Emotion Engine 5 tầng + 5 tính cách | ✅ | |
+| 🎭 Bé đọc cảm xúc từ nội dung (emoji, VI có/không dấu, EN, phủ định, cường độ) | ✅ | Ngay trên máy; có 3 mức nhạy và ô gõ thử |
+| Pipeline: lọc, bỏ trùng, ưu tiên, gộp, hàng đợi | ✅ | |
+| Attention: 4 mức ưu tiên, cooldown, tắt tiếng app, 7 chế độ tập trung, giờ yên tĩnh, Hộp thư | ✅ | |
+| 💬 Chat: báo tất cả / chỉ khi nhắc tên hoặc @all, tin nhắn riêng 1-1 vẫn báo | ✅ | Với thông báo của máy, việc nhận ra tin 1-1 là đoán theo dạng tin |
+| 🙈 Privacy Display Mode (4 mức, ẩn theo app, bật nhanh từ menu) | ✅ | Không tự phát hiện chia sẻ màn hình ⏳ |
+| 💆 Nhắc nghỉ mắt (tính theo thời gian dùng máy thật, hoãn khi đang họp hoặc tập trung) | ✅ | |
+| 🗣️ Giọng nói (nhắc nghỉ, nhấc bổng, thả xuống) | ✅ | Giọng của hệ thống; chỉ nói câu cố định |
+| Control Center: 6 tab + Theo dõi, 6 màu giao diện (thẻ thông báo đổi theo), VI/EN | ✅ | |
+| Click-through overlay (main process đọc vị trí con trỏ và so với vùng thẻ) | ✅ | |
+| Ký app bằng chứng chỉ cục bộ cố định | ✅ | Chưa có chứng chỉ Apple Developer, nên chưa notarize ⏳ |
 
-| Phase | Hạng mục | Trạng thái | Ghi chú / bằng chứng |
-|---|---|---|---|
-| 0 | Khảo sát & khả thi tích hợp | Completed | Bảng năng lực tích hợp, mô hình gateway, báo cáo bảo mật |
-| 1 | Mèo Mochi: model 3D thật + rig + clip | **Partially Completed** | Rig procedural đầy đủ 8 cảm xúc. **Chưa có `model.glb` production** |
-| 1 | Nạp GLB, semantic mapping theo `pet.json` | Completed (code) / Not Tested (GLB thật) | `semantic-map.js` + unit test |
-| 2 | AnimationController trung tâm + 5 lớp | Completed | `animation-controller.js`, 8 test |
-| 2 | Cross-fade 0.18–0.35 s, không pose pop/jitter | Completed (procedural) | ANIMATION_QUALITY_REPORT §2 |
-| 2 | Bảo vệ dt khi suspend/resume | Completed | Test + `powerMonitor.resume` |
-| 2 | Fallback khi thiếu clip | Completed (code) / Not Tested (GLB) | |
-| 2 | 60 FPS | Completed | 74.9 FPS avg, p95 14.3 ms trên M2 |
-| 2 | Emotion Engine 5 preset + rule 5 tầng | Completed | Đã có từ trước, giữ nguyên |
-| 3 | 4 mức ưu tiên, cooldown, dedupe, gom chùm, hàng đợi | Completed | `attention-engine.js`, test + E2E (M3) |
-| 3 | Inbox bền + Digest | Completed | `inbox-store.js`, Control Center → Sự chú ý & Inbox |
-| 3 | Idempotency theo event ID | Completed | Pipeline + gateway |
-| 4 | Presence Full / Minimal / Hidden | Completed | E2E M5 (Hidden: 0 frame) |
-| 4 | 6 Focus Modes (+ "Bình thường") | Completed | E2E M4 (Meeting) |
-| 4 | Gaming Mode tự phát hiện app toàn màn hình | Not Implemented | Không có API công khai. Hiện bật thủ công |
-| 4 | Quick controls (tray) | Completed | Menu khay: Hiện diện, Chế độ tập trung, Inbox, DND |
-| 5 | Billboard / Peeker / Courier | Completed | Đã có, giữ nguyên |
-| 5 | 5 theme thẻ | Completed | Pastel, Minimal White, Dark, Glass, Acrylic |
-| 5 | Kéo thả tự do + lưu vị trí + đặt lại | Completed | Đã sửa lỗi tràn màn hình và lỗi `sound.pop` khiến vị trí không được lưu |
-| 5 | Phản ứng nhấc bổng `isGrabbed` + tiếp đất | Completed | Đã chuyển sang controller (blend 0.18 s / 0.25 s, mặt được khôi phục) |
-| 5 | Kick xoay 360° | Completed | |
-| 6 | ≥ 1 kênh Native OS thật | Partially Completed | `powerMonitor` thật, chưa ghi được sự kiện pin/nhiệt thật trong phiên đo |
-| 6 | ≥ 1 kênh realtime push từ ứng dụng ngoài | **Blocked** | Cần tài khoản Composio/Slack + gateway HTTPS. Toàn bộ đường đi đã E2E trên localhost |
-| 6 | Đo latency p50/p95 | Completed | PERFORMANCE_REPORT §3 |
+## Nguồn thông báo
+| Nguồn | Trạng thái | Cách nhận |
+|---|---|---|
+| macOS Notification Center: đọc kho thông báo | ✅ | native_os, trễ khoảng 5 giây |
+| macOS: bắt banner tức thì + bấm thẻ mở đúng chat (nc-bridge, Accessibility) | 🟡 | Chạy ở bản dev. Bản đã ký đang chờ người dùng cấp lại quyền để xác nhận |
+| macOS: tắt banner gốc / khôi phục | ✅ | |
+| Composio Connect (`ck_`, MCP): Gmail, Outlook, Lịch Google, GitHub | ✅ / 🧪 | Gmail đã kiểm với tài khoản thật; Outlook, Lịch, GitHub chưa |
+| Jira: việc mới giao (kèm "giao bởi" từ changelog) / đổi trạng thái | ✅ | Kiểm tra định kỳ 2 phút |
+| Bitbucket: PR chờ review + Approve trên thẻ | ✅ / 🧪 | Đã kiểm việc đọc với tài khoản thật; approve thật từ thẻ chưa được xác nhận |
+| Composio REST (`ak_`) + trigger qua Gateway | 🧪 | Đã có unit test, chưa chạy với tài khoản thật |
+| Slack Socket Mode, GitHub PAT, Lịch iCal, Pin/hệ thống, Webhook | ✅ | |
+| Windows Toast Listener | 🧪 | Chưa chạy thử trên Windows thật |
+| Teams Graph / Zalo cá nhân | ⛔ | Thông báo của Teams/Zalo vẫn được bé mang tới qua Notification Center của macOS |
 
-## P1
-
-| Phase | Hạng mục | Trạng thái | Ghi chú |
-|---|---|---|---|
-| 7 | Control Center 10 phân hệ | Completed | Thêm "Sự chú ý & Inbox" và "Tập trung & Hiện diện" |
-| 7 | Control Center song ngữ | Partially Completed | Overlay có VI/EN, Control Center chỉ có VI |
-| 8 | Boba, Cloud, Pip | Partially Completed | Rig procedural cho cả 3, chưa có model production |
-| 9 | Slack (Socket Mode trực tiếp) | Not Tested | Code có, chưa có tài khoản |
-| 9 | Composio / Slack Events qua Gateway | Completed (code + test) / Blocked (tài khoản thật) | |
-| 9 | Gmail push, Calendar push, Graph, Notion trực tiếp | Not Implemented | Dùng Composio qua gateway hoặc ICS |
-| 9 | Teams, Discord, Zalo, macOS NC, Windows Toast | Unsupported | Có lý do hiển thị trong UI |
-| 10 | Calendar-aware Focus, Digest nâng cao | Not Implemented / Partially (Digest cơ bản) | |
-| 11 | Reduced Motion | Completed | Setting + theo OS + theo chế độ |
-| 11 | Hồi quy đa nền tảng (Windows) | Not Tested | |
-| — | Đóng gói `.dmg` / `.exe` | Partially Completed | `electron-builder --mac --dir` chạy được (phiên trước), chưa ký số, chưa có icon |
+## Đã gỡ bỏ
+- **YouTube Pet Video Frame (khung video thu nhỏ):** gỡ theo yêu cầu người dùng ngày 04/11/2026.

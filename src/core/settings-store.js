@@ -32,14 +32,17 @@ const DEFAULT_SETTINGS = Object.freeze({
     petScale: 1,
     dragEnabled: true,
     customPosition: { x: null, y: null },
-    language: 'vi'
+    language: 'vi',
+    uiTheme: 'peach',
+    cardFollowsTheme: true
   },
   sounds: {
     enabled: true,
     volume: 0.45,
     petSensitivity: 1,
     animationIntensity: 1,
-    reducedMotion: 'system'
+    reducedMotion: 'system',
+    voice: true
   },
   attention: {
     criticalBypass: true,
@@ -58,12 +61,34 @@ const DEFAULT_SETTINGS = Object.freeze({
   },
   privacy: {
     keepHistory: true,
-    historyLimit: 100
+    historyLimit: 100,
+    displayMode: 'full_content',
+    hiddenApps: []
   },
   system: {
     autoLaunch: false,
     focusMode: 'none',
+    advancedMode: false,
     presence: 'full'
+  },
+  mood: {
+    enabled: true,
+    sensitivity: 'medium'
+  },
+  chat: {
+    mode: 'all',
+    names: [],
+    includeDirect: true
+  },
+  wellbeing: {
+    breakReminder: true,
+    breakEveryMinutes: 60,
+    breakMinutes: 5
+  },
+  integrations: {
+    composioUserId: '',
+    pollSeconds: 120,
+    apps: []
   },
   adapters: {
     webhook: { enabled: true },
@@ -82,6 +107,10 @@ const ENUMS = {
   'notifications.size': ['sm', 'md', 'lg'],
   'appearance.position': POSITIONS,
   'appearance.language': ['vi', 'en'],
+  'chat.mode': ['all', 'mentions'],
+  'privacy.displayMode': ['full_content', 'masked', 'source_only', 'anonymous_source_only'],
+  'mood.sensitivity': ['low', 'medium', 'high'],
+  'appearance.uiTheme': ['peach', 'mint', 'lavender', 'ocean', 'sunset', 'midnight'],
   'system.focusMode': ['none', 'work', 'focus', 'meeting', 'gaming', 'relax', 'sleep'],
   'system.presence': ['full', 'minimal', 'hidden'],
   'sounds.reducedMotion': ['system', 'on', 'off'],
@@ -92,6 +121,9 @@ const ENUMS = {
 
 const RANGES = {
   'notifications.duration': [3000, 60000],
+  'integrations.pollSeconds': [60, 900],
+  'wellbeing.breakEveryMinutes': [20, 240],
+  'wellbeing.breakMinutes': [1, 30],
   'notifications.maxQueue': [1, 100],
   'notifications.dedupeSeconds': [0, 600],
   'notifications.groupThreshold': [2, 50],
@@ -159,6 +191,29 @@ function mergeValidated(base, patch, defaults, prefix = '') {
     if (dPath === 'customRules') { const v = sanitizeCustomRules(val); if (v) out[key] = v; continue; }
     if (dPath === 'appRules') { const v = sanitizeAppRules(val); if (v) out[key] = v; continue; }
     if (dPath === 'keywordRules') { const v = sanitizeKeywordRules(val); if (v) out[key] = v; continue; }
+    if (dPath === 'integrations.apps') {
+      if (Array.isArray(val)) {
+        out[key] = val.slice(0, 200).filter(a => a && typeof a === 'object' && a.toolkit).map(a => ({
+          provider: ['composio'].includes(a.provider) ? a.provider : 'composio',
+          toolkit: String(a.toolkit).toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 60),
+          name: String(a.name || a.toolkit).slice(0, 80),
+          logo: /^https:\/\//.test(String(a.logo || '')) ? String(a.logo).slice(0, 500) : '',
+          connectedAccountId: String(a.connectedAccountId || '').slice(0, 80),
+          status: ['pending', 'active', 'expired', 'error'].includes(a.status) ? a.status : 'pending',
+          triggers: Array.isArray(a.triggers) ? a.triggers.slice(0, 30).map(t => ({ slug: String(t.slug || '').toUpperCase().replace(/[^A-Z0-9_]/g, '').slice(0, 100), instanceId: String(t.instanceId || '').slice(0, 80), name: String(t.name || '').slice(0, 120) })).filter(t => t.slug) : [],
+          addedAt: Number(a.addedAt) || Date.now()
+        }));
+      }
+      continue;
+    }
+    if (dPath === 'privacy.hiddenApps') {
+      if (Array.isArray(val)) out[key] = [...new Set(val.map(v => String(v).toLowerCase().replace(/[^a-z0-9_.-]/g, '').slice(0, 40)).filter(Boolean))].slice(0, 100);
+      continue;
+    }
+    if (dPath === 'chat.names') {
+      if (Array.isArray(val)) out[key] = [...new Set(val.map(v => String(v).replace(/[\u0000-\u001f]/g, '').trim().slice(0, 40)).filter(Boolean))].slice(0, 10);
+      continue;
+    }
     if (dPath === 'attention.mutedApps') {
       if (Array.isArray(val)) out[key] = [...new Set(val.map(v => String(v).toLowerCase().replace(/[^a-z0-9_.-]/g, '').slice(0, 40)).filter(Boolean))].slice(0, 100);
       continue;

@@ -1,34 +1,31 @@
 # KNOWN_LIMITATIONS — Hạn chế còn tồn tại
 
-*Cập nhật: 03/11/2026. Danh sách công khai để người dùng và đội ngũ nắm rõ.*
+*Cập nhật: 04/11/2026 · v3.4.0. Danh sách công khai để người dùng và đội ngũ nắm rõ.*
 
 ## Nhân vật & hoạt họa
-1. **Chưa có `model.glb` production cho nhân vật nào**, kể cả Mèo Mochi (Phase 1 yêu cầu model thật). Cả 4 nhân vật đang chạy bằng **rig procedural tham số**. Đường nạp GLB (semantic map, alias clip, morph, fallback) mới có unit test cho phần logic, **chưa chạy với một file GLB thật**.
-2. **Chưa có ảnh tham chiếu 2D** (`assets/references`, `assets/sprites`).
-3. **Cú giơ tay biên độ lớn** đạt tốc độ đỉnh 0.41–0.46 rad/frame ở 60 Hz (vẫn liên tục, có easing). Nếu thấy nhanh, có thể tăng profile `default`.
-4. **Thỏ Cloud:** tai đã đổi thành ngắn và tròn theo BLUEPRINT V3.2 §2.3, trong khi BLENDER_GUIDE §1.2 vẫn ghi "tai dài dựng đứng". Hai tài liệu đang mâu thuẫn, cần chốt lại.
+1. **Chưa có `model.glb` production cho nhân vật nào.** Cả 4 nhân vật đang chạy bằng rig procedural. Đường nạp GLB đã có, nhưng chưa thử với một file GLB thật.
 
-## Tích hợp
-5. **Chưa có luồng realtime từ ứng dụng bên ngoài thật** (MVP Gate #9): chưa có tài khoản Composio/Slack thật và chưa có gateway HTTPS công khai. Gateway mới được kiểm chứng trên localhost với payload V3 tự ký.
-6. **Gmail push (Pub/Sub), Google Calendar watch channel, Microsoft Graph (Outlook/Teams), Discord:** chưa triển khai.
-7. **macOS Notification Center** dùng cơ sở dữ liệu nội bộ (không phải API công khai), theo lựa chọn của người dùng:
-   - Có thể **ngừng hoạt động khi nâng cấp macOS**. Trên macOS 15+ cần cấp *Full Disk Access*.
-   - Thú cưng hiện thông báo **trễ khoảng 5.4 s** so với banner gốc, vì macOS (`usernoted`) chỉ ghi DB sau khoảng 5.25 s.
-   - **Banner gốc của macOS vẫn hiện**, trừ khi người dùng đặt kiểu thông báo của từng app là "Không có" trong Cài đặt Hệ thống. App không có quyền tắt banner của app khác.
-   - **Windows Toast Listener** vẫn cần bản đóng gói MSIX.
-8. **GitHub** là polling (≥ 60 s). **Calendar ICS** là scheduled sync (5–240 phút). UI ghi nhãn đúng như vậy.
-9. **Gateway một người dùng:** chưa multi-tenant, chưa có UI OAuth/Connect Link cho Composio.
+## Thay thông báo của macOS
+2. **Dùng giao diện không công khai của Apple.** App đọc kho thông báo và dùng Accessibility cho banner. Một bản nâng cấp macOS có thể làm hỏng tính năng này.
+3. **Khi bật Focus của macOS:** macOS không hiện banner, nên app chỉ đọc được kho thông báo (trễ khoảng 5 giây).
+4. **Một số app tự bật lại banner gốc** sau khi đã tắt (Chrome, Brave, Tin nhắn). Cần tắt tay trong *Cài đặt → Thông báo*.
+5. **Bấm thẻ mở đúng cuộc chat** chỉ chắc chắn ở chế độ bắt banner tức thì (đã cấp quyền Trợ năng). Ở chế độ đọc kho thông báo, chỉ Teams và Slack có thông tin để mở đúng chat.
+6. **App chưa có chứng chỉ Apple Developer.** App được ký bằng chứng chỉ tự ký nên quyền giữ được qua các bản cập nhật trên máy này. Khi cài trên máy khác, Gatekeeper vẫn cảnh báo (chuột phải → Mở).
 
-## Sự chú ý & hiện diện
-10. **Gaming Mode chưa tự phát hiện ứng dụng toàn màn hình:** Electron không có API công khai cho việc này, người dùng phải bật thủ công.
-11. **Calendar-aware Focus (Phase 10):** chưa có tự động chuyển sang Meeting khi đang có lịch họp.
-12. **Phân loại `category`** (social/entertainment/promotion…) dựa trên tên app và từ khóa, có thể sai với app lạ. Người dùng có thể tắt tiếng từng app.
+## Chat & cảm xúc
+7. **Tin nhắn riêng 1-1 với thông báo của máy là đoán** (dạng "Người gửi: nội dung" thường là tin nhóm). Slack thì biết chính xác.
+8. **Đọc cảm xúc dựa trên từ điển và emoji, không phải AI.** Câu mỉa mai hay câu mơ hồ có thể bị đoán sai. Không đủ chắc thì bé giữ cảm xúc mặc định.
+9. **Giọng nói dùng giọng của hệ thống.** Chất lượng tùy máy, tiếng Việt là giọng "Linh". Bé không bao giờ đọc nội dung thông báo.
 
-## Giao diện
-13. **Song ngữ VI/EN:** chỉ áp dụng cho overlay (nút trên thẻ, nhãn cảm xúc, lời thoại thú cưng). **Control Center vẫn chỉ có Tiếng Việt.**
-14. **5 theme thẻ** đã có. Riêng Glassmorphism/Acrylic dùng `backdrop-filter` nhưng **không làm mờ được cửa sổ bên dưới**: cửa sổ Electron trong suốt chỉ làm mờ nội dung trong chính trang của nó.
+## Kết nối
+10. **Composio Connect (`ck_`) không có trigger**, nên Gmail, Jira, Bitbucket… là **kiểm tra định kỳ** (mặc định 2 phút) chứ không tức thì. Mỗi lần kiểm tra là một lượt gọi công cụ của Composio, có thể tính phí theo gói của bạn.
+11. **Bitbucket:** chỉ quét 25 repo cập nhật gần nhất. Nếu có 2 tài khoản Bitbucket trong Composio thì dùng tài khoản mặc định. Approve thật từ thẻ chưa được xác nhận trên tài khoản thật.
+12. **Jira:** "giao bởi" chỉ có khi Jira ghi lại lần giao việc. Việc được tạo ra đã gán sẵn cho bạn thì hiện "không có thông tin". Chưa báo khi bạn bị gỡ khỏi một việc.
+13. **Outlook, Lịch Google, GitHub qua Composio** chưa được kiểm tra với tài khoản thật.
 
-## Hiệu năng & nền tảng
-15. **CPU lúc rảnh ≈ 1.8 % một lõi** (≈ 0.23 % toàn máy M2), chủ yếu là chi phí nền của Electron. Vòng render bằng 0 khi rảnh.
-16. **Chưa chạy hồi quy trên Windows 10/11.** Bản đóng gói chưa có icon app, chưa ký số và notarize.
-17. **Lần render đầu tiên sau khởi động** có thể trễ 0.4–1.9 s (khởi tạo WebGL/shader).
+## Riêng tư
+14. **Không tự phát hiện chia sẻ màn hình** (Electron không có API công khai), nên dùng lối tắt "🙈 Ẩn nội dung thông báo".
+15. **Nội dung vẫn tới máy trước khi bị ẩn.** Nội dung đi qua macOS Notification Center, Composio (đám mây) hoặc Gateway rồi mới bị ẩn trên máy. Cảm xúc của bé vẫn được suy ra từ nội dung.
+
+## Windows
+16. **Chưa chạy thử trên máy Windows thật** (Toast Listener, khay hệ thống, đóng gói).

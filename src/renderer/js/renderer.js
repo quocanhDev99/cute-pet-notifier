@@ -18,6 +18,10 @@ const EMO = Object.fromEntries(EMOTION_SCHEMA.map(e => [e.id, e]));
 const APP_META = {
   slack: { label: 'Slack', icon: '💬' },
   github: { label: 'GitHub', icon: '🐙' },
+  wellbeing: { label: 'Sức khỏe', icon: '💆' },
+  bitbucket: { label: 'Bitbucket', icon: '🪣' },
+  jira: { label: 'Jira', icon: '🧩' },
+  gmail: { label: 'Gmail', icon: '✉️' },
   calendar: { label: 'Lịch', icon: '📅' },
   system: { label: 'Hệ thống', icon: '🖥️' },
   teams: { label: 'Teams', icon: '👥' },
@@ -64,9 +68,10 @@ const I18N = {
     kickQuip: 'Hứ! Biến đi! 🦶',
     reject: ['😤 Tránh xa ra, đừng có vuốt ve tui!'],
     kickTitle: 'Thú cưng sẽ đá văng thông báo này',
+    voiceBreak: ['Bạn ơi, mình nghỉ mắt một chút nha!', 'Nhìn màn hình lâu rồi đó, cho mắt nghỉ xíu nhé!', 'Ê, tới giờ nghỉ mắt rồi nè!'], voiceBreakStart: ['Nhắm mắt thư giãn nào, bé canh giờ cho bạn nhé.', 'Nhìn ra xa một chút, hít thở thật sâu nào.'], voiceBreakDone: ['Xong rồi! Mắt khỏe re, mình làm tiếp thôi!', 'Hết giờ nghỉ rồi, chiến tiếp nào!'], breakStart: '😌 Nghỉ ngay', breakSnooze: '⏰ 10 phút nữa', breakTick: '😌 Nghỉ mắt nào… {t}', breakTip: ['Nhìn ra xa khoảng 6 m nhé 🌳', 'Chớp mắt chậm vài lần 😌', 'Đứng dậy vươn vai một chút 🙆'], breakDone: '🌟 Mắt khỏe rồi! Làm tiếp thôi', snoozed: '⏰ OK, 10 phút nữa bé nhắc lại', moreRows: '+{n} PR khác — bấm Mở để xem tất cả', approve: '✅ Approve', approving: '⏳ Đang approve…', approved: '✓ Đã approve', approvedSay: '✅ Đã approve PR giúp bạn!', approveFail: '😿 Approve không được: ',
     priority: { critical: '🚨 Khẩn cấp', important: '⭐ Quan trọng', low: '💤 Ít quan trọng' },
     focusLine: { focus: '🎯 Đang tập trung…', meeting: '📅 Đang họp, suỵt…', work: '💼 Làm việc nghiêm túc nào!', relax: '🌿 Thư giãn thôi~', sleep: '💤 Ngủ ngon…' },
-    emo: null
+    emo: null,
   },
   en: {
     close: 'Close',
@@ -91,6 +96,7 @@ const I18N = {
     kickQuip: 'Hmph! Begone! 🦶',
     reject: ["😤 Stay back, don't touch me!", '😾 Not now, human!', '🙄 Hands off!'],
     kickTitle: 'Your pet will kick this notification away',
+    voiceBreak: ['Hey, let’s rest your eyes for a bit!', 'You’ve been staring at the screen for a while. Eye break time!'], voiceBreakStart: ['Close your eyes and relax, I’ll keep time for you.', 'Look far away and take a deep breath.'], voiceBreakDone: ['All done! Fresh eyes, let’s get back to it!'], breakStart: '😌 Break now', breakSnooze: '⏰ In 10 min', breakTick: '😌 Eye break… {t}', breakTip: ['Look about 6 m away 🌳', 'Blink slowly a few times 😌', 'Stand up and stretch 🙆'], breakDone: '🌟 Eyes refreshed! Back to it', snoozed: '⏰ OK, I’ll remind you in 10 min', moreRows: '+{n} more — press Open to see all', approve: '✅ Approve', approving: '⏳ Approving…', approved: '✓ Approved', approvedSay: '✅ PR approved for you!', approveFail: '😿 Couldn’t approve: ',
     priority: { critical: '🚨 Critical', important: '⭐ Important', low: '💤 Low' },
     focusLine: { focus: '🎯 Deep focus…', meeting: '📅 In a meeting, shh…', work: '💼 Work mode on!', relax: '🌿 Relax time~', sleep: '💤 Sleeping…' },
     emo: { happy: 'Happy', excited: 'Excited', love: 'Love', surprised: 'Surprised', angry: 'Grumpy', sad: 'Sad', thinking: 'Thinking', sleeping: 'Sleeping' },
@@ -133,6 +139,7 @@ function residentEmotion() {
 function applyPresence() {
   const hide = (eff.hidden && !(current && current.item.priority === 'critical')) || (!cfg.settings.appearance.residentPet && !current);
   dock.classList.toggle('hidden', hide);
+  refreshHitRects();
   dock.classList.toggle('presence-minimal', eff.presence === 'minimal');
   if (!stage) return;
   stage.setReducedMotion(eff.reducedMotion);
@@ -145,6 +152,26 @@ function applyPresence() {
 function esc(str) {
   return String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c]));
 }
+
+/* Report interactive rectangles to the main process (it hit-tests the real cursor). Cheap: only
+   sent when they change; re-measured each frame for a moment after layout changes/animations. */
+let lastRectsKey = '';
+let rectsUntil = 0;
+let rectsRaf = 0;
+function measureRects() {
+  rectsRaf = 0;
+  const els = [current && current.el].filter(Boolean);
+  const hidden = dock.classList.contains('hidden');
+  const rects = hidden ? [] : els.map((el) => { const r = el.getBoundingClientRect(); return { x: Math.round(r.left - 8), y: Math.round(r.top - 8), w: Math.round(r.width + 16), h: Math.round(r.height + 16) }; }).filter(r => r.w > 16 && r.h > 16);
+  const key = JSON.stringify(rects);
+  if (key !== lastRectsKey) { lastRectsKey = key; if (api && api.setHitRects) api.setHitRects(rects); }
+  if (performance.now() < rectsUntil) rectsRaf = requestAnimationFrame(measureRects);
+}
+function refreshHitRects(ms = 600) {
+  rectsUntil = Math.max(rectsUntil, performance.now() + ms);
+  if (!rectsRaf) rectsRaf = requestAnimationFrame(measureRects);
+}
+setInterval(() => { if (current || lastRectsKey !== '[]') refreshHitRects(50); }, 500); // safety net
 
 function setCapture(on) {
   if (on === mouseCaptured) return;
@@ -170,6 +197,7 @@ function side() {
  * side so a card grows toward the screen centre, then clamp everything inside the viewport.
  */
 function placeDock() {
+  refreshHitRects();
   const c = customPos();
   dock.classList.toggle('custom-pos', !!c);
   if (!c) { dock.style.left = dock.style.top = dock.style.right = dock.style.bottom = ''; return; }
@@ -196,6 +224,32 @@ function say(text, kind = '') {
   say.t = setTimeout(() => { bubbleEl.className = 'pet-bubble'; }, 1800);
 }
 
+/* ------------------------------------------------------------------ Pet voice (TTS) */
+// System voices (macOS: "Linh" vi-VN, "Samantha" en-US), on-device. The pet only ever speaks its
+// own fixed lines — never notification content (privacy).
+let voices = [];
+const loadVoices = () => { try { voices = window.speechSynthesis ? speechSynthesis.getVoices() : []; } catch { voices = []; } };
+if (window.speechSynthesis) { loadVoices(); speechSynthesis.addEventListener('voiceschanged', loadVoices); }
+function voiceOn() {
+  return !!(window.speechSynthesis && cfg && cfg.settings.sounds.enabled && cfg.settings.sounds.voice !== false && eff.mode.sound !== false && !eff.hidden);
+}
+function speak(text, { interrupt = true } = {}) {
+  if (!voiceOn() || !text) return;
+  if (!interrupt && speechSynthesis.speaking) return;
+  const lang = getLang() === 'en' ? 'en' : 'vi';
+  const clean = String(text).replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '').replace(/\s+/g, ' ').trim();
+  if (!clean) return;
+  const u = new SpeechSynthesisUtterance(clean);
+  u.lang = lang === 'en' ? 'en-US' : 'vi-VN';
+  u.voice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith(lang)) || null;
+  u.pitch = 1.55; // small, cute
+  u.rate = lang === 'en' ? 1.05 : 1.0;
+  u.volume = Math.max(0, Math.min(1, (cfg.settings.sounds.volume || 0.45) * 1.6));
+  if (interrupt) speechSynthesis.cancel();
+  speechSynthesis.speak(u);
+}
+const pickLine = (key) => { const l = t(key); return Array.isArray(l) ? l[Math.floor(Math.random() * l.length)] : l; };
+
 function speciesVoice() { return getSpecies(cfg ? cfg.settings.activePet : 'cat_mochi').sound; }
 
 /* ------------------------------------------------------------------ config */
@@ -209,6 +263,9 @@ function applyConfig(payload) {
   const n = s.notifications;
 
   dock.className = `dock pos-${a.position} side-${side()} theme-${n.theme} size-${n.size} mode-${current ? current.item.presentationMode : 'resident'}${current ? ' has-card' : ''}`;
+  // Card colour follows the app colour unless the user prefers colours by emotion.
+  dock.dataset.ui = a.uiTheme || 'peach';
+  dock.classList.toggle('accent-ui', a.cardFollowsTheme !== false);
   dock.style.setProperty('--margin', `${a.margin}px`);
   dock.style.setProperty('--pet-scale', a.petScale);
 
@@ -292,8 +349,18 @@ function buildCard(item) {
       </header>
       <h3 class="title">${esc(item.title)}</h3>
       ${item.message ? `<p class="message">${esc(item.message).replace(/\n/g, '<br>')}</p>` : ''}
+      ${(item.items || []).length ? `<ul class="rows">${item.items.map(r => `
+        <li class="row" data-key="${esc(r.key)}">
+          <div class="row-main"><b>${esc(r.title)}</b>${r.subtitle ? `<small>${esc(r.subtitle)}</small>` : ''}</div>
+          <div class="row-btns">
+            ${r.url ? `<button class="btn row-open" data-url="${esc(r.url)}" title="${esc(t('openUrl'))}">↗</button>` : ''}
+            ${r.actions.includes('approve') && item.source === 'composio' ? `<button class="btn approve row-approve">${esc(t('approve'))}</button>` : ''}
+          </div>
+        </li>`).join('')}</ul>${item.moreCount ? `<p class="rows-more">${esc(t('moreRows').replace('{n}', item.moreCount))}</p>` : ''}` : ''}
       <footer>
         <button class="btn primary open">${esc(item.openLabel === 'chat' ? t('openChat') : item.openLabel === 'app' ? t('openApp') : item.url || item.openLabel === 'link' ? t('openUrl') : t('openDone'))}</button>
+        ${(item.actions || []).includes('break-start') ? `<button class="btn primary brk" data-brk="break-start">${esc(t('breakStart'))}</button><button class="btn brk ghost" data-brk="break-snooze">${esc(t('breakSnooze'))}</button>` : ''}
+        ${(item.actions || []).includes('approve') && item.source === 'composio' && !(item.items || []).length ? `<button class="btn approve">${esc(t('approve'))}</button>` : ''}
         ${item.annoying ? `<button class="btn kick" title="${esc(t('kickTitle'))}">${esc(t('kick'))}</button>` : ''}
         <span class="hint">${item.annoying ? esc(t('hintAnnoying')) : esc(t('hintPet'))}</span>
       </footer>
@@ -314,6 +381,7 @@ function showNotification(item) {
   const mode = item.presentationMode || 'billboard';
   const el = buildCard(item);
   current = { item, el, remaining: item.duration, startedAt: 0, timer: null };
+  refreshHitRects(1600);
 
   dock.classList.remove('hidden', 'leaving');
   dock.className = dock.className.replace(/mode-\S+/, `mode-${mode}`);
@@ -335,6 +403,7 @@ function showNotification(item) {
       if (speciesVoice() === 'meow' && ['happy', 'excited', 'love'].includes(item.emotion)) setTimeout(() => sound.bell(), 450);
     }
     startTimer();
+    if (item.app === 'wellbeing' && (item.actions || []).includes('break-start')) setTimeout(() => speak(pickLine('voiceBreak')), 500);
   };
 
   // Latency mark: the first painted frame of the presentation (pet reaction / courier run-in).
@@ -368,6 +437,27 @@ function showNotification(item) {
   });
   el.querySelector('.close').addEventListener('click', (e) => { e.stopPropagation(); finishCard('close'); });
   el.querySelector('.open').addEventListener('click', (e) => { e.stopPropagation(); finishCard('click'); });
+  // Approve buttons — the card's own (single PR) and one per row (several PRs). One click approves.
+  el.querySelectorAll('.approve').forEach((approve) => approve.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (approve.disabled) return;
+    pauseTimer();
+    approve.disabled = true;
+    approve.textContent = t('approving');
+    const row = approve.closest('.row');
+    if (api) api.onAction('approve', { id: item.id, source: item.source, externalId: row ? row.dataset.key : item.externalId });
+  }));
+  el.querySelectorAll('[data-brk]').forEach((b) => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (api) api.onAction(b.dataset.brk, { id: item.id });
+    if (b.dataset.brk === 'break-snooze') say(t('snoozed'));
+    finishCard('replace-quiet');
+  }));
+  el.querySelectorAll('.row-open').forEach((b) => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (api) api.onAction('open-url', { id: item.id, url: b.dataset.url });
+  }));
+  el.addEventListener('mouseenter', () => { if (el.querySelector('.rows')) pauseTimer(); });
   const kick = el.querySelector('.kick');
   if (kick) kick.addEventListener('click', (e) => { e.stopPropagation(); finishCard('kick'); });
 }
@@ -404,10 +494,12 @@ function resumeTimer() {
 
 function finishCard(how) {
   if (!current) return;
+  refreshHitRects(900);
   const { item, el } = current;
   clearTimeout(current.timer);
   current = null;
 
+  if (how === 'close' && api) api.onAction('close', { id: item.id });
   if (how === 'click' && api) api.onAction('click', { id: item.id, url: item.url, source: item.source, externalId: item.externalId });
 
   const cleanup = () => {
@@ -429,6 +521,7 @@ function finishCard(how) {
     if (api) api.onAction('finished', { id: item.id });
   };
 
+  if (how === 'replace-quiet') { el.classList.add('out'); setTimeout(cleanup, 380); return; }
   if (how === 'replace') { el.remove(); if (api) api.onAction('finished', { id: item.id }); return; }
 
   if (how === 'kick') {
@@ -441,6 +534,35 @@ function finishCard(how) {
   el.classList.add(how === 'click' ? 'out-zoom' : 'out');
   if (how === 'close' && !item.annoying) stage.play('wave');
   setTimeout(cleanup, 420);
+}
+
+/* ------------------------------------------------------------------ Eye-break countdown */
+let breakTimer = null;
+function startBreak(minutes) {
+  clearInterval(breakTimer);
+  const end = Date.now() + Math.max(1, Number(minutes) || 5) * 60000;
+  if (stage) { stage.setEmotion('sleeping'); stage.wake(1500); }
+  speak(pickLine('voiceBreakStart'));
+  let n = 0;
+  const show = () => {
+    const left = Math.max(0, end - Date.now());
+    if (!left) {
+      clearInterval(breakTimer); breakTimer = null;
+      bubbleEl.className = 'pet-bubble';
+      if (stage) { stage.setEmotion(current ? current.item.emotion : residentEmotion() === 'sleeping' ? 'happy' : residentEmotion()); stage.play('wave'); }
+      say(t('breakDone'), 'love'); sound.bell();
+      setTimeout(() => speak(pickLine('voiceBreakDone')), 400);
+      return;
+    }
+    const mm = Math.floor(left / 60000), ss = String(Math.floor(left / 1000) % 60).padStart(2, '0');
+    const tips = t('breakTip');
+    bubbleEl.textContent = `${t('breakTick').replace('{t}', `${mm}:${ss}`)}${n % 20 < 10 ? '' : `  ·  ${tips[Math.floor(n / 20) % tips.length]}`}`;
+    bubbleEl.className = 'pet-bubble show';
+    clearTimeout(say.t);
+    n++;
+  };
+  show();
+  breakTimer = setInterval(show, 1000);
 }
 
 /* ------------------------------------------------------------------ pointer / click-through */
@@ -458,7 +580,8 @@ document.addEventListener('mousemove', (e) => {
   if (!near) {
     if (mouseCaptured) setCapture(false);
   } else {
-    const overCard = current && current.el.contains(document.elementFromPoint(e.clientX, e.clientY));
+    const under = document.elementFromPoint(e.clientX, e.clientY);
+    const overCard = (current && current.el.contains(under));
     let overPet = false;
     const r = stageEl.getBoundingClientRect();
     const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
@@ -494,7 +617,12 @@ petSlot.addEventListener('pointerdown', (e) => {
   if (e.button !== 0) return; // Left mouse button only
   const hit = stage && stage.hitTest ? stage.hitTest(e) : { over: true };
   if (!hit.over) return;
+  beginPetPress(e);
+});
 
+/** Start a press that becomes a drag of the whole dock (pet + held card/video) after 6 px. */
+function beginPetPress(e) {
+  try { if (e.target && e.target.setPointerCapture) e.target.setPointerCapture(e.pointerId); } catch { /* ignore */ } // release can't get lost in the iframe
   isPointerDownOnPet = true;
   isDraggingPet = false;
   dragStartX = e.clientX;
@@ -509,7 +637,7 @@ petSlot.addEventListener('pointerdown', (e) => {
   const pr = petSlot.getBoundingClientRect();
   petOffsetX = pr.left - dockRect.left;
   petOffsetY = pr.top - dockRect.top;
-});
+}
 
 document.addEventListener('pointermove', (e) => {
   if (!isPointerDownOnPet) return;
@@ -521,11 +649,13 @@ document.addEventListener('pointermove', (e) => {
     setCapture(true);
     if (stage) stage.setGrabbed(true);
     sound.bell();
-    say(randomQuote('pickedUp'), 'angry');
+    { const line = randomQuote('pickedUp'); say(line, 'angry'); speak(line); }
     dragSayInterval = setInterval(() => {
       if (isDraggingPet) {
         sound.bell();
-        say(randomQuote('pickedUp'), 'angry');
+        const line = randomQuote('pickedUp');
+        say(line, 'angry');
+        speak(line, { interrupt: false }); // don't cut the previous line mid-sentence
       }
     }, 2400);
   }
@@ -550,6 +680,7 @@ document.addEventListener('pointermove', (e) => {
 
     dock.style.left = `${newLeft}px`;
     dock.style.top = `${newTop}px`;
+    refreshHitRects(200);
     dock.style.right = 'auto';
     dock.style.bottom = 'auto';
   }
@@ -565,7 +696,7 @@ document.addEventListener('pointerup', () => {
     isDraggingPet = false;
     document.body.classList.remove('is-dragging');
     if (stage) { stage.setGrabbed(false); stage.suppressClick = true; }
-    say(randomQuote('landed'), 'happy');
+    { const line = randomQuote('landed'); say(line, 'happy'); speak(line); }
     sound.pop();
 
     const rect = petSlot.getBoundingClientRect();
@@ -595,5 +726,23 @@ if (api) {
   });
   api.onDismiss(() => { if (current) finishCard('close'); });
   api.onResumed(() => { if (stage) { stage.lastFrame = performance.now(); stage.wake(800); } });
+  api.onActionResult && api.onActionResult((r) => {
+    if (!current || current.item.id !== r.id) { if (r.ok) say(t('approvedSay'), 'love'); else say(t('approveFail') + (r.error || ''), 'angry'); return; }
+    const row = r.key ? [...current.el.querySelectorAll('.row')].find(x => x.dataset.key === r.key) : null;
+    const b = row ? row.querySelector('.approve') : current.el.querySelector('footer .approve');
+    if (r.ok) {
+      if (b) { b.textContent = t('approved'); b.classList.add('done'); b.disabled = true; }
+      if (row) row.classList.add('approved');
+      say(t('approvedSay'), 'love');
+      if (stage) { stage.setEmotion('happy'); stage.play('wave'); }
+      // Single PR → close; list → close once every row is approved.
+      const allDone = !row || [...current.el.querySelectorAll('.row-approve')].every(x => x.classList.contains('done'));
+      if (allDone) setTimeout(() => { if (current && current.item.id === r.id) finishCard('close'); }, 1800);
+    } else {
+      if (b) { b.disabled = false; b.textContent = t('approve'); }
+      say(t('approveFail') + (r.error || ''), 'angry');
+    }
+  });
+  api.onBreakStart && api.onBreakStart(({ minutes }) => startBreak(minutes));
   api.onModelChanged(({ id }) => { if (stage && cfg && cfg.settings.activePet === id) stage.reloadModel(); });
 }

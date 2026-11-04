@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" data-theme="peach">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -16,25 +16,13 @@
         <div class="brand-logo"><img src="/assets/icons/icon-256.png" alt="Cute Pet Companion"></div>
         <div>
           <div class="brand-name">Cute Pet</div>
-          <div class="brand-sub">Companion Control Center</div>
+          <div class="brand-sub">Companion</div>
         </div>
       </div>
-      <nav id="nav">
-        <a href="#dashboard" data-route="dashboard"><span>🏠</span>Dashboard</a>
-        <a href="#pets" data-route="pets"><span>🐱</span>Thú cưng</a>
-        <a href="#emotions" data-route="emotions"><span>🎭</span>Cảm xúc &amp; Tính cách</a>
-        <a href="#notifications" data-route="notifications"><span>🔔</span>Thông báo</a>
-        <a href="#attention" data-route="attention"><span>🧠</span>Sự chú ý &amp; Inbox <i class="nav-badge" id="inbox-badge" hidden></i></a>
-        <a href="#focus" data-route="focus"><span>🎯</span>Tập trung &amp; Hiện diện</a>
-        <a href="#connections" data-route="connections"><span>🔌</span>Kết nối ứng dụng</a>
-        <a href="#appearance" data-route="appearance"><span>🖥️</span>Hiển thị &amp; Vị trí</a>
-        <a href="#sounds" data-route="sounds"><span>🎵</span>Âm thanh &amp; Hoạt họa</a>
-        <a href="#settings" data-route="settings"><span>⚙️</span>Quyền riêng tư &amp; Cài đặt</a>
-      </nav>
+      <nav id="nav"></nav>
       <div class="sidebar-foot">
         <div class="live-dot" id="live-dot"><i></i><span>Đang kết nối…</span></div>
         <div class="mode-pill" id="mode-pill"></div>
-        <button class="quit-btn" data-action="quit-app" title="Tắt hẳn ứng dụng (thú cưng và máy chủ nội bộ)">⏻ Thoát ứng dụng</button>
         <label class="dnd-toggle">
           <input type="checkbox" data-setting="dnd.enabled">
           <span class="switch"></span>
@@ -48,6 +36,7 @@
   </div>
   <div id="stage-home" hidden><div id="preview-stage" class="preview-stage"></div></div>
   <div id="toast"></div>
+  <div id="modal" class="modal" hidden></div>
   <script src="/control/control.bundle.js"></script>
 </body>
 </html>

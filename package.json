@@ -1,6 +1,6 @@
 {
   "name": "cute-pet-notifier",
-  "version": "3.2.0",
+  "version": "3.4.0",
   "description": "3D desktop pet companion that turns notifications into emotional interactions (macOS & Windows)",
   "main": "src/main/index.js",
   "scripts": {
@@ -13,7 +13,8 @@
     "test": "node --test test/*.test.js test/*.test.mjs",
     "test:notify": "node scripts/send-test-notify.js",
     "dist": "sh scripts/build-native.sh && npm run build && electron-builder",
-    "dist:mac": "sh scripts/build-native.sh && npm run build && electron-builder --mac",
+    "dist:mac": "sh scripts/dist-mac.sh",
+    "pack:mac": "npm run build:overlay && npm run build:control && electron-builder --mac dir --arm64 && sh scripts/sign-mac.sh \"dist/mac-arm64/Cute Pet Companion.app\"",
     "dist:win": "npm run build && electron-builder --win",
     "gateway": "node gateway/server.js"
   },

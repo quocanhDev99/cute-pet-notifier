@@ -162,6 +162,8 @@ function metadataEmotion(notif) {
   return null;
 }
 
+const { readMood } = require('./mood-reader');
+
 function getPreset(id) {
   return PERSONALITY_PRESETS[id] || PERSONALITY_PRESETS.sweet_friendly;
 }
@@ -190,6 +192,12 @@ function classify(notif = {}, cfg = {}) {
       result = { emotion: rule.emotion, matchedBy: 'custom', rule: rule.name || `${rule.field || 'any'} ${rule.match || 'contains'} "${rule.pattern}"` };
       break;
     }
+  }
+
+  // 1b. Mood reading — the message's own emoji / words (on by default; Settings → Thú cưng).
+  if (!result && !(cfg.mood && cfg.mood.enabled === false)) {
+    const m = readMood(notif, { sensitivity: (cfg.mood && cfg.mood.sensitivity) || 'medium' });
+    if (m) result = { emotion: m.emotion, matchedBy: 'mood', rule: `mood ${m.reasons.join(' ')}`, reasons: m.reasons };
   }
 
   // 2. Application rules

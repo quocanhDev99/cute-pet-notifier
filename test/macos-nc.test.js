@@ -44,13 +44,13 @@ test('macOS NC adapter: only NEW records, read-only, maps app, skips own app, ev
   try {
     assert.strictEqual(await a.connect(), true);
     insert(2, 2, { app: 'com.github.Electron', req: { titl: 'self', body: 'own app' } });            // skipped
-    insert(3, 1, { app: 'com.vng.zalo', req: { titl: 'Lan', subt: 'Nhóm Dev', body: 'Họp lúc 3h nhé' } });
+    insert(3, 1, { app: 'com.vng.zalo', req: { titl: 'Ban C', subt: 'Nhóm Dev', body: 'Họp lúc 3h nhé' } });
     for (let i = 0; i < 100 && !got.length; i++) await new Promise(r => setTimeout(r, 30));
     assert.strictEqual(got.length, 1);
     const n = got[0].p;
     assert.strictEqual(n.app, 'zalo');
     assert.strictEqual(n.appName, 'Zalo');
-    assert.strictEqual(n.title, 'Lan — Nhóm Dev');
+    assert.strictEqual(n.title, 'Ban C — Nhóm Dev');
     assert.strictEqual(n.message, 'Họp lúc 3h nhé');
     assert.strictEqual(n.deliveryMode, 'native_os');
     assert.strictEqual(n.sourceEventId, 'nc:3:com.vng.zalo');
@@ -105,13 +105,13 @@ test('AX layer + DB layer: one card per notification, click presses the hidden b
     const sent = [];
     a.interceptorProc = { stdin: { write: (l) => { const c = JSON.parse(l); sent.push(c); setImmediate(() => a.handleInterceptorEvent({ type: 'result', cmd: c.cmd, id: c.id, ok: true })); }, end() {} }, kill() {} };
     a.handleInterceptorEvent({ type: 'ready', trusted: true });
-    a.handleInterceptorEvent({ type: 'banner', id: '4242', app: 'Microsoft Teams', title: 'Lan', subtitle: '', body: 'Họp lúc 3h nhé', t: Date.now() });
+    a.handleInterceptorEvent({ type: 'banner', id: '4242', app: 'Microsoft Teams', title: 'Ban C', subtitle: '', body: 'Họp lúc 3h nhé', t: Date.now() });
     assert.strictEqual(got.length, 1);
     assert.strictEqual(got[0].app, 'teams');
     assert.strictEqual(got[0].appName, 'Microsoft Teams');
     assert.strictEqual(got[0].openLabel, 'chat');
     // same notification arrives in the DB ~5 s later → no second card
-    sql(`INSERT INTO record (rec_id, app_id, data, delivered_date) VALUES (1, 1, X'${makeBplist(dir, { app: 'com.microsoft.teams2', req: { titl: 'Lan', body: 'Họp lúc 3h nhé' } }).toString('hex')}', ${(Date.now() - 978307200000) / 1000});`);
+    sql(`INSERT INTO record (rec_id, app_id, data, delivered_date) VALUES (1, 1, X'${makeBplist(dir, { app: 'com.microsoft.teams2', req: { titl: 'Ban C', body: 'Họp lúc 3h nhé' } }).toString('hex')}', ${(Date.now() - 978307200000) / 1000});`);
     await a.readNew();
     assert.strictEqual(got.length, 1);
     // clicking the card presses the real banner

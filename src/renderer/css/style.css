@@ -178,7 +178,7 @@ html, body {
   box-shadow: 0 1.5px 0 rgba(0,0,0,.06), inset 0 0 0 1px rgba(0,0,0,.04);
   white-space: nowrap;
 }
-.chip.emo { background: color-mix(in srgb, var(--c) 16%, white); color: color-mix(in srgb, var(--c) 75%, black); }
+.chip.emo { background: color-mix(in srgb, var(--ec, var(--c)) 16%, white); color: color-mix(in srgb, var(--ec, var(--c)) 75%, black); }
 .icon-btn.close {
   margin-left: auto; width: 26px; height: 26px; border-radius: 50%; border: 0; cursor: pointer;
   background: rgba(0,0,0,.05); color: var(--muted); font-size: 12px; font-weight: 900;
@@ -224,14 +224,14 @@ html, body {
 .progress i { display: block; height: 100%; background: linear-gradient(90deg, var(--c), var(--c2)); transform-origin: left; border-radius: 3px; }
 
 /* Emotion palettes */
-.emo-happy { --c: #FFAA1D; --c2: #FFD66B; }
-.emo-excited { --c: #FF7A45; --c2: #FFB37A; }
-.emo-love { --c: #FF4F8B; --c2: #FF9EC1; }
-.emo-surprised { --c: #8B5CF6; --c2: #C4B5FD; }
-.emo-angry { --c: #EF4444; --c2: #FB923C; }
-.emo-sad { --c: #3B82F6; --c2: #93C5FD; }
-.emo-thinking { --c: #14B8A6; --c2: #5EEAD4; }
-.emo-sleeping { --c: #6366F1; --c2: #A5B4FC; }
+.emo-happy { --c: #FFAA1D; --c2: #FFD66B; --ec: #FFAA1D; }
+.emo-excited { --c: #FF7A45; --c2: #FFB37A; --ec: #FF7A45; }
+.emo-love { --c: #FF4F8B; --c2: #FF9EC1; --ec: #FF4F8B; }
+.emo-surprised { --c: #8B5CF6; --c2: #C4B5FD; --ec: #8B5CF6; }
+.emo-angry { --c: #EF4444; --c2: #FB923C; --ec: #EF4444; }
+.emo-sad { --c: #3B82F6; --c2: #93C5FD; --ec: #3B82F6; }
+.emo-thinking { --c: #14B8A6; --c2: #5EEAD4; --ec: #14B8A6; }
+.emo-sleeping { --c: #6366F1; --c2: #A5B4FC; --ec: #6366F1; }
 .card.annoying .card-inner { animation: grumble 3.2s ease-in-out infinite; }
 @keyframes grumble { 0%, 90%, 100% { transform: translateZ(0); } 92% { transform: translateX(-2px); } 94% { transform: translateX(2px); } 96% { transform: translateX(-1px); } }
 
@@ -247,7 +247,7 @@ html, body {
   --text: #F5F0FF; --muted: #B8B0D6; --edge1: #17152B; --edge2: #100E20;
 }
 .theme-dark .chip { background: rgba(255,255,255,.08); color: #D8D0F5; }
-.theme-dark .chip.emo { background: color-mix(in srgb, var(--c) 25%, #1d1a35); color: color-mix(in srgb, var(--c) 60%, white); }
+.theme-dark .chip.emo { background: color-mix(in srgb, var(--ec, var(--c)) 25%, #1d1a35); color: color-mix(in srgb, var(--ec, var(--c)) 60%, white); }
 .theme-dark .icon-btn.close { background: rgba(255,255,255,.08); color: #D8D0F5; }
 .theme-dark .card-inner { box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 1.5px 0 var(--edge1), 0 3px 0 var(--edge1), 0 4.5px 0 var(--edge2), 0 6px 0 var(--edge2), 0 24px 44px -12px rgba(0,0,0,.6); }
 
@@ -333,3 +333,48 @@ body.reduced-motion .card.kicked { animation: none !important; opacity: 0; trans
 /* Free-drag position: no corner transforms, pet bottom is the anchor */
 .dock.custom-pos { transform: none !important; align-items: flex-end; }
 .dock.custom-pos.mode-peeker { align-items: center !important; }
+
+
+.card .btn.approve { background: linear-gradient(180deg, #34C98A, #1FA571); color: #fff; box-shadow: 0 3px 0 #13804F; }
+.card .btn.approve.done { background: #E6F6EE; color: #1E8A5C; box-shadow: none; }
+body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
+
+/* Flexible card width (follows the content) + 5-line message clamp */
+.card { width: max-content; min-width: calc(var(--card-w) * .82); max-width: min(460px, calc(100vw - var(--pet) - 48px)); }
+.card .title { -webkit-line-clamp: 3; }
+.card .message { -webkit-line-clamp: 5; overflow-wrap: anywhere; }
+.card:has(.rows) { min-width: min(400px, calc(100vw - var(--pet) - 48px)); }
+/* Rows: one PR per line, each with its own buttons */
+.card .rows { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; position: relative; z-index: 1; max-height: 300px; overflow-y: auto; }
+.card .row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; background: rgba(255,255,255,.75); box-shadow: 0 0 0 1px var(--edge1) inset; }
+.card .row.approved { opacity: .6; }
+.card .row-main { flex: 1; min-width: 0; }
+.card .row-main b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 13px; font-weight: 800; line-height: 1.3; }
+.card .row-main small { display: block; font-size: 11.5px; font-weight: 700; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .row-btns { display: flex; gap: 6px; flex: 0 0 auto; }
+.card .row .btn { padding: 6px 10px; font-size: 12px; border-radius: 10px; }
+.card .row .row-open { background: #fff; color: var(--text); box-shadow: 0 2px 0 var(--edge2); }
+.card .rows-more { font-size: 12px; font-weight: 700; color: var(--muted); margin-top: 6px; position: relative; z-index: 1; }
+.card .btn.brk.ghost { background: #fff; color: var(--text); box-shadow: 0 2px 0 var(--edge2); }
+.card:has([data-brk]) .open, .card:has([data-brk]) .hint { display: none; }
+.pet-slot { cursor: grab; }
+
+/* ---------------- Card colour follows the app colour (Settings → Màu giao diện) ---------------- */
+/* Accent (top strip, buttons, progress, glow) on every card style; soft background only on Pastel. */
+.dock.accent-ui[data-ui="peach"] .card { --c: #FF8E9C; --c2: #FFB36B; }
+.dock.accent-ui.theme-pastel[data-ui="peach"] .card { --bg: linear-gradient(150deg, rgba(255,255,255,.97), rgba(255,244,246,.95) 55%, rgba(255,232,236,.94)); --edge1: #F6DDE2; --edge2: #EBC5CD; }
+.dock.accent-ui[data-ui="mint"] .card { --c: #2FBF8F; --c2: #7FD6B0; }
+.dock.accent-ui.theme-pastel[data-ui="mint"] .card { --bg: linear-gradient(150deg, rgba(255,255,255,.97), rgba(240,251,246,.95) 55%, rgba(222,245,234,.94)); --edge1: #D3EDE1; --edge2: #B9E0CE; }
+.dock.accent-ui[data-ui="lavender"] .card { --c: #8B6CF0; --c2: #C49BFA; }
+.dock.accent-ui.theme-pastel[data-ui="lavender"] .card { --bg: linear-gradient(150deg, rgba(255,255,255,.97), rgba(246,242,255,.95) 55%, rgba(235,228,255,.94)); --edge1: #E2DAF6; --edge2: #CFC2EE; }
+.dock.accent-ui[data-ui="ocean"] .card { --c: #3B82F6; --c2: #5EC8F2; }
+.dock.accent-ui.theme-pastel[data-ui="ocean"] .card { --bg: linear-gradient(150deg, rgba(255,255,255,.97), rgba(240,247,255,.95) 55%, rgba(225,238,255,.94)); --edge1: #D6E3F5; --edge2: #BED2EE; }
+.dock.accent-ui[data-ui="sunset"] .card { --c: #F08A24; --c2: #F7C548; }
+.dock.accent-ui.theme-pastel[data-ui="sunset"] .card { --bg: linear-gradient(150deg, rgba(255,255,255,.97), rgba(255,248,236,.95) 55%, rgba(255,238,214,.94)); --edge1: #F4E1C7; --edge2: #EACDA6; }
+.dock.accent-ui[data-ui="midnight"] .card { --c: #FF8EA0; --c2: #FFB37A; }
+.dock.accent-ui.theme-pastel[data-ui="midnight"] .card { --bg: linear-gradient(150deg, rgba(42,38,58,.97), rgba(33,30,46,.96)); --text: #F2EEF8; --muted: #B9B1CC; --edge1: #17151F; --edge2: #0F0D15; }
+.dock.accent-ui.theme-pastel[data-ui="midnight"] .chip { background: rgba(255,255,255,.08); color: #D8D0F5; }
+.dock.accent-ui.theme-pastel[data-ui="midnight"] .chip.emo { background: color-mix(in srgb, var(--ec) 25%, #1d1a35); color: color-mix(in srgb, var(--ec) 60%, white); }
+.dock.accent-ui.theme-pastel[data-ui="midnight"] .icon-btn.close { background: rgba(255,255,255,.08); color: #D8D0F5; }
+.dock.accent-ui.theme-pastel[data-ui="midnight"] .card .row { background: rgba(255,255,255,.06); }
+.dock.accent-ui.theme-pastel[data-ui="midnight"] .card .row .row-open { background: rgba(255,255,255,.1); color: var(--text); }

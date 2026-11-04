@@ -168,6 +168,8 @@ class SlackAdapter extends ApplicationAdapter {
       url: ev.channel ? `https://slack.com/app_redirect?channel=${encodeURIComponent(ev.channel)}` : null,
       priority: isDm || isMention ? 'important' : 'normal',
       category: 'chat',
+      chatDirect: !!isDm,
+      chatMention: !!isMention,
       deliveryMode: 'realtime_push',
       // app_mention + message events share channel:ts → idempotent across both
       sourceEventId: `${ev.channel}:${ev.ts}`,

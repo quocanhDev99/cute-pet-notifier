@@ -1,6 +1,6 @@
 # SECURITY_AND_PRIVACY_REPORT
 
-*Cập nhật: 03/11/2026*
+*Cập nhật: 04/11/2026 · v3.4.0*
 
 ## 1. Cổng nội bộ `127.0.0.1:3721`
 | Biện pháp | Trạng thái | Kiểm thử |
@@ -61,3 +61,15 @@ Không có streak, không phạt khi không tương tác, không ép vuốt ve. 
 ## 7. Rủi ro còn lại
 - **Token phiên:** `X-Pet-Token` được nhúng vào trang Control Center. Mọi tiến trình cục bộ cùng user đều đọc được, đây là giả định tin cậy của mô hình local-first.
 - **Gateway một người dùng:** nếu lộ `DESKTOP_TOKEN` thì bên kia đọc được luồng sự kiện. Cách xử lý: đổi token và khởi động lại gateway.
+
+
+## v3.4 — Bổ sung
+| Biện pháp | Trạng thái | Kiểm thử |
+|---|---|---|
+| **Privacy Display Mode**: một hàm ẩn nội dung dùng chung, chạy trước overlay, SSE, history và Inbox; mức chặt hơn thắng (toàn cục và theo app) | ✅ | `test/privacy.test.js` (chuỗi bí mật) |
+| Nút Approve chỉ dùng id trong bảng tra của main process; renderer không thể chỉ định PR khác | ✅ | `test/bitbucket-review.test.js` (id giả bị từ chối) |
+| Hành động trên thẻ có allowlist (`approve`, `break-start`, `break-snooze`); link mở từ thẻ chỉ nhận https | ✅ | `test/pipeline.test.js` |
+| Khóa Composio (`ck_`/`ak_`) lưu bằng safeStorage (Keychain), không bao giờ trả về giao diện; user id gửi Composio là chuỗi ngẫu nhiên, không phải email | ✅ | `test/composio*.test.js` |
+| Giọng nói chỉ đọc câu cố định, không bao giờ đọc nội dung thông báo | ✅ | xem mã `speak()` trong renderer |
+| App và `nc-bridge` ký bằng chứng chỉ cục bộ cố định (`build/signing/`, không có trong git); keychain chỉ được thêm vào search list trong lúc ký | ✅ | `scripts/sign-mac.sh` |
+| Câu mẫu và test không dùng tên người thật | ✅ | |

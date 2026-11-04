@@ -102,3 +102,30 @@ test('quiet hours across midnight', () => {
   assert.strictEqual(inQuietHours(dnd, new Date(2026, 0, 1, 6, 59)), true);
   assert.strictEqual(inQuietHours(dnd, new Date(2026, 0, 1, 12, 0)), false);
 });
+
+test('Pipeline keeps allowlisted rows/actions only', () => {
+  const { normalize } = require('../src/core/notification-pipeline');
+  if (typeof normalize !== 'function') return;
+  const n = normalize({ title: 'x', actions: ['approve', 'merge'], items: [{ key: 'k1', title: 'PR', url: 'javascript:alert(1)', actions: ['approve', 'delete'] }, { title: 'no key' }] }, 'composio');
+  assert.deepStrictEqual(n.actions, ['approve']);
+  assert.strictEqual(n.items.length, 1);
+  assert.deepStrictEqual(n.items[0].actions, ['approve']);
+  assert.ok(!n.items[0].url, 'non-http url dropped');
+});
+
+test('Chat "mentions" mode: group chatter → Inbox, mentions & DMs → card', () => {
+  const { p, s, shown } = mk();
+  s.chat = { mode: 'mentions', names: ['Mai Pham', '@Mai'], includeDirect: true };
+  const r1 = p.ingest({ title: 'Nhom Du An', message: 'Ban A: app gãy rồi', app: 'teams' }, 'macos_nc');
+  assert.strictEqual(r1.inboxed, true);
+  assert.strictEqual(r1.reason, 'not_mentioned');
+  const r2 = p.ingest({ title: 'Nhom Du An', message: 'Ban A: @Mai xem giúp', app: 'teams' }, 'macos_nc');
+  assert.ok(!r2.inboxed);
+  assert.strictEqual(r2.item.priority, 'important');
+  const r3 = p.ingest({ title: 'Ban A', message: 'rảnh không?', app: 'zalo' }, 'macos_nc');
+  assert.ok(!r3.inboxed, 'direct message still shows');
+  s.chat.mode = 'all';
+  const r4 = p.ingest({ title: 'Nhom Ha Tang', message: 'Ban B: build xanh', app: 'teams' }, 'macos_nc');
+  assert.ok(!r4.inboxed);
+  assert.ok(shown.length >= 1);
+});

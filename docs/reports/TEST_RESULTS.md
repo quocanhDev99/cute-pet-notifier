@@ -1,5 +1,36 @@
 # TEST_RESULTS — Nhật ký kiểm thử
 
+## v3.4.0 — 04/11/2026 · Apple M2, macOS 14.6.1 · Node v22.11.0 · Electron 33.4.11
+`npm test` → **73/73 pass** (≈ 2.5 s), 17 file:
+
+| File | Phạm vi |
+|---|---|
+| animation-controller.test.mjs | profile chuyển cảnh, không giật pose, đổi mặt sau cú chớp, dt guard, grab, reduced motion, semantic map |
+| attention.test.js | ưu tiên, Inbox, cooldown, chế độ tập trung, hidden/gaming, tắt tiếng |
+| pipeline.test.js | lọc input, hàng đợi, dedupe, gộp, DND, idempotency, rows/actions allowlist, chế độ chat "mentions" |
+| privacy.test.js | **chuỗi bí mật** không có trong event, history, Inbox và file trên đĩa; masked/anonymous; quy tắc "chặt hơn thắng" |
+| chat-filter.test.js | nhắc tên (không dấu, @tên 1 chữ, không nhầm "mai" thường ngày / email), @all, câu báo của app, tin 1-1 |
+| mood-reader.test.js | emoji, VI có/không dấu, EN, phủ định, "!!!"/CHỮ HOA, câu trung tính, độ nhạy |
+| break-reminder.test.js | 60 phút dùng máy, rời máy thì đếm lại, chờ hết họp, hẹn 10 phút, nghỉ, tắt |
+| bitbucket-review.test.js | thẻ gộp nhiều PR, approve từng dòng, từ chối id giả |
+| composio-connect.test.js / composio.test.js | khóa `ck_`/`ak_`, connect → active → chỉ báo tin MỚI, triggers, remove |
+| macos-nc.test.js / ncprefs.test.js | đọc kho thông báo, AX + DB không trùng thẻ, deep link, tắt/khôi phục banner trên BẢN SAO prefs |
+| gateway.test.js / ics.test.js / emotion-engine.test.js / settings-and-server.test.js / windows-nc.test.js | như các bản trước |
+
+### Kiểm thử thật (tài khoản người dùng, chỉ đếm số lượng, không in nội dung)
+| Mục | Kết quả |
+|---|---|
+| Bitbucket: PR chờ review | 3 → 0 (người dùng đã approve; chưa xác định approve từ thẻ hay trên web) |
+| Jira: việc đang mở được giao | 20, đủ key, tên, trạng thái, link; "giao bởi" tìm thấy ở 1/5 việc |
+| Gmail: thư chưa đọc trong 24 giờ | 8, đủ tiêu đề |
+| Màu thẻ theo giao diện | đã chụp màn hình với Đại dương và Đêm |
+| Giọng nói | overlay thấy giọng "Linh" (vi) và "Samantha" (en) |
+| Chữ ký app | `codesign --verify --deep --strict` pass; DR = identifier + certificate leaf |
+
+---
+
+## Lịch sử (bản trước)
+
 *Ngày chạy: 03/11/2026 · Máy: Apple M2, macOS 14.6.1 · Node v22.11.0 · Electron 33.4.11 · three 0.187*
 
 ## 1. Kiểm thử tự động — `npm test`

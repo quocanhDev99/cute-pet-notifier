@@ -1,102 +1,136 @@
-# 🐾 Cute Pet Companion — 3D Desktop Pet & Smart Notification System
+# 🐾 Cute Pet Companion
 
-Ứng dụng desktop (macOS & Windows 10/11) biến thông báo khô khan thành tương tác có cảm xúc với thú cưng 3D phong cách art-toy sống ở góc màn hình. Thiết kế theo [docs/BLUEPRINT.md](docs/BLUEPRINT.md) **V3.2** và [docs/ANIMATION_AND_REALTIME_NOTIFICATION_GUIDE.md](docs/ANIMATION_AND_REALTIME_NOTIFICATION_GUIDE.md).
+**Một thú cưng 3D sống ở góc màn hình, thay thế các thông báo khô khan của máy tính.** Tin nhắn Teams/Zalo/Slack, email, PR cần review, việc Jira mới giao… đều được bé mang tới bằng một tấm thẻ dễ thương, kèm cảm xúc hợp với nội dung tin. Bé biết khi nào nên im lặng, và biết nhắc bạn nghỉ mắt.
 
-> 📊 Báo cáo nghiệm thu dựa trên số liệu đo thật: [docs/reports/](docs/reports/FINAL_IMPLEMENTATION_REPORT.md). Hạn chế đã biết: [KNOWN_LIMITATIONS](docs/reports/KNOWN_LIMITATIONS.md).
+*Phiên bản 3.4.0 · macOS (Apple Silicon & Intel) · Windows 10/11 (chưa kiểm thử trên máy thật)*
 
-> 📦 **Cài đặt cho người dùng (macOS .dmg / Windows .exe):** [docs/INSTALL.md](docs/INSTALL.md)
+---
 
-## 🚀 Chạy nhanh
+## 1. Bé làm được gì cho bạn?
+
+| | Tính năng | Bạn được gì |
+|---|---|---|
+| 🍎 | **Thay thông báo của máy Mac** | Banner góc phải của macOS được thay bằng thẻ của bé. Bấm thẻ là mở đúng app (với Teams/Slack thì mở đúng cuộc chat khi có thông tin). |
+| 💬 | **Chỉ báo khi được nhắc tên** | Chọn "báo tất cả tin nhắn" hoặc "chỉ khi có tên bạn / @all". Tin khác vẫn được giữ trong Hộp thư. |
+| 🔍 | **PR Bitbucket chờ review** | Thẻ liệt kê từng PR, có nút **↗ Mở** và **✅ Approve** ngay trên thẻ. |
+| 🧩 | **Việc Jira mới giao** | Báo khi có việc mới giao cho bạn (kèm **người giao**) hoặc khi việc đổi trạng thái. |
+| ✉️ | **Gmail, Outlook, GitHub, Lịch…** | Kết nối hơn 1000 ứng dụng qua Composio, không cần lập trình. |
+| 🎭 | **Bé đọc cảm xúc tin nhắn** | 😁 → bé vui, "gãy rồi 😭" → bé buồn, "gấp lên!!" → bé cáu. Xử lý ngay trên máy. |
+| 🧠 | **Không làm phiền sai lúc** | 4 mức ưu tiên, 7 chế độ tập trung (Làm việc, Đang họp, Chơi game…), giờ yên tĩnh, tắt tiếng từng app. |
+| 📥 | **Hộp thư** | Tin bị giữ lại khi bạn đang tập trung, nên không có tin nào bị mất. |
+| 🙈 | **Ẩn nội dung khi chia sẻ màn hình** | 4 mức: đầy đủ / che bớt / chỉ tên app / ẩn hoàn toàn. Bật nhanh bằng chuột phải vào bé. |
+| 💆 | **Nhắc nghỉ mắt** | Sau mỗi 60 phút dùng máy thật, bé nhắc và nói *"Bạn ơi, mình nghỉ mắt một chút nha!"*, rồi đếm giờ nghỉ giúp bạn. |
+| 🗣️ | **Bé biết nói** | Giọng đọc tiếng Việt và tiếng Anh có sẵn trên máy: khi nhắc nghỉ, khi bị nhấc bổng, khi được thả xuống. Bé không bao giờ đọc nội dung thông báo. |
+| 🎨 | **Cá nhân hóa** | 4 nhân vật, 5 tính cách, 6 màu giao diện (thẻ thông báo đổi màu theo), 3 kiểu bé cầm thẻ, tiếng Việt và tiếng Anh. |
+
+---
+
+## 2. Cài đặt trong 5 phút (macOS)
+
+1. **Cài app:** mở `Cute Pet Companion-3.4.0-arm64.dmg` (máy chip Apple) hoặc `Cute Pet Companion-3.4.0.dmg` (máy Intel), rồi kéo app vào **Applications**. Lần đầu mở: **chuột phải → Mở**.
+2. **Cho bé thay thông báo của máy:** vào Control Center → **🔌 Kết nối** → thẻ **🍎 Thay thế thông báo của máy Mac**:
+   - **Bước 1:** bấm **Mở Cài đặt**, rồi bật **Cute Pet Companion** trong *Quyền riêng tư & Bảo mật → Trợ năng*.
+   - **Bước 2 (tùy chọn):** bấm **🤫 Bật** để tắt hẳn banner gốc của macOS. Muốn trả lại thì bấm **↺ Hoàn tác**.
+3. **Kết nối Gmail, Jira, Bitbucket… (tùy chọn):** cũng trong **🔌 Kết nối**:
+   - Dán khóa **Composio**, lấy ở *dashboard.composio.dev → Connect → Sessions & API Key*. Khóa dạng `ck_…`, hoặc khóa dự án `ak_…`.
+   - Tìm app → **＋ Kết nối** → đăng nhập trên trình duyệt → quay lại app.
+4. **Chọn cách bé báo tin chat:** vào **🔔 Thông báo → 💬 Tin nhắn**.
+
+Hướng dẫn chi tiết, kể cả Windows: **[docs/INSTALL.md](docs/INSTALL.md)** · Build & chia sẻ file cài đặt: **[docs/DISTRIBUTION.md](docs/DISTRIBUTION.md)**
+
+---
+
+## 3. Bản đồ Control Center
+
+Mở bằng icon 🐾 trên thanh menu, nhấp đúp vào bé, hoặc chuột phải vào bé.
+
+| Tab | Có gì |
+|---|---|
+| 🏠 **Trang chủ** | Bé đang làm gì, trạng thái thay thông báo, cách bé xuất hiện, tin gần đây, Hộp thư |
+| 🐱 **Thú cưng** | Chọn nhân vật, tính cách, 🎭 bé đọc cảm xúc (có ô **gõ thử**), âm thanh, 🗣️ bé nói chuyện |
+| 🔔 **Thông báo** | 🎨 Hiển thị · 💬 Tin nhắn (báo tất cả / chỉ khi nhắc tên) · 🎯 Tập trung (chế độ, không làm phiền, 💆 nhắc nghỉ mắt) · ⭐ Ưu tiên |
+| 📥 **Hộp thư** | Các tin bị giữ lại |
+| 🔌 **Kết nối** | Thay thông báo của Mac, ứng dụng của tôi, thêm ứng dụng mới |
+| ⚙️ **Cài đặt** | Màu giao diện, ngôn ngữ, 🙈 nội dung trên thẻ, quyền riêng tư, chế độ nâng cao |
+| 📊 **Theo dõi** | *(bật trong Cài đặt → Nâng cao)* thống kê, độ trễ, thông số kỹ thuật, quy tắc cảm xúc, công cụ thử |
+
+**Menu chuột phải vào bé:** mở Control Center, Hộp thư, 🌙 Không làm phiền, 🙈 Ẩn nội dung thông báo, ẩn bé, ⏻ Thoát.
+
+---
+
+## 4. Thông báo tới nhanh cỡ nào?
+
+| Nguồn | Cách nhận | Độ trễ |
+|---|---|---|
+| Thông báo của máy Mac (đã cấp quyền Trợ năng) | Bắt banner ngay khi xuất hiện | gần như tức thì |
+| Thông báo của máy Mac (chưa cấp quyền, hoặc đang bật Focus của macOS) | Đọc kho thông báo của macOS | khoảng 5 giây |
+| Slack (kết nối trực tiếp) | Socket Mode của Slack | tức thì |
+| Gmail / Jira / Bitbucket / Outlook / GitHub qua Composio Connect | Kiểm tra định kỳ | 1–15 phút, mặc định **2 phút** |
+| Webhook / script của bạn | `POST http://127.0.0.1:3721/notify` | tức thì |
+
+App luôn ghi đúng cách nhận tin: kiểm tra định kỳ thì gọi là kiểm tra định kỳ, không bao giờ gọi là "realtime".
+
+---
+
+## 5. Riêng tư & bảo mật
+
+- **Xử lý trên máy:** cảm xúc, bộ lọc chat và giọng đọc đều chạy ngay trên máy. Nội dung thông báo không được gửi đi đâu thêm.
+- **Ẩn nội dung thật sự:** khi bật 🙈, nội dung bị cắt **trước khi** tới thẻ, Hộp thư, lịch sử hay log. Thẻ đã ẩn nội dung thì không có nút Approve.
+- **Khóa và token:** được mã hóa bằng **Keychain** (macOS) hoặc **DPAPI** (Windows), và không bao giờ gửi ngược về giao diện.
+- **Không mở cổng ra Internet:** máy chủ nội bộ chỉ nghe ở `127.0.0.1`, và mỗi lần khởi động dùng một token ngẫu nhiên.
+- **Lưu ý về Composio:** khi dùng Composio, dữ liệu của app bạn kết nối (Gmail, Jira…) đi qua máy chủ của Composio.
+
+---
+
+## 6. Xử lý sự cố thường gặp
+
+| Hiện tượng | Cách xử lý |
+|---|---|
+| Vẫn thấy *"Còn 1 bước"* dù đã bật Trợ năng | Trong *Trợ năng*: chọn **Cute Pet Companion** (và **nc-bridge** nếu có) → bấm **–** → quay lại app bấm **Mở Cài đặt** → bật lại. Bé tự nhận ra trong vài giây. |
+| Banner gốc vẫn hiện | Bật bước 2 *"Không bao giờ thấy banner gốc"*. Một vài app đang mở (Chrome, Tin nhắn) có thể cần tắt tay trong *Cài đặt → Thông báo*. |
+| *"Khóa Composio không hợp lệ"* | Dùng khóa `ck_…` (mục Connect) hoặc khóa dự án `ak_…`. Khóa người dùng `uak_…` không dùng được. |
+| Không thấy thông báo Jira/Bitbucket | Đợi tối đa 2 phút, hoặc bấm **🔔 Kiểm tra ngay** trong 🔌 Kết nối. Lỗi gần nhất (nếu có) hiện ở đầu trang Kết nối. |
+| Bé im lặng | Kiểm tra 🌙 Không làm phiền, chế độ tập trung, và 🐱 Thú cưng → âm thanh / 🗣️ Bé nói chuyện. |
+| Muốn tắt app | Chuột phải vào bé → **⏻ Thoát**, hoặc bấm ⌘Q khi đang mở Control Center. |
+
+Danh sách đầy đủ các hạn chế: **[docs/reports/KNOWN_LIMITATIONS.md](docs/reports/KNOWN_LIMITATIONS.md)**
+
+---
+
+## 7. Dành cho lập trình viên
 
 ```bash
 npm install
-npm start          # build 2 bundle (overlay + control center) rồi mở Electron
-npm test           # 41 test: engine, pipeline, attention, iCal, gateway, animation controller, bảo mật — cần Node ≥ 22
-npm run gateway    # (tùy chọn) Integration Gateway cho Composio / Slack Events — xem gateway/README.md
-npm run dist:mac   # đóng gói .dmg   |   npm run dist:win → .exe (NSIS 1-click)
+npm start            # build overlay + control center bundle rồi mở Electron
+npm test             # 73 test (Node ≥ 22): engine, pipeline, privacy, chat, mood, Composio, gateway, adapters…
+npm run pack:mac     # app đã ký (arm64) trong dist/mac-arm64
+npm run dist:mac     # DMG arm64 + x64, ký bằng chứng chỉ cục bộ cố định
+npx electron-builder --win nsis --x64   # file .exe cho Windows (build được trên máy Mac)
+npm run gateway      # (tùy chọn) Integration Gateway HTTPS cho webhook Composio/Slack — xem gateway/README.md
 ```
 
-Sau khi chạy: icon 🐾 trên menu bar / khay hệ thống → **Mở Control Center** (hoặc nhấp đúp vào thú cưng, hoặc mở `http://127.0.0.1:3721`).
+**Ký app:** `scripts/sign-mac.sh` ký app và trợ lý `nc-bridge` bằng chứng chỉ tự ký nằm trong `build/signing/` (không đưa lên git). Nhờ đó macOS giữ quyền Trợ năng qua các lần cập nhật. Nếu chưa có chứng chỉ thì app được build nhưng không ký.
 
-## ✨ Tính năng
-
-| Phân hệ | Đã có |
-|---|---|
-| **Nhân vật 3D** | Rig tham số dùng chung cho Mochi, Boba, Cloud, Pip (đúng tên bone theo blueprint). Ánh sáng studio + vật liệu matte vinyl, bóng tiếp xúc mềm. Tự nạp `model.glb` (Blender) nếu có: chuẩn hóa kích thước, chạy animation clip theo tên cảm xúc, blend morph target, bone `head` nhìn theo chuột. Nhập `.glb` ngay trong Control Center. |
-| **8 cảm xúc** | Mắt (cười, nhắm, sao, tim, mở to, nheo), miệng, lông mày, má hồng, tai, đuôi, tư thế tay và hiệu ứng (tim, sao, 💢, hơi nóng, nước mắt, Zzz, ?, mồ hôi, !) chuyển đổi mượt mà. |
-| **Xúc giác** | Xoa đầu (raycast + vận tốc chuột) → squash & stretch, bắn tim, tiếng purr. Thông báo gây phiền → né chuột, lắc đầu từ chối, nói câu theo tính cách. Nút "😒 Đá bay!" → thú cưng đá văng thẻ. |
-| **Thẻ thông báo** | Thẻ acrylic 3D (độ dày, nghiêng theo chuột, ánh phản chiếu), 3 chế độ **Billboard Hugger / Peeker / Courier**, 3 theme (Pastel / Glass / Dark), 3 kích thước, 8 vị trí, đa màn hình. |
-| **Emotion Engine** | 5 preset tính cách, phân loại 5 tầng (custom → app → keyword → metadata → default), regex có bảo vệ ReDoS, bộ thử phân loại trực tiếp. |
-| **Pipeline** | Lọc dữ liệu không tin cậy, bỏ trùng, ưu tiên tin gấp, gộp tin dồn dập, giới hạn hàng đợi, Không làm phiền + giờ yên tĩnh. |
-| **AnimationController (V3.2)** | Một bộ điều khiển duy nhất, chia 5 lớp (base, reaction, interaction, action, face). Cross-fade 0.18–0.35 s, biểu cảm mặt đổi sau một cú chớp mắt, chặn delta-time khi máy thức dậy, Reduced Motion. Với GLB: semantic mapping cấu hình trong `pet.json` và fallback khi thiếu clip. |
-| **Sự chú ý (V3.2)** | 4 mức ưu tiên, cooldown 3 tin/10 s mỗi app, tắt tiếng từng app. Tin bị giữ lại vào **Inbox lưu bền + Digest**, không mất tin nào. |
-| **Hiện diện & tập trung (V3.2)** | Full / Minimal / Hidden. Các chế độ Work · Deep Focus · Meeting · Gaming · Relax · Sleep, và giờ yên tĩnh. Tin khẩn cấp luôn được hiện. Có trong menu khay. |
-| **Kéo thả** | Nhấc bổng thú cưng (giãn người, chân đung đưa, kêu cứu), thả xuống có cú nảy. Vị trí được lưu, thẻ tự mở về phía giữa màn hình. |
-| **Hiệu năng** | 74.9 FPS (vsync 75 Hz), frame p95 14.3 ms. Vòng render **ngủ đông** khi rảnh (0 frame) và dừng hẳn ở chế độ Hidden/Gaming. |
-| **Âm thanh** | Tiếng meo / gâu / chíp / píp, chuông vàng và nhạc theo cảm xúc, tổng hợp bằng Web Audio. |
-
-## 🔌 Kết nối ứng dụng thật
-
-Mỗi kênh được gắn **nhãn delivery mode trung thực**: `realtime_push`, `near_realtime_poll`, `scheduled_sync` hoặc `native_os`. App không bao giờ gọi polling là realtime. Độ trễ p50/p95 đo thật được hiển thị ngay trên Control Center.
-
-| Kênh | Cách kết nối | Trạng thái |
-|---|---|---|
-| Webhook nội bộ | `POST http://127.0.0.1:3721/notify` (+ header `X-Pet-Secret` nếu bật) | ✅ |
-| Hệ thống | Pin yếu / sạc, mở khóa màn hình, máy quá nhiệt, thức dậy (Electron `powerMonitor`) | ✅ |
-| GitHub | Notifications REST API + Personal Access Token (classic, scope `notifications`) — bấm vào thẻ sẽ đánh dấu đã đọc | ✅ |
-| Google / Outlook / iCloud Calendar | Link iCal bí mật → nhắc trước giờ họp (hỗ trợ TZID, RRULE, EXDATE, lịch dời) | ✅ |
-| Slack | Socket Mode (WebSocket chính thức): DM & @mention | ✅ |
-| Composio · Slack Events · webhook HMAC | **Integration Gateway** HTTPS của riêng bạn. Desktop kết nối ra qua SSE, không mở cổng; secret chỉ nằm trên gateway | ✅ (kiểm chứng E2E trên localhost) |
-| Gmail / Outlook / Notion | Qua Composio trên Gateway (Gmail được gắn nhãn **polling**) | ⚠️ chưa test với tài khoản thật |
-| **macOS Notification Center: thay thế thông báo của MỌI app** (bấm thẻ → mở đúng chat Teams/Slack khi app có gửi kèm thông tin) | Đọc chỉ-đọc DB Notification Center cục bộ (không phải API công khai của Apple; có thể hỏng khi nâng cấp macOS) | ✅ đã thử với thông báo thật · trễ ≈ 5.4 s do macOS |
-| Windows Toast Listener | Cần đóng gói MSIX với capability `userNotificationListener` | ⛔ báo rõ lý do |
-| Teams / Zalo | Graph cần endpoint HTTPS công khai; Zalo không có API cho tài khoản cá nhân | ⛔ báo rõ lý do |
-
-Token được mã hóa bằng **macOS Keychain / Windows DPAPI** (`safeStorage`), không bao giờ gửi ngược về giao diện.
-
-### Ví dụ webhook
+**Gửi thử một thông báo:**
 ```bash
 curl -X POST http://127.0.0.1:3721/notify -H "Content-Type: application/json" \
-  -d '{"title":"Build xong!","message":"CI passed","app":"github"}'
+  -d '{"title":"Build xong!","message":"CI passed 🎉","app":"github","priority":"important"}'
 ```
-Các trường: `title`, `message`, `app`, `url` (http/https), `mood`, `priority` (`high`/`urgent`/`low`), `event` (`TASK_DONE`…`IDLE_DND`), `presentationMode`, `duration`, `forceEmotion`.
+Các trường: `title`, `message`, `app`, `url` (https), `priority` (`critical`/`important`/`normal`/`low`), `mood`, `event`, `presentationMode`, `duration`, `forceEmotion`, `sourceEventId`.
 
-```bash
-npm run test:notify                       # cảm xúc ngẫu nhiên
-node scripts/send-test-notify.js angry peeker
-```
-
-## 🛡️ Bảo mật
-- Server chỉ lắng nghe `127.0.0.1`, kiểm tra Host header (chống DNS rebinding).
-- API `/api/*` của Control Center cần token ngẫu nhiên mỗi lần khởi động, không gửi CORS header.
-- Overlay chạy `sandbox` + `contextIsolation` + CSP; chỉ mở link `http(s)`.
-
-## 🗂️ Cấu trúc
+**Cấu trúc thư mục**
 ```
 src/
-├── main/        index.js (Electron, tray, cửa sổ) · server.js (webhook + API + SSE)
-├── core/        emotion-engine · attention-engine · inbox-store · latency · notification-pipeline · settings-store · secret-store
-├── adapters/    webhook/system · github · calendar (+ ics-parser) · slack · gateway (SSE client) · hub
-├── renderer/    overlay: renderer.js · sound.js · pet/ (animation-controller, pet-stage, semantic-map, character-builder, species, emotion-poses, fx)
-├── control/     Control Center 10 phân hệ (index.html, control.js, control.css)
-└── shared/      emotion-constants · sample-notifications
-assets/          pet-manifest.json · pets/{id}/pet.json (+ model.glb khi có)
-test/            node --test
+├── main/          Electron: cửa sổ, khay, IPC, bắt chuột cho overlay · server.js (webhook + API + SSE)
+├── core/          notification-pipeline · emotion-engine · mood-reader · chat-filter · privacy ·
+│                  attention-engine · break-reminder · inbox-store · settings-store · secret-store · latency
+├── adapters/      macOS Notification Center (+ nc-bridge, ncprefs) · Windows · Slack · GitHub · Calendar · Gateway · system/webhook
+├── integrations/  Composio Connect (MCP, ck_) · Composio REST (ak_) · bộ chọn provider
+├── renderer/      overlay: thú cưng 3D (Three.js, AnimationController), thẻ thông báo, giọng nói, âm thanh
+├── control/       Control Center (HTML/CSS/JS, i18n VI/EN)
+└── shared/        emotion-constants
+native/macos/      nc-bridge.swift (Accessibility helper)   gateway/   Integration Gateway (tùy chọn)
+scripts/           build-native · sign-mac · dist-mac         test/      node --test
 ```
 
-## 📋 Tiến độ theo Blueprint V3.2
-Xem [docs/reports/IMPLEMENTATION_STATUS.md](docs/reports/IMPLEMENTATION_STATUS.md).
-
-Tóm tắt: P0 đã triển khai Attention Management, Adaptive Presence, AnimationController, kéo thả và đo latency. **MVP Gate còn thiếu 2 mục:**
-1. `model.glb` production cho Mèo Mochi.
-2. Một luồng realtime push từ ứng dụng bên ngoài thật (cần tài khoản Composio/Slack và gateway HTTPS công khai).
-
-## 🍎 Để thú cưng thay thế hoàn toàn thông báo của macOS
-1. Control Center → **Kết nối ứng dụng** → **macOS Notification Center** → **Lưu & kết nối**.
-2. Bấm **⚙️ Mở Cài đặt Thông báo của macOS**. Với từng app (Zalo, Messenger, Mail, Slack…), đặt **Kiểu thông báo = Không có** và vẫn **bật "Hiển thị trong Trung tâm thông báo"**. Banner gốc sẽ biến mất, chỉ còn thú cưng mang tin tới.
-3. Trên macOS 15 (Sequoia) trở lên: cấp **Full Disk Access** cho Cute Pet Companion (hoặc cho Terminal nếu chạy bằng `npm start`).
-
-## ⏻ Tắt ứng dụng
-- **Chuột phải vào thú cưng** → ⏻ Thoát Cute Pet Companion.
-- Hoặc trong Control Center: nút **⏻ Thoát ứng dụng** ở góc dưới thanh bên, hoặc **Cmd+Q** khi đang mở cửa sổ Control Center.
-- Hoặc icon 🐾 trên thanh menu. Trên MacBook có notch, icon này có thể bị giấu khi thanh menu nhiều icon.
+**Tài liệu:** [Cài đặt](docs/INSTALL.md) · [Phát hành & chia sẻ](docs/DISTRIBUTION.md) · [Blueprint](docs/BLUEPRINT.md) · [Hướng dẫn animation & realtime](docs/ANIMATION_AND_REALTIME_NOTIFICATION_GUIDE.md) · [Blender](docs/BLENDER_GUIDE.md) · [Trạng thái tính năng](docs/reports/IMPLEMENTATION_STATUS.md) · [Kết quả kiểm thử](docs/reports/TEST_RESULTS.md) · [Bảo mật & riêng tư](docs/reports/SECURITY_AND_PRIVACY_REPORT.md) · [Jira](docs/reports/JIRA_INTEGRATION_REPORT.md) · [Bitbucket](docs/reports/BITBUCKET_PR_WORKFLOW_REPORT.md) · [Privacy mode](docs/reports/NOTIFICATION_PRIVACY_REPORT.md) · [Composio](docs/reports/COMPOSIO_INTEGRATION_REPORT.md)

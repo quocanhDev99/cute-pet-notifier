@@ -161,6 +161,15 @@ class MacNotificationCenterAdapter extends ApplicationAdapter {
     return false;
   }
 
+  restartInterceptor() {
+    const p = this.interceptorProc;
+    if (!p || this.isTrusted || this.stoppedByUser) return;
+    this.interceptorProc = null;
+    this.axLive.clear();
+    try { p.kill(); } catch { /* ignore */ }
+    setTimeout(() => this.startNativeInterceptor(), 300);
+  }
+
   startNativeInterceptor() {
     if (this.interceptorProc) return;
     const bin = bridgePath(this.ctx);
@@ -195,6 +204,15 @@ class MacNotificationCenterAdapter extends ApplicationAdapter {
     });
   }
 
+  /** Friendly flags for the simple (non-technical) Control Center UI. */
+  describe() {
+    const d = super.describe();
+    let replaced = false;
+    try { replaced = !!this.ncprefs.changes().active; } catch { /* ignore */ }
+    d.extra = { trusted: !!this.isTrusted, replaced, helperPath: bridgePath(this.ctx) || '' };
+    return d;
+  }
+
   statusLine() {
     if (!this.interceptorProc) return `Đọc kho thông báo (trễ ~5 s) · #${this.lastId}`;
     if (!this.isTrusted) return 'Chưa có quyền Trợ năng → đang đọc kho thông báo (trễ ~5 s). Bấm "Cấp quyền Trợ năng" để thay thế tức thì.';
@@ -205,6 +223,17 @@ class MacNotificationCenterAdapter extends ApplicationAdapter {
     if (ev.type === 'ready' || ev.type === 'trust') {
       this.isTrusted = !!ev.trusted;
       if (this.status === STATUS.CONNECTED) this.setStatus(STATUS.CONNECTED, this.statusLine());
+      // macOS only applies a newly granted Accessibility permission to processes started AFTER the
+      // grant — a running helper keeps answering "not trusted". So while untrusted, relaunch the
+      // helper every few seconds; it picks the permission up as soon as the user turns it on.
+      clearTimeout(this.trustRetry);
+      if (this.isTrusted) this.trustAttempts = 0;
+      else if (this.interceptorProc) {
+        this.trustAttempts = (this.trustAttempts || 0) + 1;
+        const wait = this.trustAttempts <= 20 ? 6000 : 60000; // ~2 min fast, then once a minute
+        this.trustRetry = setTimeout(() => this.restartInterceptor(), wait);
+        if (this.trustRetry.unref) this.trustRetry.unref();
+      }
       return;
     }
     if (ev.type === 'result') {
@@ -383,8 +412,30 @@ class MacNotificationCenterAdapter extends ApplicationAdapter {
   }
 
   async runAction(id) {
+    if (id === 'reveal-helper') {
+      this.trustAttempts = 0; // the user is granting it right now → check quickly again
+      // macOS evaluates the helper's Accessibility permission on its own when the app launches it,
+      // so it must be in the list too: show it in Finder (drag it into the list) + open the pane.
+      const bin = bridgePath(this.ctx);
+      if (!bin) return { ok: false, error: 'Không tìm thấy nc-bridge' };
+      execFile('/usr/bin/open', ['-R', bin], () => {});
+      execFile('/usr/bin/open', ['x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'], () => {});
+      if (this.interceptorProc) this.send({ cmd: 'prompt' }).catch(() => {});
+      return { ok: true, path: bin };
+    }
+    if (id === 'reset-accessibility') {
+      // Old entries in the list belong to an older signature of the app; switching them on does
+      // nothing for the current build. Remove ours, then register the current identity again.
+      await new Promise((resolve) => execFile('/usr/bin/tccutil', ['reset', 'Accessibility', 'com.cutepet.companion'], () => resolve()));
+      this.trustAttempts = 0;
+      if (this.ctx.promptAccessibility) this.ctx.promptAccessibility();
+      execFile('/usr/bin/open', ['x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'], () => {});
+      return { ok: true };
+    }
     if (id === 'request-accessibility') {
       if (!this.interceptorProc) this.startNativeInterceptor();
+      this.trustAttempts = 0;
+      if (this.ctx.promptAccessibility) this.ctx.promptAccessibility();
       const r = await this.send({ cmd: 'prompt' });
       execFile('/usr/bin/open', ['x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'], () => {});
       return { ok: true, trusted: !!r.ok };
@@ -410,6 +461,7 @@ class MacNotificationCenterAdapter extends ApplicationAdapter {
   }
 
   async disconnect() {
+    clearTimeout(this.trustRetry);
     this.stopWatching();
     if (this.interceptorProc) {
       const proc = this.interceptorProc;

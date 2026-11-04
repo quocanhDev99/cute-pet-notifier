@@ -13,6 +13,8 @@ const crypto = require('crypto');
 const { classify } = require('./emotion-engine');
 const { AttentionEngine, normalizePriority, PRIORITY_RANK, inQuietHours } = require('./attention-engine');
 const { LatencyRecorder } = require('./latency');
+const { chatDecision } = require('./chat-filter');
+const privacy = require('./privacy');
 const { PRESENTATION_MODES, isEmotion } = require('../shared/emotion-constants');
 
 const DELIVERY_MODES = ['realtime_push', 'near_realtime_poll', 'scheduled_sync', 'native_os', 'manual'];
@@ -70,6 +72,18 @@ function normalize(raw = {}, source = 'webhook', defaults = {}) {
     message,
     category: cleanKey(r.category, '') || null,
     url: cleanUrl(r.sourceUrl || r.url),
+    actions: Array.isArray(r.actions) ? r.actions.filter(a => ['approve', 'break-start', 'break-snooze'].includes(a)) : [], // allowlisted inline actions
+    // Optional rows (e.g. several PRs in one card), each with its own allowlisted actions.
+    items: Array.isArray(r.items) ? r.items.slice(0, 8).map(it => ({
+      key: cleanText(it && it.key, 120),
+      title: cleanText(it && it.title, 160),
+      subtitle: cleanText(it && it.subtitle, 120),
+      url: cleanUrl(it && it.url),
+      actions: Array.isArray(it && it.actions) ? it.actions.filter(a => ['approve'].includes(a)) : []
+    })).filter(it => it.key && it.title) : [],
+    chatDirect: typeof r.chatDirect === 'boolean' ? r.chatDirect : null, // known only for some sources (Slack)
+    chatMention: typeof r.chatMention === 'boolean' ? r.chatMention : null,
+    moreCount: Number.isInteger(r.moreCount) && r.moreCount > 0 ? Math.min(r.moreCount, 999) : 0,
     mood: isEmotion(r.mood) ? r.mood : null,
     forceEmotion: isEmotion(r.forceEmotion) ? r.forceEmotion : null,
     priority: normalizePriority(r.priority || r.urgency),
@@ -157,15 +171,24 @@ class NotificationPipeline extends EventEmitter {
     }
     this.recentKeys.set(item.deduplicationKey, now);
 
+    // Chat mode: "only when I'm mentioned" sends other chat messages to the Inbox.
+    const chat = opts.bypassAttention ? null : chatDecision(item, s);
+    if (chat && chat.chat && chat.mentioned) item.priority = 'important';
     // Attention Gatekeeper
     const decision = opts.bypassAttention
       ? { action: 'show', reason: 'manual_test', priority: item.priority || 'normal', category: 'test', silent: false, motion: 'full', mode: 'none' }
-      : this.attention.decide(item);
+      : chat && !chat.show
+        ? { ...this.attention.decide(item), action: 'inbox', reason: 'not_mentioned' }
+        : this.attention.decide(item);
     item.priority = decision.priority;
     item.category = decision.category;
     item.silent = decision.silent;
     item.motion = decision.motion;
     item.attentionReason = decision.reason;
+    // Privacy projection — before the card, Control Center, history and the persisted Inbox ever
+    // see the item (emotion/priority were decided above, on-device, from the full content).
+    const pmode = privacy.effectiveMode(item, s);
+    if (pmode !== 'full_content') Object.assign(item, privacy.project(item, pmode, s.appearance && s.appearance.language));
     this.stats.byPriority[item.priority] = (this.stats.byPriority[item.priority] || 0) + 1;
     this.stats.byReason[decision.reason] = (this.stats.byReason[decision.reason] || 0) + 1;
 
@@ -192,16 +215,16 @@ class NotificationPipeline extends EventEmitter {
       const existing = this.queue.find(q => q.group && q.app === item.app);
       if (existing) {
         existing.members.push(item);
-        existing.title = `${existing.members.length} thông báo mới từ ${item.app}`;
-        existing.message = existing.members.slice(-3).map(m => `• ${m.title}`).join('\n');
+        existing.title = item.privacy === 'anonymous_source_only' ? `${existing.members.length} thông báo mới` : `${existing.members.length} thông báo mới từ ${item.appName || item.app}`;
+        existing.message = item.privacy && item.privacy !== 'full_content' && item.privacy !== 'masked' ? '' : existing.members.slice(-3).map(m => `• ${m.title}`).join('\n');
       } else {
         this.queue.push({
           ...item,
           id: 'g_' + item.id,
           group: true,
           members,
-          title: `${members.length} thông báo mới từ ${item.app}`,
-          message: members.slice(-3).map(m => `• ${m.title}`).join('\n')
+          title: item.privacy === 'anonymous_source_only' ? `${members.length} thông báo mới` : `${members.length} thông báo mới từ ${item.appName || item.app}`,
+          message: item.privacy && item.privacy !== 'full_content' && item.privacy !== 'masked' ? '' : members.slice(-3).map(m => `• ${m.title}`).join('\n')
         });
       }
       this.stats.grouped++;

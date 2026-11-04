@@ -1,4 +1,16 @@
-# FINAL_IMPLEMENTATION_REPORT — Cập nhật theo Blueprint V3.2
+# FINAL_IMPLEMENTATION_REPORT
+
+## v3.4.0 — 04/11/2026 (thay đổi từ v3.2)
+- **Control Center** gọn lại còn 6 tab thân thiện + tab "Theo dõi" kỹ thuật (bật trong Nâng cao). Có 6 màu giao diện, thẻ thông báo đổi màu theo.
+- **Kết nối động:** dùng Composio Connect (`ck_`, MCP) hoặc REST (`ak_`) thay cho danh sách cố định. Đã có Gmail, Outlook, Lịch, GitHub, **Jira** (việc mới, đổi trạng thái, "giao bởi" từ changelog) và **Bitbucket** (PR chờ review, Approve trên thẻ).
+- **Chat:** báo tất cả, hoặc chỉ khi nhắc tên / @all. **Bé đọc cảm xúc** từ nội dung. **Privacy Display Mode** 4 mức. **Nhắc nghỉ mắt** có giọng nói. **Bé nói** khi bị nhấc bổng và kéo thả.
+- **Ổn định:** click-through dựa vào vị trí con trỏ do main process đọc; trợ lý nc-bridge tự khởi động lại cho tới khi nhận quyền; app được ký bằng chứng chỉ cục bộ cố định.
+- **Đã gỡ:** khung YouTube thu nhỏ (theo yêu cầu).
+- **Kiểm thử:** 73/73 test. Chi tiết trong TEST_RESULTS.md. Hạn chế trong KNOWN_LIMITATIONS.md.
+
+---
+
+## Bản V3.2 (03/11/2026)
 
 *Ngày: 03/11/2026 · Phạm vi: nâng cấp ứng dụng hiện có theo `docs/BLUEPRINT.md` (V3.2), `docs/ANIMATION_AND_REALTIME_NOTIFICATION_GUIDE.md`, `docs/BLENDER_GUIDE.md`*
 

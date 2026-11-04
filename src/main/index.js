@@ -11,6 +11,9 @@ const { EventEmitter } = require('events');
 
 const { SettingsStore } = require('../core/settings-store');
 const { SecretStore } = require('../core/secret-store');
+const { IntegrationsManager } = require('../integrations');
+const { BreakReminder } = require('../core/break-reminder');
+let breaks = null;
 const { NotificationPipeline } = require('../core/notification-pipeline');
 const { InboxStore } = require('../core/inbox-store');
 const { FOCUS_MODES, PRIORITIES } = require('../core/attention-engine');
@@ -36,6 +39,7 @@ let settings;
 let secrets;
 let pipeline;
 let hub;
+let integrations;
 let inbox;
 let lastModeKey = '';
 const bus = new EventEmitter();
@@ -158,6 +162,30 @@ function sendOverlay(channel, data) {
 /* Control Center window                                               */
 /* ------------------------------------------------------------------ */
 
+
+/* Mouse capture for the click-through overlay: captured when the renderer asks (pet hover, drag,
+   resize) OR the real cursor is inside one of the reported interactive rectangles. */
+let rendererWantsMouse = false;
+let cursorInRect = false;
+let hitRects = [];
+let hitTimer = null;
+let overlayIgnoring = true;
+function applyMouseCapture() {
+  if (!overlay || overlay.isDestroyed()) return;
+  const ignore = !(rendererWantsMouse || cursorInRect);
+  if (ignore === overlayIgnoring) return;
+  overlayIgnoring = ignore;
+  overlay.setIgnoreMouseEvents(ignore, { forward: true });
+}
+function pollCursor() {
+  if (!overlay || overlay.isDestroyed() || !overlay.isVisible()) return;
+  const p = screen.getCursorScreenPoint();
+  const b = overlay.getBounds();
+  const x = p.x - b.x, y = p.y - b.y;
+  const inside = hitRects.some(r => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
+  if (inside !== cursorInRect) { cursorInRect = inside; applyMouseCapture(); }
+}
+
 function quitApp() { setTimeout(() => app.quit(), 150); return { ok: true }; }
 
 function openControlCenter(section) {
@@ -174,7 +202,7 @@ function openControlCenter(section) {
     minHeight: 660,
     title: 'Cute Pet Companion — Control Center',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    backgroundColor: '#FFF7F2',
+    backgroundColor: settings && settings.get().appearance.uiTheme === 'midnight' ? '#17151F' : '#FFF7F2',
     show: false,
     icon: process.platform === 'darwin' ? undefined : APP_ICON,
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true }
@@ -255,8 +283,9 @@ function buildTrayMenu() {
         label: `${FOCUS_MODES[id].emoji} ${label}`, type: 'radio', checked: s.system.focusMode === id, click: () => updateSettings({ system: { focusMode: id } })
       }))
     },
-    { label: `📥 Inbox (${inbox ? inbox.unreadCount() : 0} ${L('chưa đọc', 'unread')})`, click: () => openControlCenter('attention') },
+    { label: `📥 Inbox (${inbox ? inbox.unreadCount() : 0} ${L('chưa đọc', 'unread')})`, click: () => openControlCenter('inbox') },
     { label: L('🌙 Không làm phiền', '🌙 Do Not Disturb'), type: 'checkbox', checked: s.dnd.enabled, click: (i) => updateSettings({ dnd: { enabled: i.checked } }) },
+    { label: L('🙈 Ẩn nội dung thông báo (khi chia sẻ màn hình)', '🙈 Hide notification content (screen sharing)'), type: 'checkbox', checked: s.privacy.displayMode !== 'full_content', click: (i) => updateSettings({ privacy: { displayMode: i.checked ? 'source_only' : 'full_content' } }) },
     { label: L('🐱 Thú cưng thường trú trên màn hình', '🐱 Keep the pet on screen'), type: 'checkbox', checked: s.appearance.residentPet, click: (i) => updateSettings({ appearance: { residentPet: i.checked } }) },
     { type: 'separator' },
     { label: L('⏻ Thoát Cute Pet Companion', '⏻ Quit Cute Pet Companion'), click: () => app.quit() }
@@ -299,12 +328,26 @@ function getState() {
     characters: characterList(),
     displays: screen.getAllDisplays().map((d, i) => ({ id: d.id, label: `Màn hình ${i + 1} — ${d.size.width}×${d.size.height}${d.id === screen.getPrimaryDisplay().id ? ' (chính)' : ''}` })),
     adapters: hub.describeAll(),
+    integrations: integrations.status(),
+    chatNameSuggestion: systemFullName(),
+    // What macOS says about THIS app build (the helper reports the same via the adapter).
+    appAxTrusted: process.platform === 'darwin' ? systemPreferences.isTrustedAccessibilityClient(false) : null,
     pipeline: pipeline.snapshot(),
     effective: effectiveState(),
     focusModes: FOCUS_MODES,
     priorities: PRIORITIES,
     autoLaunchSupported: process.platform === 'darwin' || process.platform === 'win32'
   };
+}
+
+let fullNameCache;
+function systemFullName() {
+  if (fullNameCache !== undefined) return fullNameCache;
+  fullNameCache = '';
+  try {
+    if (process.platform === 'darwin') fullNameCache = require('child_process').execFileSync('/usr/bin/id', ['-F'], { timeout: 2000 }).toString().trim().slice(0, 40);
+  } catch { /* ignore */ }
+  return fullNameCache;
 }
 
 function applySystemSettings(s) {
@@ -318,7 +361,17 @@ function applySystemSettings(s) {
 
 function registerIpc() {
   ipcMain.on('window:set-ignore-mouse-events', (e, ignore) => {
-    if (overlay && e.sender === overlay.webContents) overlay.setIgnoreMouseEvents(!!ignore, { forward: true });
+    if (overlay && e.sender === overlay.webContents) { rendererWantsMouse = !ignore; applyMouseCapture(); }
+  });
+  // Interactive rectangles (notification cards) in overlay coordinates. The main
+  // process hit-tests the real cursor against them, more robust than renderer-only
+  // hover tracking (fast moves, nested frames).
+  ipcMain.on('overlay:hit-rects', (e, rects) => {
+    if (!overlay || e.sender !== overlay.webContents || !Array.isArray(rects)) return;
+    hitRects = rects.slice(0, 8).map(r => ({ x: Number(r.x), y: Number(r.y), w: Number(r.w), h: Number(r.h) }))
+      .filter(r => [r.x, r.y, r.w, r.h].every(Number.isFinite) && r.w > 0 && r.h > 0);
+    if (hitRects.length && !hitTimer) hitTimer = setInterval(pollCursor, 33);
+    if (!hitRects.length && hitTimer) { clearInterval(hitTimer); hitTimer = null; cursorInRect = false; applyMouseCapture(); }
   });
   ipcMain.on('pet:save-position', (e, pos) => {
     if (!overlay || e.sender !== overlay.webContents) return;
@@ -333,6 +386,16 @@ function registerIpc() {
       if (typeof url === 'string' && /^https?:\/\//.test(url)) shell.openExternal(url);
       if (source) hub.handleAction(source, 'open', externalId);
     }
+    if (action === 'approve' && source === 'composio' && typeof externalId === 'string') {
+      integrations.approvePullRequest(externalId)
+        .then((r) => sendOverlay('notification:action-result', { id, action, key: externalId, ...r }))
+        .catch((err) => sendOverlay('notification:action-result', { id, action, key: externalId, ok: false, error: err.message }));
+      log(`[composio] approve requested ${id}`);
+    }
+    if (breaks && action === 'break-start') breaks.startBreak();
+    if (breaks && action === 'break-snooze') breaks.snooze();
+    if (breaks && action === 'close') { const cur = pipeline.current; if (cur && cur.id === id && cur.app === 'wellbeing') breaks.dismiss(); }
+    if (action === 'open-url' && typeof url === 'string' && /^https:\/\//.test(url)) shell.openExternal(url);
     if (action === 'finished') {
       // Close the hidden native banner too (alert-style banners would otherwise stay off-screen).
       const cur = pipeline.current;
@@ -357,9 +420,10 @@ function registerIpc() {
     const s = settings.get();
     Menu.buildFromTemplate([
       { label: L('🐾 Mở Control Center', '🐾 Open Control Center'), click: () => openControlCenter() },
-      { label: `📥 Inbox (${inbox ? inbox.unreadCount() : 0} ${L('chưa đọc', 'unread')})`, click: () => openControlCenter('attention') },
+      { label: `📥 Inbox (${inbox ? inbox.unreadCount() : 0} ${L('chưa đọc', 'unread')})`, click: () => openControlCenter('inbox') },
       { type: 'separator' },
       { label: L('🌙 Không làm phiền', '🌙 Do Not Disturb'), type: 'checkbox', checked: s.dnd.enabled, click: (i) => updateSettings({ dnd: { enabled: i.checked } }) },
+      { label: L('🙈 Ẩn nội dung thông báo (khi chia sẻ màn hình)', '🙈 Hide notification content (screen sharing)'), type: 'checkbox', checked: s.privacy.displayMode !== 'full_content', click: (i) => updateSettings({ privacy: { displayMode: i.checked ? 'source_only' : 'full_content' } }) },
       { label: L('🙈 Ẩn thú cưng (mở lại từ Control Center / menu khay)', '🙈 Hide the pet (restore from Control Center / tray)'), click: () => updateSettings({ system: { presence: 'hidden' } }) },
       { type: 'separator' },
       { label: L('⏻ Thoát Cute Pet Companion', '⏻ Quit Cute Pet Companion'), click: () => app.quit() }
@@ -373,7 +437,18 @@ async function boot() {
   secrets = new SecretStore(dir, safeStorage);
   inbox = new InboxStore(dir, { getSettings: () => settings.get() });
   pipeline = new NotificationPipeline({ getSettings: () => settings.get(), inbox });
-  hub = new AdapterHub({ settings, secrets, log, dataDir: dir }, { port: PORT, powerMonitor, platform: process.platform });
+  integrations = new IntegrationsManager({ settings, secrets, log, openExternal: (u) => shell.openExternal(u), pollSeconds: () => settings.get().integrations.pollSeconds });
+  integrations.on('notification', (payload) => {
+    const r = pipeline.ingest(payload, 'composio', { defaults: { deliveryMode: 'near_realtime_poll', provider: 'composio' } });
+    log(`[composio] ${r.item.id} near_realtime_poll → ${r.item.emotion}/${r.item.priority || '-'} (${r.reason || r.item.matchedBy})`);
+  });
+  hub = new AdapterHub({
+    settings, secrets, log, dataDir: dir,
+    // The APP itself must be in the Accessibility list (its helper inherits it); prompting from the
+    // main process registers the current, signed app identity.
+    promptAccessibility: () => (process.platform === 'darwin' ? systemPreferences.isTrustedAccessibilityClient(true) : false),
+    appAccessibilityTrusted: () => (process.platform === 'darwin' ? systemPreferences.isTrustedAccessibilityClient(false) : false)
+  }, { port: PORT, powerMonitor, platform: process.platform });
 
   hub.on('notification', (payload, source, meta) => {
     const r = pipeline.ingest(payload, source, { defaults: meta || {} });
@@ -409,6 +484,7 @@ async function boot() {
       apiToken,
       userPetsDir: userPetsDir(),
       adapters: hub,
+      integrations,
       getState,
       updateSettings,
       resetSettings: () => settings.reset(),
@@ -444,6 +520,25 @@ async function boot() {
   applySystemSettings(settings.get());
 
   await hub.startEnabled();
+  integrations.start();
+  breaks = new BreakReminder({
+    getSettings: () => settings.get(),
+    getIdleSeconds: () => { try { return powerMonitor.getSystemIdleTime(); } catch { return 0; } },
+    getModeId: () => pipeline.attention.mode().id
+  });
+  breaks.on('remind', ({ usedMinutes, breakMinutes }) => {
+    pipeline.ingest({
+      title: L(`Bạn đã nhìn màn hình ${usedMinutes} phút rồi 👀`, `You’ve been looking at the screen for ${usedMinutes} min 👀`),
+      message: L(`Cho mắt nghỉ ${breakMinutes} phút nhé: nhìn ra xa khoảng 6 m, chớp mắt vài lần, đứng dậy vươn vai một chút.`, `Give your eyes ${breakMinutes} minutes: look ~6 m away, blink a few times, stand up and stretch.`),
+      app: 'wellbeing', appName: L('Sức khỏe', 'Wellbeing'), forceEmotion: 'love', priority: 'important', duration: 45000,
+      actions: ['break-start', 'break-snooze'], sourceEventId: `break:${Date.now()}`
+    }, 'wellbeing', { bypassDedupe: true, defaults: { deliveryMode: 'native_os', provider: 'wellbeing' } });
+  });
+  breaks.on('break', ({ minutes }) => sendOverlay('break:start', { minutes }));
+  powerMonitor.on('lock-screen', () => breaks.rested());
+  powerMonitor.on('suspend', () => breaks.rested());
+  breaks.start();
+  if (!app.isPackaged && process.env.CPC_DEV_HOOKS === '1') global.__cpcDev = { settings, integrations, pipeline, get breaks() { return breaks; }, mouse: () => ({ hitRects, cursorInRect, overlayIgnoring, rendererWantsMouse }) }; // dev-only test hook
   if (serverError) hub.get('webhook').markServerError(serverError);
   else if (!settings.get().adapters.webhook.enabled) hub.get('webhook').setStatus('Disconnected', 'Đang từ chối POST /notify');
 

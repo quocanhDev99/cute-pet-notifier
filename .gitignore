@@ -3,3 +3,4 @@ dist/
 src/renderer/js/bundle.js
 src/control/control.bundle.js
 .DS_Store
+build/signing/

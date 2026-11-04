@@ -181,6 +181,21 @@ function startNotificationServer(host) {
         const im = p.match(/^\/api\/inbox\/([a-z0-9_]+)$/);
         if (im && req.method === 'DELETE') { host.inbox.remove(im[1]); sendJson(res, 200, host.inbox.list()); return; }
 
+        // ---------- Dynamic integrations (Composio) ----------
+        if (p.startsWith('/api/integrations') && host.integrations) {
+          const ig = host.integrations;
+          if (p === '/api/integrations' && req.method === 'GET') { sendJson(res, 200, ig.status()); return; }
+          if (p === '/api/integrations/key' && req.method === 'PUT') { const b = await readJson(req); sendJson(res, 200, await ig.setKey(typeof b.key === 'string' ? b.key : '')); return; }
+          if (p === '/api/integrations/catalog' && req.method === 'GET') { sendJson(res, 200, { items: await ig.catalog({ q: url.searchParams.get('q') || '', category: url.searchParams.get('category') || '' }) }); return; }
+          if (p === '/api/integrations/connect' && req.method === 'POST') { sendJson(res, 200, await ig.connect(await readJson(req))); return; }
+          if (p === '/api/integrations/refresh' && req.method === 'POST') { sendJson(res, 200, await ig.refresh()); return; }
+          if (p === '/api/integrations/poll' && req.method === 'POST') { sendJson(res, 200, await ig.pollNow()); return; }
+          if (p === '/api/integrations/triggers' && req.method === 'GET') { sendJson(res, 200, { items: await ig.triggerTypes(url.searchParams.get('toolkit') || '') }); return; }
+          if (p === '/api/integrations/trigger' && req.method === 'POST') { sendJson(res, 200, await ig.setTrigger(await readJson(req))); return; }
+          const ia = p.match(/^\/api\/integrations\/apps\/([a-z0-9_-]+)$/);
+          if (ia && req.method === 'DELETE') { sendJson(res, 200, await ig.remove(ia[1])); return; }
+        }
+
         const aa = p.match(/^\/api\/adapters\/([a-z_]+)\/action$/);
         if (aa && req.method === 'POST') { const b = await readJson(req); sendJson(res, 200, await host.adapters.runAction(aa[1], b.action)); return; }
         const am = p.match(/^\/api\/adapters\/([a-z_]+)\/(configure|connect|disconnect)$/);
@@ -219,7 +234,8 @@ function startNotificationServer(host) {
 
       sendJson(res, 404, { error: 'Endpoint not found' });
     } catch (err) {
-      sendJson(res, err.code && Number.isInteger(err.code) ? err.code : 500, { success: false, error: err.message });
+      const code = Number.isInteger(err.code) ? err.code : Number.isInteger(err.status) && err.status >= 400 && err.status < 600 ? err.status : 500;
+      sendJson(res, code, { success: false, error: err.message });
     }
   });
 

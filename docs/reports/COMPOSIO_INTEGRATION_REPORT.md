@@ -1,6 +1,6 @@
 # COMPOSIO_INTEGRATION_REPORT
 
-*Cập nhật: 03/11/2026*
+*Cập nhật: 04/11/2026 · v3.4.0*
 
 ## 1. Kiến trúc
 ```
@@ -55,3 +55,20 @@ Desktop ── GET /events (Bearer DESKTOP_TOKEN, SSE, Last-Event-ID) ─► Gat
 2. **Chưa triển khai HTTPS công khai:** chưa đặt gateway trên Cloud Run/Fly/VPS. Xem `gateway/README.md`.
 3. **Chưa xử lý Connected account revoke / expiry:** sự kiện bị bỏ qua, chưa hiển thị trạng thái trong UI.
 4. **Một người dùng:** gateway chưa hỗ trợ multi-tenant.
+
+
+## v3.4 — Hai cách dùng Composio (app tự nhận theo loại khóa)
+| Khóa | Cách gọi | Sự kiện | Dùng cho |
+|---|---|---|---|
+| `ck_…` (Connect → Sessions & API Key) | MCP `https://connect.composio.dev/mcp`, header `x-consumer-api-key` | **Kiểm tra định kỳ** 1/2/5/15 phút (không có trigger) | Gmail, Outlook, Lịch Google, GitHub, Jira, Bitbucket |
+| `ak_…` (khóa dự án) | REST v3.1 `backend.composio.dev`, header `x-api-key` | Trigger → webhook của project → **Gateway** → desktop qua SSE | Mọi toolkit có trigger |
+| `uak_…` | — | — | Bị từ chối, app báo rõ nên dùng khóa nào |
+
+**Các meta-tool đang dùng:** `COMPOSIO_SEARCH_TOOLS` (tìm app), `COMPOSIO_MANAGE_CONNECTIONS` (thêm / liệt kê / gỡ kết nối, có `redirect_url`), `COMPOSIO_MULTI_EXECUTE_TOOL` (chạy công cụ đọc), `COMPOSIO_PROXY_EXECUTE` (gọi thẳng REST của Bitbucket và Jira).
+
+**Những điểm đã học được khi chạy với tài khoản thật:**
+- Dữ liệu trả về nằm trong `results[].response.data`. Khi dữ liệu lớn, chỉ có `data_preview` (bản cắt bớt).
+- Với Jira, tham số `fields` phải là **mảng**. Issue trả về đã được làm phẳng (`summary`, `status{name}`, `browser_url`).
+- Proxy Jira phải dùng URL đầy đủ `https://api.atlassian.com/ex/jira/{cloudId}/…`, lấy cloudId từ `oauth/token/accessible-resources`.
+- Proxy Bitbucket dùng base `/2.0` sẵn, nên endpoint viết là `/user`, `/repositories/...`.
+- Nếu có nhiều tài khoản cùng một toolkit, MULTI_EXECUTE cần trường `account`.
