@@ -333,7 +333,12 @@ function registerIpc() {
       if (typeof url === 'string' && /^https?:\/\//.test(url)) shell.openExternal(url);
       if (source) hub.handleAction(source, 'open', externalId);
     }
-    if (action === 'finished') pipeline.finished(id);
+    if (action === 'finished') {
+      // Close the hidden native banner too (alert-style banners would otherwise stay off-screen).
+      const cur = pipeline.current;
+      if (cur && cur.id === id && cur.source && cur.externalId) hub.handleAction(cur.source, 'dismiss', cur.externalId);
+      pipeline.finished(id);
+    }
     if (action === 'rendered') {
       const at = Number(msg.renderedAt);
       const r = pipeline.markRendered(id, Number.isFinite(at) && at <= Date.now() + 1000 ? at : Date.now());

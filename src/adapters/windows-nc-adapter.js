@@ -174,3 +174,4 @@ class WindowsNotificationAdapter extends ApplicationAdapter {
 }
 
 module.exports = { WindowsNotificationAdapter };
+

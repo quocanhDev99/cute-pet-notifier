@@ -68,7 +68,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   adapters: {
     webhook: { enabled: true },
     gateway: { enabled: false, url: '' },
-    macos_nc: { enabled: true, skipConnectedSlack: true, skipAppleSystem: true }, // the app's purpose on macOS: replace system banners
+    macos_nc: { enabled: true, suppressNativeBanner: true, skipConnectedSlack: true, skipAppleSystem: true }, // the app's purpose on macOS: replace system banners
     github: { enabled: false, pollSeconds: 60, participatingOnly: true },
     calendar: { enabled: false, leadMinutes: 5, pollMinutes: 10 },
     slack: { enabled: false, notifyOn: 'mentions' },

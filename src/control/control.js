@@ -1011,7 +1011,19 @@ const actions = {
   },
   async 'adapter-run'(arg) {
     const [id, action] = String(arg).split('|');
-    try { await api(`/api/adapters/${id}/action`, { method: 'POST', body: { action } }); toast('Đã mở Cài đặt Hệ thống', 'ok'); } catch (err) { toast(err.message, 'error'); }
+    const confirmText = {
+      'replace-all': 'Tắt banner gốc của TẤT CẢ ứng dụng trên Mac để chỉ thú cưng hiện thông báo?\n\nThông báo vẫn được lưu trong Trung tâm thông báo. Cài đặt gốc được sao lưu — bấm "Khôi phục banner gốc" để trả lại bất cứ lúc nào.',
+      'restore-banners': 'Bật lại banner gốc của macOS cho các ứng dụng đã bị tắt?'
+    }[action];
+    if (confirmText && !confirm(tr(confirmText))) return;
+    try {
+      const r = await api(`/api/adapters/${id}/action`, { method: 'POST', body: { action } });
+      if (action === 'replace-all') toast(`🤫 Đã tắt banner gốc của ${r.changed} ứng dụng`, 'ok');
+      else if (action === 'restore-banners') toast(`↺ Đã khôi phục banner gốc cho ${r.restored} ứng dụng`, 'ok');
+      else if (action === 'request-accessibility') toast(r.trusted ? '✅ Đã có quyền Trợ năng' : 'Hãy bật Cute Pet Companion trong Trợ năng rồi quay lại', r.trusted ? 'ok' : '');
+      else toast('Đã mở Cài đặt Hệ thống', 'ok');
+      await refreshState(); if (route === 'connections') render();
+    } catch (err) { toast(err.message, 'error'); }
   },
   'reset-position'() {
     queueSave({ appearance: { customPosition: { x: null, y: null } } }, true);

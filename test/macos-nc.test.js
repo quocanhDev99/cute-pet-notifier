@@ -38,7 +38,7 @@ test('macOS NC adapter: only NEW records, read-only, maps app, skips own app, ev
   insert(1, 1, { app: 'com.vng.zalo', req: { titl: 'OLD', body: 'old message' } }); // existed before connect → must be ignored
 
   const settings = { get: () => ({ adapters: { macos_nc: { enabled: true }, slack: { enabled: false } } }) };
-  const a = new MacNotificationCenterAdapter({ settings, secrets: { has: () => false }, log: () => {}, ncDbPath: db }, 'darwin');
+  const a = new MacNotificationCenterAdapter({ settings, secrets: { has: () => false }, log: () => {}, ncDbPath: db, ncBridgePath: '/nonexistent' }, 'darwin');
   const got = [];
   a.subscribeNotifications((p, source, meta) => got.push({ p, source, meta }));
   try {
@@ -86,4 +86,39 @@ test('deep links: Teams chat/meeting message, Slack, generic safe URL, unsafe re
   assert.strictEqual(deepLinkFor('com.evil', { usda: archive({ url: 'file:///etc/passwd' }) }).url, null);
   assert.strictEqual(safeUrl('javascript:alert(1)'), null);
   assert.strictEqual(deepLinkFor('com.vng.zalo', {}).url, null);
+});
+
+test('AX layer + DB layer: one card per notification, click presses the hidden banner', { skip: !isMac }, async () => {
+  const { MacNotificationCenterAdapter: A } = require('../src/adapters/macos-nc-adapter');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cpc-ax-'));
+  const db = path.join(dir, 'db');
+  const sql = (q) => execFileSync('/usr/bin/sqlite3', [db, q], { encoding: 'utf8' });
+  sql('PRAGMA journal_mode=WAL; CREATE TABLE app (app_id INTEGER PRIMARY KEY, identifier VARCHAR, badge INTEGER); CREATE TABLE record (rec_id INTEGER PRIMARY KEY, app_id INTEGER, uuid BLOB, data BLOB, request_date REAL, request_last_date REAL, delivered_date REAL, presented Bool, style INTEGER, snooze_fire_date REAL);');
+  sql("INSERT INTO app VALUES (1,'com.microsoft.teams2',0);");
+  const settings = { get: () => ({ adapters: { macos_nc: { enabled: true, suppressNativeBanner: true }, slack: { enabled: false } } }) };
+  const a = new A({ settings, secrets: { has: () => false }, log: () => {}, ncDbPath: db, ncBridgePath: '/nonexistent', dataDir: dir }, 'darwin');
+  const got = [];
+  a.subscribeNotifications((p) => got.push(p));
+  try {
+    assert.strictEqual(await a.connect(), true);
+    // fake bridge process capturing commands
+    const sent = [];
+    a.interceptorProc = { stdin: { write: (l) => { const c = JSON.parse(l); sent.push(c); setImmediate(() => a.handleInterceptorEvent({ type: 'result', cmd: c.cmd, id: c.id, ok: true })); }, end() {} }, kill() {} };
+    a.handleInterceptorEvent({ type: 'ready', trusted: true });
+    a.handleInterceptorEvent({ type: 'banner', id: '4242', app: 'Microsoft Teams', title: 'Lan', subtitle: '', body: 'Họp lúc 3h nhé', t: Date.now() });
+    assert.strictEqual(got.length, 1);
+    assert.strictEqual(got[0].app, 'teams');
+    assert.strictEqual(got[0].appName, 'Microsoft Teams');
+    assert.strictEqual(got[0].openLabel, 'chat');
+    // same notification arrives in the DB ~5 s later → no second card
+    sql(`INSERT INTO record (rec_id, app_id, data, delivered_date) VALUES (1, 1, X'${makeBplist(dir, { app: 'com.microsoft.teams2', req: { titl: 'Lan', body: 'Họp lúc 3h nhé' } }).toString('hex')}', ${(Date.now() - 978307200000) / 1000});`);
+    await a.readNew();
+    assert.strictEqual(got.length, 1);
+    // clicking the card presses the real banner
+    await a.handleNotificationAction('open', 'ax:4242');
+    assert.deepStrictEqual(sent.find(c => c.cmd === 'press'), { cmd: 'press', id: '4242' });
+    // card dismissed → hidden banner closed
+    a.handleNotificationAction('dismiss', 'ax:4242');
+    assert.ok(sent.some(c => c.cmd === 'close' && c.id === '4242'));
+  } finally { a.interceptorProc = null; await a.disconnect(); }
 });

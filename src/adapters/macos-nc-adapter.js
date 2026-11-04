@@ -1,13 +1,14 @@
 /**
  * macOS Notification Center adapter — lets the pet REPLACE the default macOS banners.
  *
- * Dual-layer Architecture:
- * 1. ⚡ Instant Native AX Interceptor (src/native/macos/NotificationInterceptor.m -> bin/macos-interceptor):
- *    Uses Accessibility API (AXObserver) to intercept incoming banners from
- *    com.apple.notificationcenterui in < 50ms, dismisses the native banner immediately
- *    to avoid duplicate popups, and emits JSON events.
- * 2. 🗄️ SQLite Database Watcher (fallback & background history):
- *    Reads local record store with deduplication fingerprints so events are never duplicated.
+ * Dual-layer architecture:
+ * 1. ⚡ Instant layer — native/macos/nc-bridge.swift (Accessibility API, needs the Accessibility permission):
+ *    sees each AXNotificationCenterBanner the moment Notification Center shows it, reads
+ *    title/subtitle/body by AXIdentifier, hides the native banner (moves its window off-screen,
+ *    falling back to the banner's "Close" action) and can later "press" it so the source app
+ *    opens the exact conversation — for every app, not only those with deep links.
+ * 2. 🗄️ Database layer (fallback, ~5 s later): read-only Notification Center DB; also used to
+ *    enrich instant events with deep links. Fingerprints (title + body) prevent duplicates.
  */
 const fs = require('fs');
 const os = require('os');
@@ -17,9 +18,11 @@ const { spawn, execFile, execFileSync } = require('child_process');
 const { ApplicationAdapter, STATUS } = require('./base-adapter');
 const { parseBplist, APPLE_EPOCH_MS } = require('./bplist');
 const { deepLinkFor } = require('./nc-deeplink');
+const { NcPrefs } = require('./ncprefs');
 
 const SQLITE = '/usr/bin/sqlite3';
 const OWN_BUNDLES = ['com.github.electron', 'com.cutepet.companion'];
+const OWN_APP_NAMES = ['cute pet companion', 'electron'];
 
 const KNOWN_APPS = [
   [/slack/i, 'slack', 'Slack'], [/zalo/i, 'zalo', 'Zalo'], [/facebook\.(archon|messenger)|messenger/i, 'messenger', 'Messenger'],
@@ -51,11 +54,28 @@ function sqlite(db, sql) {
   });
 }
 
-function makeFingerprint(appName, title, body) {
-  const a = String(appName || '').trim().toLowerCase();
-  const t = String(title || '').trim().toLowerCase();
-  const b = String(body || '').trim().slice(0, 40).toLowerCase();
-  return `${a}|${t}|${b}`;
+/** Title + start of body only: the AX layer sees display names ("Microsoft Teams") while the DB
+ *  sees bundle ids, so the app name must not be part of the duplicate key. */
+function makeFingerprint(_appName, title, body) {
+  const norm = (v) => String(v || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  return `${norm(title)}|${norm(body).slice(0, 60)}`;
+}
+
+/** Display-name → app key (AX layer gives the localized app name, not the bundle id). */
+const NAME_APPS = [
+  [/teams/i, 'teams'], [/zalo/i, 'zalo'], [/messenger/i, 'messenger'], [/slack/i, 'slack'], [/outlook/i, 'outlook'],
+  [/telegram/i, 'telegram'], [/discord/i, 'discord'], [/whatsapp/i, 'whatsapp'], [/zoom/i, 'zoom'], [/notion/i, 'notion'],
+  [/^mail$/i, 'mail'], [/^(calendar|lịch)$/i, 'calendar'], [/^(messages|tin nhắn)$/i, 'messages'], [/^(reminders|lời nhắc)$/i, 'reminders'],
+  [/chrome/i, 'chrome'], [/safari/i, 'safari'], [/spotify/i, 'spotify'], [/facetime/i, 'facetime']
+];
+
+function bridgePath(ctx) {
+  if (ctx.ncBridgePath) return fs.existsSync(ctx.ncBridgePath) ? ctx.ncBridgePath : null;
+  const candidates = [
+    process.resourcesPath && path.join(process.resourcesPath, 'nc-bridge'),
+    path.resolve(__dirname, '../../build/native/nc-bridge')
+  ].filter(Boolean);
+  return candidates.find(p => { try { return fs.statSync(p).isFile(); } catch { return false; } }) || null;
 }
 
 class MacNotificationCenterAdapter extends ApplicationAdapter {
@@ -69,12 +89,14 @@ class MacNotificationCenterAdapter extends ApplicationAdapter {
       deliveryMode: 'native_os',
       provider: 'macos',
       fields: [
-        { key: 'suppressNativeBanner', label: 'Tự động đóng banner gốc macOS (yêu cầu quyền Trợ năng)', type: 'boolean', default: true },
+        { key: 'suppressNativeBanner', label: '⚡ Tức thì: ẩn banner gốc ngay khi nó xuất hiện (cần quyền Trợ năng)', type: 'boolean' },
         { key: 'skipConnectedSlack', label: 'Bỏ qua Slack khi đã kết nối Slack trực tiếp (tránh trùng)', type: 'boolean' },
         { key: 'skipAppleSystem', label: 'Bỏ qua thông báo hệ thống của Apple (cập nhật, Screen Time…)', type: 'boolean' }
       ],
       actions: [
-        { id: 'open-accessibility-settings', label: '🔐 Mở Cài đặt Trợ năng (Accessibility - để tự đóng banner gốc)' },
+        { id: 'request-accessibility', label: '🔐 Cấp quyền Trợ năng (Accessibility)' },
+        { id: 'replace-all', label: '🤫 Thay thế tất cả: tắt banner gốc của mọi app' },
+        { id: 'restore-banners', label: '↺ Khôi phục banner gốc' },
         { id: 'open-notification-settings', label: '⚙️ Mở Cài đặt Thông báo của macOS' },
         { id: 'open-full-disk-access', label: '📁 Mở Cài đặt Full Disk Access (macOS 15+)' }
       ]
@@ -87,7 +109,11 @@ class MacNotificationCenterAdapter extends ApplicationAdapter {
     this.pending = false;
     this.names = new Map();
     this.links = new Map(); // sourceEventId → deep link (in memory only)
-    this.handledFingerprints = new Set();
+    this.handledFingerprints = new Map(); // fingerprint → sourceEventId of the event already shown
+    this.axLive = new Set();               // AX banner ids still alive (pressable)
+    this.axMeta = new Map();               // sourceEventId → { appName, bundleId }
+    this.pendingResults = new Map();
+    this.ncprefs = new NcPrefs(ctx.dataDir);
     this.interceptorProc = null;
     this.rl = null;
     this.isTrusted = false;
@@ -114,8 +140,7 @@ class MacNotificationCenterAdapter extends ApplicationAdapter {
         this.lastId = parseInt(out.trim(), 10) || 0; // only notifications from now on
         this.startWatching();
         
-        const modeLabel = this.isTrusted ? '⚡ Chặn & thay thế banner tức thì (<50ms)' : `Đang theo dõi Notification Center · #${this.lastId}`;
-        this.setStatus(STATUS.CONNECTED, modeLabel);
+        this.setStatus(STATUS.CONNECTED, this.statusLine());
         return true;
       } catch (err) {
         lastErr = err;
@@ -124,7 +149,7 @@ class MacNotificationCenterAdapter extends ApplicationAdapter {
 
     if (this.interceptorProc) {
       // Even if SQLite is blocked by Full Disk Access, instant interceptor is active!
-      this.setStatus(STATUS.CONNECTED, this.isTrusted ? '⚡ Đang chặn & thay thế banner tức thì qua Accessibility' : 'Đang chạy qua Accessibility (Cần cấp quyền Trợ năng)');
+      this.setStatus(STATUS.CONNECTED, this.statusLine());
       return true;
     }
 
@@ -138,82 +163,75 @@ class MacNotificationCenterAdapter extends ApplicationAdapter {
 
   startNativeInterceptor() {
     if (this.interceptorProc) return;
-    const rootDir = path.resolve(__dirname, '../..');
-    const binPath = path.join(rootDir, 'bin', 'macos-interceptor');
-
-    if (!fs.existsSync(binPath)) {
-      this.ctx.log('[macos_nc] Interceptor binary not found at bin/macos-interceptor, skipping instant hook.');
-      return;
-    }
-
+    const bin = bridgePath(this.ctx);
+    if (!bin) { this.ctx.log('[macos_nc] nc-bridge not found (run scripts/build-native.sh) — database layer only.'); return; }
+    const args = this.config.suppressNativeBanner === false ? [] : ['--autohide'];
     try {
-      this.interceptorProc = spawn(binPath, [], { stdio: ['pipe', 'pipe', 'pipe'] });
-      this.rl = readline.createInterface({ input: this.interceptorProc.stdout });
-
+      const proc = spawn(bin, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+      this.interceptorProc = proc;
+      this.rl = readline.createInterface({ input: proc.stdout });
       this.rl.on('line', (line) => {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith('{')) return;
-        try {
-          const ev = JSON.parse(trimmed);
-          this.handleInterceptorEvent(ev);
-        } catch { /* ignore invalid json */ }
+        const t = line.trim();
+        if (!t.startsWith('{')) return;
+        try { this.handleInterceptorEvent(JSON.parse(t)); } catch { /* ignore */ }
       });
-
-      this.interceptorProc.stderr.on('data', (d) => {
-        const msg = d.toString().trim();
-        if (msg) this.ctx.log(`[macos_nc] interceptor stderr: ${msg}`);
-      });
-
-      this.interceptorProc.on('close', (code) => {
-        this.ctx.log(`[macos_nc] interceptor exited with code ${code}`);
-        this.interceptorProc = null;
+      proc.stderr.on('data', () => {}); // compiler/runtime noise only — never notification content
+      proc.on('close', (code) => {
+        if (this.interceptorProc === proc) { this.interceptorProc = null; this.axLive.clear(); }
+        this.ctx.log(`[macos_nc] nc-bridge exited (${code})`);
       });
     } catch (err) {
-      this.ctx.log(`[macos_nc] failed to spawn interceptor: ${err.message}`);
+      this.ctx.log(`[macos_nc] failed to start nc-bridge: ${err.message}`);
     }
+  }
+
+  send(cmd) {
+    if (!this.interceptorProc) return Promise.resolve({ ok: false, detail: 'bridge-not-running' });
+    return new Promise((resolve) => {
+      const key = `${cmd.cmd}:${cmd.id || ''}`;
+      this.pendingResults.set(key, resolve);
+      setTimeout(() => { if (this.pendingResults.get(key) === resolve) { this.pendingResults.delete(key); resolve({ ok: false, detail: 'timeout' }); } }, 1500);
+      try { this.interceptorProc.stdin.write(JSON.stringify(cmd) + '\n'); } catch { resolve({ ok: false, detail: 'write-failed' }); }
+    });
+  }
+
+  statusLine() {
+    if (!this.interceptorProc) return `Đọc kho thông báo (trễ ~5 s) · #${this.lastId}`;
+    if (!this.isTrusted) return 'Chưa có quyền Trợ năng → đang đọc kho thông báo (trễ ~5 s). Bấm "Cấp quyền Trợ năng" để thay thế tức thì.';
+    return this.config.suppressNativeBanner === false ? '⚡ Bắt banner tức thì (banner gốc vẫn hiện)' : '⚡ Tức thì: bắt & ẩn banner gốc ngay khi xuất hiện';
   }
 
   handleInterceptorEvent(ev) {
-    if (ev.type === 'status') {
+    if (ev.type === 'ready' || ev.type === 'trust') {
       this.isTrusted = !!ev.trusted;
-      if (this.status === STATUS.CONNECTED) {
-        if (this.isTrusted) {
-          this.setStatus(STATUS.CONNECTED, '⚡ Đang chặn & thay thế banner macOS tức thì (<50ms)');
-        } else {
-          this.setStatus(STATUS.CONNECTED, 'Đang đọc thông báo · Cần cấp quyền Trợ năng để tự động đóng banner gốc');
-        }
-      }
-    } else if (ev.type === 'notification') {
-      const appName = ev.appName || 'Notification';
-      const title = ev.title || appName;
-      const body = ev.body || '';
-
-      const fp = makeFingerprint(appName, title, body);
-      if (this.handledFingerprints.has(fp)) return;
-      this.rememberFingerprint(fp);
-
-      const app = this.appInfo(appName.toLowerCase());
-      if (this.shouldSkip(app.key)) return;
-
-      this.publish({
-        instant: true,
-        dismissedNative: !!ev.dismissedNative,
-        bundleId: app.key,
-        appName,
-        title,
-        body,
-        deliveredMs: ev.timestamp || Date.now(),
-        sourceEventId: ev.id
-      });
+      if (this.status === STATUS.CONNECTED) this.setStatus(STATUS.CONNECTED, this.statusLine());
+      return;
     }
+    if (ev.type === 'result') {
+      const key = `${ev.cmd}:${ev.id || ''}`;
+      const r = this.pendingResults.get(key);
+      if (r) { this.pendingResults.delete(key); r(ev); }
+      return;
+    }
+    if (ev.type === 'gone') { this.axLive.delete(String(ev.id)); return; }
+    if (ev.type !== 'banner') return;
+    const id = String(ev.id);
+    this.axLive.add(id);
+    const appName = String(ev.app || '').trim() || 'Thông báo';
+    if (OWN_APP_NAMES.includes(appName.toLowerCase())) return;
+    const fp = makeFingerprint(appName, ev.title, ev.body);
+    if (this.handledFingerprints.has(fp)) return;
+    const sourceEventId = `ax:${id}`;
+    this.rememberFingerprint(fp, sourceEventId);
+    const key = (NAME_APPS.find(([re]) => re.test(appName)) || [])[1];
+    if (key && this.shouldSkip(key)) return;
+    this.axMeta.set(sourceEventId, { appName });
+    this.publish({ instant: true, appName, appKey: key, title: ev.title, subtitle: ev.subtitle, body: ev.body, deliveredMs: Number(ev.t) || Date.now(), sourceEventId });
   }
 
-  rememberFingerprint(fp) {
-    this.handledFingerprints.add(fp);
-    if (this.handledFingerprints.size > 500) {
-      const oldest = this.handledFingerprints.keys().next().value;
-      this.handledFingerprints.delete(oldest);
-    }
+  rememberFingerprint(fp, sourceEventId) {
+    this.handledFingerprints.set(fp, sourceEventId);
+    if (this.handledFingerprints.size > 500) this.handledFingerprints.delete(this.handledFingerprints.keys().next().value);
   }
 
   startWatching() {
@@ -261,20 +279,22 @@ class MacNotificationCenterAdapter extends ApplicationAdapter {
 
         const app = this.appInfo(bundleId);
         const fp = makeFingerprint(app.label, req.titl, req.body);
-        if (this.handledFingerprints.has(fp)) {
-          // Already intercepted and shown instantly by AX interceptor!
-          continue;
-        }
-        this.rememberFingerprint(fp);
-
-        const deliveredMs = Number(delivered) ? APPLE_EPOCH_MS + Number(delivered) * 1000 : (typeof rec.date === 'number' ? APPLE_EPOCH_MS + rec.date * 1000 : Date.now());
         let link = null;
         try { link = deepLinkFor(bundleId, req); } catch { link = null; }
+        const shownAs = this.handledFingerprints.get(fp);
+        if (shownAs) {
+          // Already shown instantly by the AX layer → only enrich it (bundle id + deep link for later clicks).
+          const meta = this.axMeta.get(shownAs);
+          if (meta) meta.bundleId = bundleId;
+          if (link && link.url) this.links.set(shownAs, link.url);
+          continue;
+        }
+        this.rememberFingerprint(fp, `nc:${recId}:${bundleId}`);
+
+        const deliveredMs = Number(delivered) ? APPLE_EPOCH_MS + Number(delivered) * 1000 : (typeof rec.date === 'number' ? APPLE_EPOCH_MS + rec.date * 1000 : Date.now());
         this.publish({ recId, bundleId, title: req.titl, subtitle: req.subt, body: req.body, deliveredMs, link: link && link.url, linkKind: link && link.kind });
       }
-      if (!this.isTrusted) {
-        this.detail = `Đang theo dõi Notification Center · #${this.lastId}`;
-      }
+      this.detail = this.statusLine();
     } catch (err) {
       this.detail = `Lỗi đọc: ${String(err.stderr || err.message).trim().slice(0, 100)}`;
     } finally {
@@ -312,7 +332,9 @@ class MacNotificationCenterAdapter extends ApplicationAdapter {
   }
 
   normalizeNotification(n) {
-    const app = this.appInfo(n.bundleId || n.appName);
+    const app = n.instant
+      ? { key: n.appKey || String(n.appName || 'app').toLowerCase().replace(/[^a-z0-9_.-]/g, '').slice(0, 40) || 'app', label: n.appName }
+      : this.appInfo(n.bundleId || n.appName);
     const title = n.subtitle ? `${n.title || app.label} — ${n.subtitle}` : (n.title || app.label);
     const sourceEventId = n.sourceEventId || `nc:${n.recId}:${n.bundleId}`;
     if (n.link) {
@@ -328,22 +350,55 @@ class MacNotificationCenterAdapter extends ApplicationAdapter {
       deliveryMode: 'native_os',
       provider: 'macos',
       sourceEventId,
-      openLabel: n.link ? (n.linkKind === 'message' ? 'chat' : 'link') : 'app',
+      openLabel: n.instant ? 'chat' : n.link ? (n.linkKind === 'message' ? 'chat' : 'link') : 'app',
       sourceCreatedAt: n.deliveredMs
     };
   }
 
   async handleNotificationAction(action, externalId) {
-    if (action !== 'open' || !externalId) return;
-    const parts = String(externalId).split(':');
+    if (!externalId) return;
+    const ext = String(externalId);
+    if (ext.startsWith('ax:')) {
+      const id = ext.slice(3);
+      if (action === 'dismiss') { if (this.axLive.has(id)) this.send({ cmd: 'close', id }); return; }
+      if (action !== 'open') return;
+      // Best: press the real (hidden) banner → the source app opens the exact conversation.
+      if (this.axLive.has(id)) { const r = await this.send({ cmd: 'press', id }); if (r.ok) return; }
+      const meta = this.axMeta.get(ext) || {};
+      const link = this.links.get(ext);
+      if (meta.bundleId && /^[a-z0-9._-]+$/i.test(meta.bundleId)) {
+        execFile('/usr/bin/open', link ? ['-b', meta.bundleId, link] : ['-b', meta.bundleId], () => {});
+      } else if (meta.appName) {
+        execFile('/usr/bin/open', ['-a', meta.appName], () => {});
+      }
+      return;
+    }
+    if (action !== 'open') return;
+    const parts = ext.split(':');
     const bundleId = parts.length > 2 ? parts.slice(2).join(':') : parts[0];
     if (!/^[a-z0-9._-]+$/i.test(bundleId)) return;
-    const link = this.links.get(String(externalId));
+    const link = this.links.get(ext);
     if (link) execFile('/usr/bin/open', ['-b', bundleId, link], (err) => { if (err) execFile('/usr/bin/open', ['-b', bundleId], () => {}); });
     else execFile('/usr/bin/open', ['-b', bundleId], () => {});
   }
 
   async runAction(id) {
+    if (id === 'request-accessibility') {
+      if (!this.interceptorProc) this.startNativeInterceptor();
+      const r = await this.send({ cmd: 'prompt' });
+      execFile('/usr/bin/open', ['x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'], () => {});
+      return { ok: true, trusted: !!r.ok };
+    }
+    if (id === 'replace-all') {
+      const r = await this.ncprefs.replaceAll();
+      this.setStatus(this.status, `${this.statusLine()} · 🤫 Đã tắt banner gốc của ${r.changed} app`);
+      return { ok: true, ...r };
+    }
+    if (id === 'restore-banners') {
+      const r = await this.ncprefs.restore();
+      this.setStatus(this.status, `${this.statusLine()} · ↺ Đã khôi phục banner gốc cho ${r.restored} app`);
+      return { ok: true, ...r };
+    }
     const urls = {
       'open-accessibility-settings': 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility',
       'open-notification-settings': 'x-apple.systempreferences:com.apple.Notifications-Settings.extension',
@@ -357,13 +412,13 @@ class MacNotificationCenterAdapter extends ApplicationAdapter {
   async disconnect() {
     this.stopWatching();
     if (this.interceptorProc) {
-      try {
-        this.interceptorProc.stdin.write(JSON.stringify({ action: 'quit' }) + '\n');
-      } catch {}
-      setTimeout(() => {
-        if (this.interceptorProc) this.interceptorProc.kill();
-        this.interceptorProc = null;
-      }, 300);
+      const proc = this.interceptorProc;
+      this.interceptorProc = null;
+      try { proc.stdin.end(); } catch { /* helper exits when stdin closes */ }
+      const t = setTimeout(() => { try { proc.kill(); } catch { /* already gone */ } }, 500);
+      if (t.unref) t.unref();
+      if (this.rl) { this.rl.close(); this.rl = null; }
+      this.axLive.clear();
     }
     if (this.rl) {
       this.rl.close();

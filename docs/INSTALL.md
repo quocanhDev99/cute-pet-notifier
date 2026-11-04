@@ -37,6 +37,19 @@ Các bản cài **chưa được ký số** (chưa có chứng chỉ Apple Devel
    - Nếu báo *"app bị hỏng"* (do tệp tải từ Internet): chạy `xattr -dr com.apple.quarantine "/Applications/Cute Pet Companion.app"`.
 3. Thú cưng xuất hiện ở góc màn hình và **Control Center** tự mở trong lần chạy đầu.
 
+### 2.2a Thay thế hoàn toàn (khuyến nghị): ⚡ Tức thì hoặc 🤫 Im lặng tuyệt đối
+Control Center → **Kết nối ứng dụng → macOS Notification Center**. Có hai cách:
+
+| | ⚡ Tức thì (mặc định) | 🤫 Im lặng tuyệt đối |
+|---|---|---|
+| Cách làm | Bấm **🔐 Cấp quyền Trợ năng**, bật *Cute Pet Companion* trong *Trợ năng* | Bấm **🤫 Thay thế tất cả** |
+| Banner gốc | Bị ẩn ngay khi vừa xuất hiện (có thể chớp rất nhanh) | Không bao giờ xuất hiện |
+| Độ trễ của thú cưng | Gần như tức thì | khoảng 5–9 giây |
+| Bấm thẻ | Mở **đúng cuộc chat của mọi app**: app "bấm hộ" vào thông báo gốc | Mở đúng chat Teams/Slack nếu có thông tin, còn lại mở app |
+| Hoàn tác | Tắt tùy chọn "⚡ Tức thì" | Bấm **↺ Khôi phục banner gốc** (cài đặt gốc đã được sao lưu) |
+
+Lưu ý: khi đang bật **Focus / Không làm phiền**, macOS không hiện banner nên chế độ ⚡ không có gì để bắt. Lúc đó app tự chuyển sang đọc kho thông báo (trễ khoảng 5 giây).
+
 ### 2.2 Kích hoạt chế độ Tức thì & Tự đóng banner gốc
 1. Vào Control Center → **Kết nối ứng dụng** → thẻ **macOS Notification Center**.
 2. Bấm nút **🔐 Mở Cài đặt Trợ năng (Accessibility)**.

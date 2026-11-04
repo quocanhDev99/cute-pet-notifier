@@ -6,14 +6,14 @@
   "scripts": {
     "build:overlay": "esbuild src/renderer/js/renderer.js --bundle --outfile=src/renderer/js/bundle.js --format=iife --target=chrome128 --minify --legal-comments=none",
     "build:control": "esbuild src/control/control.js --bundle --outfile=src/control/control.bundle.js --format=iife --target=chrome120 --minify --legal-comments=none",
-    "build:native:mac": "mkdir -p bin && clang -O2 -fobjc-arc -framework Foundation -framework AppKit -framework ApplicationServices src/native/macos/NotificationInterceptor.m -o bin/macos-interceptor",
+    "build:native:mac": "sh scripts/build-native.sh",
     "build": "npm run build:native:mac && npm run build:overlay && npm run build:control",
     "start": "npm run build && electron .",
     "dev": "npm run build && electron . --inspect",
     "test": "node --test test/*.test.js test/*.test.mjs",
     "test:notify": "node scripts/send-test-notify.js",
-    "dist": "npm run build && electron-builder",
-    "dist:mac": "npm run build && electron-builder --mac",
+    "dist": "sh scripts/build-native.sh && npm run build && electron-builder",
+    "dist:mac": "sh scripts/build-native.sh && npm run build && electron-builder --mac",
     "dist:win": "npm run build && electron-builder --win",
     "gateway": "node gateway/server.js"
   },
@@ -45,7 +45,9 @@
       "!src/renderer/legacy/**",
       "!src/renderer/vendor/**",
       "assets/**/*",
-      "package.json"
+      "package.json",
+      "!bin/**",
+      "!native/**"
     ],
     "asar": true,
     "asarUnpack": [
@@ -65,7 +67,13 @@
       "extendInfo": {
         "LSUIElement": true
       },
-      "icon": "build/icon.icns"
+      "icon": "build/icon.icns",
+      "extraResources": [
+        {
+          "from": "build/native/nc-bridge",
+          "to": "nc-bridge"
+        }
+      ]
     },
     "win": {
       "target": [

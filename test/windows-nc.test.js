@@ -77,3 +77,4 @@ test('Windows notification adapter: Event emission and deduplication', async () 
   assert.equal(emitted.length, 1);
   assert.equal(emitted[0].appName, 'Slack');
 });
+
