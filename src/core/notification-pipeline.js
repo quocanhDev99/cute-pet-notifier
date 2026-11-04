@@ -73,6 +73,7 @@ function normalize(raw = {}, source = 'webhook', defaults = {}) {
     externalId: sourceEventId,
     title,
     message,
+    sender: cleanText(r.sender || r.senderName, 80) || null,
     category: cleanKey(r.category, '') || null,
     url: cleanUrl(r.sourceUrl || r.url),
     actions: Array.isArray(r.actions) ? r.actions.filter(a => ['approve', 'break-start', 'break-snooze'].includes(a)) : [], // allowlisted inline actions
@@ -130,7 +131,7 @@ class NotificationPipeline extends EventEmitter {
     const n = normalize(raw, raw && raw.app || 'test');
     const classification = classify(n, this.getSettings());
     const probe = new AttentionEngine({ getSettings: this.getSettings });
-    const attention = probe.decide({ ...n, emotion: classification.emotion });
+    const attention = probe.decide({ ...n, emotion: classification.emotion, contentEmotion: classification.baseEmotion, contactGroup: classification.contactGroup });
     return { notification: n, classification, attention };
   }
 
@@ -141,6 +142,10 @@ class NotificationPipeline extends EventEmitter {
     const item = {
       ...n,
       emotion: c.emotion,
+      // What the CONTENT says (before attitude/personality): drives priority, so the chosen attitude
+      // changes how the pet reacts but never how urgent a notification is.
+      contentEmotion: c.baseEmotion,
+      contactGroup: c.contactGroup,
       annoying: c.annoying,
       matchedBy: c.matchedBy,
       rule: c.rule,

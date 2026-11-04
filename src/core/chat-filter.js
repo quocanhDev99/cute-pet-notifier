@@ -92,4 +92,41 @@ function chatDecision(item, settings) {
   return { chat: true, show, ...m, direct, reason: show ? null : 'not_mentioned' };
 }
 
-module.exports = { chatDecision, mentionInfo, isDirect, isChat, fold, CHAT_APPS };
+/**
+ * Local relationship groups (Blueprint §5.3). The app NEVER guesses who someone is: the user puts a
+ * name into a group in Control Center. Each group has a default reaction and attention effect.
+ */
+const CONTACT_GROUPS = Object.freeze({
+  partner: { label: 'Người yêu / Vợ chồng', emoji: '💞', emotion: 'love' },
+  family: { label: 'Gia đình', emoji: '🏡', emotion: 'happy' },
+  friends: { label: 'Bạn bè', emoji: '🤝', emotion: 'happy' },
+  colleagues: { label: 'Đồng nghiệp', emoji: '💼', emotion: 'thinking' },
+  manager: { label: 'Quản lý / Sếp', emoji: '👔', emotion: 'thinking', priority: 'important' },
+  important: { label: 'Quan trọng', emoji: '⭐', emotion: null, priority: 'important', bypassCooldown: true },
+  ignored: { label: 'Bỏ qua (vào Hộp thư)', emoji: '🔕', emotion: null, inbox: true }
+});
+
+/** Who sent it: explicit sender, the "Name: …" prefix of group chats, or the title of a chat. */
+function senderCandidates(item) {
+  const out = [];
+  if (item.sender) out.push(item.sender);
+  const prefix = senderPrefix(item.message);
+  if (prefix) out.push(prefix);
+  if (item.title && (isChat(item) || item.sender == null)) out.push(item.title);
+  return out.map(fold).map(s => s.trim()).filter(Boolean);
+}
+
+/** The user's contact entry matching this notification's sender, or null. Exact name match (accent-insensitive). */
+function contactOf(item, contacts = []) {
+  if (!Array.isArray(contacts) || !contacts.length) return null;
+  const who = senderCandidates(item);
+  if (!who.length) return null;
+  for (const c of contacts) {
+    if (!c || !CONTACT_GROUPS[c.group]) continue;
+    const name = fold(c.name).trim();
+    if (name && who.includes(name)) return c;
+  }
+  return null;
+}
+
+module.exports = { chatDecision, mentionInfo, isDirect, isChat, fold, contactOf, senderCandidates, CHAT_APPS, CONTACT_GROUPS };

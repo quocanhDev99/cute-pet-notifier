@@ -1,265 +1,391 @@
-# 🐾 CUTE PET COMPANION — MASTER ARCHITECTURAL BLUEPRINT V3.2
-## Smart 3D Desktop Companion — Smooth Animation, Real-Time Integrations & User-Centered UX
-*Document Version: 3.2.0 — Final Production Blueprint & Architectural Specification*
-
-> **Cập nhật V3.2.0:**
-> * **Bỏ khung xương cứng cố định:** Mục kỹ thuật khung xương cố định trước đây đã được gỡ bỏ hoàn toàn. Chi tiết giải phẫu, rigging từng loài và quy trình xuất `.glb` được quản lý chuyên biệt tại [BLENDER_GUIDE.md](file:///Users/anhnguyen/Documents/PROGRAMING/cute-pet-notifier/docs/BLENDER_GUIDE.md) và [ANIMATION_AND_REALTIME_NOTIFICATION_GUIDE.md](file:///Users/anhnguyen/Documents/PROGRAMING/cute-pet-notifier/docs/ANIMATION_AND_REALTIME_NOTIFICATION_GUIDE.md).
-> * **Smooth Animation System (P0):** Chuẩn hóa bộ điều khiển AnimationController, phân lớp hoạt họa (Layers), kỹ thuật hòa trộn chuyển động (Cross-fading 0.18s–0.35s) và mục tiêu benchmark 60 FPS.
-> * **Real-Time Integration Router (P0):** Tích hợp Composio + Native OS + Direct API + Custom Webhook; phân định rõ **Actions** và **Triggers**; tuyệt đối không gắn nhãn polling là realtime; mô hình Public HTTPS Gateway bảo vệ an toàn cổng nội bộ `127.0.0.1:3721`.
-> * **Attention Management & Adaptive Presence (P0):** Chống mỏi thông báo, chế độ tàng hình khi họp/gaming, gom chùm tin nhắn, hộp thư Inbox và Digest.
-> * **Tương tác vật lý phong phú:** Kéo thả tự do trên màn hình (Free Drag & Drop), trạng thái bị nhấc bổng (`isGrabbed`), 5 Theme đồ họa và Song ngữ Tiếng Việt 🇻🇳 / English 🇺🇸.
+# 🐾 CUTE PET COMPANION — MASTER ARCHITECTURAL BLUEPRINT V3.6
+## Smart Desktop Companion — Smart Notifications, Personalized Emotions & 3D Interactive Desktop Pet
+*Document Version: 3.6.0 — Production Blueprint & Phase Completion Specification*
+*Last Updated: 04/11/2026 · Target Platforms: macOS (Apple Silicon & Intel) & Windows 10/11*
 
 ---
 
-# 🌟 1. ROLE, TẦM NHÌN & 15 NGUYÊN TẮC CỐT LÕI (CORE PRINCIPLES)
+> ### 📌 CẬP NHẬT TRỌNG TÂM PHIÊN BẢN V3.6.0
+> 1. **Đồng bộ toàn diện với Master Development Prompt V3.6:** Chuẩn hóa 3 giá trị cốt lõi (*Smart Desktop Companion*, *Personalized Pet Experience*, *Comfortable Daily Usage*) và quy tắc Scope Control chống phình tính năng (Anti-bloat).
+> 2. **Character Audio Identity (P0):** Xác lập bộ nhận diện âm thanh riêng biệt cho cả 4 nhân vật (*Mèo Mochi*, *Chó Boba*, *Thỏ Cloud*, *Chim cánh cụt Pip*) cùng hệ thống chống spam âm thanh (Sound Anti-Spam Priority).
+> 3. **Contextual Emotion Engine & Basic Rule Studio (P0):** Phân tích ngữ cảnh nội bộ (On-device), 8 kịch bản cảm xúc quy chuẩn, nhóm quan hệ cục bộ (*partner*, *family*, *friends*, *colleagues*, *manager*), 4 cấp độ cường độ cảm xúc và ma trận giải quyết xung đột quy tắc.
+> 4. **Notification Actionability & Deep Workflows (P0):** Chuẩn hóa Deep-linking, tích hợp Jira (phân biệt rạch ròi người giao việc từ changelog vs người báo cáo), quy trình Bitbucket PR Review & nút Approve xác thực API an toàn.
+> 5. **Privacy Notification Architecture (P0):** Bốn chế độ hiển thị (*Full Content*, *Masked Content*, *Source Only*, *Fully Hidden*) tách biệt với Privacy phân loại cảm xúc; cơ chế Strict Privacy tuyệt đối không rò rỉ dữ liệu nhạy cảm vào log/inbox.
+> 6. **Bảng Theo Dõi Tiến Độ Tự Động (Phase Completion Tracker):** Bổ sung mục riêng biệt theo dõi tiến độ chi tiết từ **Phase 0 đến Phase 14**, hiển thị minh bạch các giai đoạn đã hoàn thành `[x]`, đang thực hiện `[-]` và dự kiến `[ ]` dựa trên mã nguồn và kiểm thử thực tế.
+
+---
+
+# 🌟 1. ROLE, TẦM NHÌN & 3 GIÁ TRỊ CỐT LÕI (CORE VALUES)
 
 ## 1.1 Tầm nhìn Sản phẩm
-**Cute Pet Companion** là ứng dụng desktop đa nền tảng (**macOS** & **Windows 10/11**) biến các thông báo hệ thống khô khan, gây stress thành những tương tác sống động, có ngữ cảnh và cảm xúc cùng người bạn thú cưng 3D ảo sống ngay trên màn hình máy tính.
+**Cute Pet Companion** là ứng dụng desktop đa nền tảng (**macOS** & **Windows 10/11**) nâng tầm các thông báo hệ thống và công việc khô khan, gây áp lực thành những tương tác sống động, có ngữ cảnh và cảm xúc cùng người bạn thú cưng 3D ảo đồng hành ngay trên màn hình máy tính.
 
-Ứng dụng kết hợp hài hòa:
-* Thú cưng 3D hoạt họa mượt mà, phản ứng linh hoạt với ngữ cảnh làm việc.
-* Quản lý sự chú ý thông minh, giảm thiểu tối đa hiện tượng phân tâm và stress thông báo.
-* Tiếp nhận thông báo theo thời gian thực (Push-first) từ các ứng dụng hàng ngày qua Composio và Direct API.
-* Tương tác vật lý thực tế: ôm giữ thẻ thông báo, phản ứng xúc giác vuốt ve, né tránh và la hét khi bị nhấc bổng kéo thả.
+Ứng dụng cam kết mang lại 3 giá trị cốt lõi:
 
-## 1.2 Mười Lăm Nguyên Tắc Bất Biến (Non-Negotiable Product Principles)
-1. **Bảo tồn tính năng hoạt động:** Giữ vững và kế thừa các chức năng đã kiểm chứng của dự án.
-2. **Kiến trúc mô-đun hóa cao:** Tách biệt tuyệt đối giữa 3D Rendering, Animation Controller, Emotion Engine, Attention Management, Notification Pipeline và Integration Providers.
-3. **Chiến lược Pilot-First:** **Mèo Mochi (`cat_mochi`)** phải hoàn thiện 100% về visual, rig, morph và runtime animation trước khi sản xuất 3 nhân vật kế tiếp.
-4. **Nguyên tắc "1 Mô hình / 8 Cảm xúc":** Tuyệt đối không tạo 32 file mesh độc lập! Mỗi nhân vật dùng đúng 1 mô hình `model.glb` duy nhất kết hợp armature, shape keys và animation clips.
-5. **Độc lập Logic Cảm xúc:** Emotion Engine và Rule Classifier hoạt động hoàn toàn độc lập với nhân vật đang kích hoạt.
-6. **Hoạt họa phải mượt trong Three.js runtime:** Mọi chuyển động phải mượt mà trong ứng dụng thực tế, không chỉ mượt trong phần mềm dựng hình Blender.
-7. **Ưu tiên Push-First cho thông báo:** Tận dụng push event/webhook chính thức khi nhà cung cấp hỗ trợ.
-8. **Tuyệt đối không gọi Polling là Realtime:** Cơ chế quét định kỳ (polling) phải được ghi nhãn minh bạch là `near_realtime_poll` hoặc `scheduled_sync`, đi kèm khoảng thời gian trễ thực tế.
-9. **Kiểm soát gián đoạn trước khi mở rộng tích hợp:** Hoàn thiện Attention Management và Adaptive Presence trước khi kết nối thêm nhiều ứng dụng ngoài.
-10. **Người dùng toàn quyền kiểm soát:** Cho phép người dùng tùy chỉnh trạng thái hiện diện (Full / Minimal / Hidden), âm thanh, tần suất và nguồn thông báo.
-11. **Không gây áp lực tâm lý:** Tuyệt đối không dùng tin nhắn mang tính chất khiển trách, ép buộc vuốt ve, duy trì chuỗi điểm (streaks) hay phạt khi không tương tác.
-12. **Nói không với tính năng giả:** Không tạo nút bấm giả lập, không mock trạng thái kết nối hoặc hiển thị preview giả tạo.
-13. **Bảo mật token và API Key tuyệt đối:** Không bao giờ để lộ Shared Composio API Key hoặc OAuth secrets trong renderer code hay bộ cài desktop phân phối.
-14. **Minh bạch vị trí xử lý dữ liệu:** Công khai rõ ràng nguồn nào xử lý cục bộ (Local), nguồn nào đi qua cổng trung gian đám mây (Cloud-mediated).
-15. **Đo đạc hiệu năng bằng số liệu thực:** Báo cáo thời gian phản hồi, p50/p95 latency và FPS bằng kết quả đo thực tế, không đưa ra con số ước chừng.
+### A. Smart Desktop Companion (Người bạn Thông minh)
+* Tiếp nhận thông báo tức thời từ các ứng dụng hàng ngày và công cụ làm việc.
+* Trình diễn thông báo thông minh, tinh tế, không xâm phạm không gian làm việc.
+* Mở chính xác ứng dụng gốc, luồng hội thoại chat, Jira issue hoặc Bitbucket Pull Request (Deep-linking).
+* Hỗ trợ các thao tác thiết thực trực tiếp trên thẻ thông báo (Quick Actions, Approve, Snooze, Pin).
+* Bảo vệ nghiêm ngặt nội dung nhạy cảm và thông tin cá nhân.
+* Triệt tiêu hiện tượng mỏi thông báo (Notification Fatigue) và gián đoạn công việc không cần thiết.
 
----
+### B. Personalized Pet Experience (Trải nghiệm Cá nhân hóa)
+* **4 nhân vật độc bản:** Mèo Mochi, Chó Boba, Thỏ Cloud, Chim cánh cụt Pip.
+* **Bản sắc âm thanh riêng biệt (Audio Identity):** Tiếng kêu và âm sắc đặc trưng cho từng nhân vật.
+* **8 cảm xúc quy chuẩn (Canonical Emotions):** Phản ứng giàu biểu cảm, tự nhiên và mượt mà.
+* **Bộ máy cảm xúc theo ngữ cảnh (Contextual Emotion Engine):** Phản ứng thích hợp với người gửi, nội dung và loại sự kiện.
+* **Xưởng quy tắc cảm xúc (Emotion Rule Studio):** Cho phép người dùng tự do định nghĩa quy tắc cảm xúc mà không cần viết code.
+* **Hoạt họa 3D mềm mại:** Chuẩn 60 FPS, hòa trộn động (cross-fade 0.18s–0.35s).
+* **Tương tác vật lý xúc giác:** Vuốt ve xoa đầu, né tránh, kéo thả tự do trên màn hình và trạng thái bị nhấc bổng (`isGrabbed`).
 
-# 🐾 2. THƯ VIỆN NHÂN VẬT & BỘ NHẬN DIỆN BẤT BIẾN
-
-Ứng dụng hỗ trợ 4 nhân vật với bộ nhận diện bất biến qua mọi góc nhìn:
-
-```
-+---------------------------------------------------------------------------------------------------------+
-| 🐱 MÈO MOCHI (cat_mochi)      - PILOT PRODUCTION | Scottish Fold tai cụp, kem & cam pastel, nơ đỏ chuông vàng |
-| 🐶 CHÓ BOBA  (dog_boba)       - KẾ HOẠCH PH. 8  | Corgi chân ngắn, lông vàng mật & trắng tuyết, bandana xanh |
-| 🐰 THỎ CLOUD (bunny_cloud)    - KẾ HOẠCH PH. 8  | Netherland Dwarf, trắng tuyết, má hồng, kẹp mầm cây xanh    |
-| 🐧 PENGUIN PIP (penguin_pip)  - KẾ HOẠCH PH. 8  | Cánh cụt baby, lưng xanh đá phiến, bụng trắng, mũ len vàng |
-+---------------------------------------------------------------------------------------------------------+
-```
-
-### 2.1 Mèo Mochi (`cat_mochi`) — Nhân vật Pilot Sản Xuất
-* **Loài & Hình thể:** Chibi Scottish Fold tròn xoe múp míp, hai tai gập cụp sát đầu, thân tròn mềm dẻo như bánh mochi.
-* **Màu sắc & Chất liệu:** Lông kem pha cam đào pastel, đệm chân hồng phấn; chất liệu matte vinyl toy cao cấp.
-* **Phụ kiện:** Vòng cổ nơ ruy băng lụa đỏ thắm gắn một chiếc chuông vàng nhỏ xíu lắc leng keng.
-* **Tính cách:** Đáng yêu, nũng nịu khi vuốt ve, nhưng cực kỳ xéo xắc khi bị làm phiền; la hét đòi buông ra khi bị nhấc bổng.
-
-### 2.2 Chó Boba (`dog_boba`) — Kế hoạch Phase 8
-* **Loài & Hình thể:** Corgi puppy chân ngắn mập ú, mông tròn to, tai to vểnh nhọn hình tam giác bo góc.
-* **Màu sắc & Phụ kiện:** Vàng mật ong và trắng tuyết, đốm lông mày tròn hạt đậu trắng; khăn bandana chấm bi xanh ngọc.
-
-### 2.3 Thỏ Cloud (`bunny_cloud`) — Kế hoạch Phase 8
-* **Loài & Hình thể:** Netherland Dwarf trắng muốt như bông tuyết, đôi tai ngắn tròn chụm, má phúng phính.
-* **Màu sắc & Phụ kiện:** Trắng tuyết phớt hồng đào; kẹp tóc mầm cây non nhỏ xíu trên tai trái.
-
-### 2.4 Chim cánh cụt Pip (`penguin_pip`) — Kế hoạch Phase 8
-* **Loài & Hình thể:** Cánh cụt baby dáng quả lê tròn lẳn, đôi cánh bơi ngắn múp míp, mỏ cam ngắn.
-* **Màu sắc & Phụ kiện:** Lưng xanh đá phiến pastel, bụng trắng tinh; đội mũ len dệt kim màu vàng ấm áp.
+### C. Comfortable Daily Usage (Thoải mái & Tôn trọng Người dùng)
+* Chế độ Tập trung (Focus Mode), Chế độ Họp (Meeting Mode) và Giờ yên tĩnh (Quiet Hours).
+* Ba trạng thái hiện diện linh hoạt: Toàn phần (Full), Tối giản (Minimal), Tàng hình (Hidden).
+* Tùy biến âm thanh thông minh, chống dồn dập (anti-spam cooldown).
+* Quản lý sự chú ý (Attention Management) lọc trùng, gom chùm và lưu Hộp thư (Inbox / Digest).
+* Tiết kiệm tài nguyên phần cứng (CPU < 2%, RAM thấp, ngủ đông khi không hoạt động).
+* Chính sách quyền riêng tư minh bạch, xử lý hoàn toàn cục bộ trên máy người dùng.
 
 ---
 
-# 🏷️ 3. QUY ƯỚC ASSETS & CANONICAL EMOTION SCHEMA
+## 1.2 Nguyên Tắc Thành Công & Kiểm Soát Phạm Vi (Scope Control)
 
-Hệ thống sử dụng **duy nhất 8 mã cảm xúc chuẩn (Canonical IDs)** trong toàn bộ mã nguồn:
+> [!IMPORTANT]
+> **Product Success Principle:**
+> Không tối đa hóa số lượng tính năng. Phải tối đa hóa:
+> **Tính hữu ích thực tế · Độ tin cậy · Quyền kiểm soát của người dùng · Tính cá nhân hóa · Độ chính xác thông báo · Mức độ ít gián đoạn · Khả năng gắn bó lâu dài.**
+>
+> Mọi tính năng mới phải giải quyết một vấn đề có thật của người dùng. Tuyệt đối không triển khai tính năng chỉ vì nó thú vị về mặt kỹ thuật hay hào nhoáng bên ngoài.
 
-| Asset Key | Canonical ID | Tên hiển thị (VI) | Display Name (EN) | Hành vi / Hoạt họa 3D | Morph Targets & Poses |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| `01_happy` | **`happy`** | Vui vẻ | Happy | Mắt trăng khuyết cười tít, vẫy đuôi, tai giật nhẹ, nhảy nhót | `eyes: arcHappy`, `bounce: 0.25` |
-| `02_excited` | **`excited`** | Hào hứng | Excited | Mắt sáng sao lấp lánh, người chồm tới háo hức, hai tay vẫy | `eyes: star`, `cheek: 1.2` |
-| `03_love` | **`love`** | Yêu thương | Love / Kudos | Má hồng ửng đào, mắt trái tim, ôm má nũng nịu, tim 3D bay | `eyes: heart`, `blush: 1.0` |
-| `04_surprised` | **`surprised`** | Bất ngờ | Surprised | Mắt tròn xoe, giật nảy mình, tai dựng đứng, há hốc mồm | `eyes: open`, `eyeScale: 1.35`, `jolt` |
-| `05_angry` | **`angry`** | Cáu kỉnh | Grumpy / Angry | Má phồng to, đầu lắc nguầy nguậy, chân dậm bình bịch, bốc khói | `browAngle: 0.35`, `shake: 0.4` |
-| `06_sad` | **`sad`** | Buồn bã | Sad / Error | Mắt ầng ậng nước, tai cụp sâu u sầu, gục đầu buồn rũ rượi | `tears: true`, `lean: -0.15` |
-| `07_thinking` | **`thinking`** | Suy tư | Thinking | Đầu nghiêng 30°, một tay chống cằm, mắt nhìn lên trên | `pitch: 0.25`, `yaw: 0.3` |
-| `08_sleeping` | **`sleeping`** | Ngủ say | Sleeping / DND | Mắt nhắm nghiền, cuộn tròn người thở êm, chữ Zzz bay lơ lửng | `eyes: arcClosed`, `breathFreq: 0.6` |
+### 10 Câu Hỏi Kiểm Soát Phạm Vi (Scope Control Checklist)
+Trước khi bổ sung bất kỳ tính năng nào vào mã nguồn, kỹ sư bắt buộc phải trả lời:
+1. Tính năng này giải quyết vấn đề cụ thể nào của người dùng?
+2. Có module nào hiện có đã giải quyết một phần bài toán này chưa?
+3. Có thể mở rộng module hiện có thay vì viết mới không?
+4. Tính năng này có thực sự cần thiết cho giai đoạn P0 / MVP không?
+5. Chi phí triển khai và bảo trì lâu dài là bao nhiêu?
+6. Có phát sinh dependency hoặc hạ tầng mới nào không?
+7. Có tạo thêm rủi ro về quyền hạn hệ thống hoặc rò rỉ dữ liệu riêng tư không?
+8. Hiệu quả thành công sẽ được đo lường bằng số liệu thực tế nào?
+9. Phiên bản tối thiểu khả thi (MVP implementation) là gì?
+10. Những phần mở rộng nào phải dứt khoát hoãn lại cho P1 / P2?
+
+### Quy Tắc Chống Phình Tính Năng (Anti-Bloat Rules)
+* **Không tạo Engine thứ hai:** Tuyệt đối không viết thêm Emotion Engine 2, AudioManager 2, Notification Pipeline 2 hay Inbox 2.
+* **Không biến thành Workflow Engine cồng kềnh:** Không xây dựng hệ thống lập trình trực quan phức tạp.
+* **Không đẩy dữ liệu lên Cloud AI:** Phân loại cảm xúc và đọc nội dung phải hoàn toàn on-device; không gửi nội dung chat riêng tư lên Composio hay AI server.
+* **Feature Freeze trong giai đoạn P0:** Không thiết kế lại giao diện không cần thiết, không mở rộng tích hợp ồ ạt khi P0 chưa ổn định.
+
+---
+
+# 🐾 2. THƯ VIỆN NHÂN VẬT & CHIẾN LƯỢC ASSET (PILOT-FIRST)
+
+Ứng dụng sở hữu 4 nhân vật thú cưng với visual và tính cách bất biến:
+
+```
++---------------------------------------------------------------------------------------------------------------+
+| 🐱 MÈO MOCHI (cat_mochi)      - PILOT PRODUCTION | Scottish Fold tai cụp, kem & cam pastel, nơ đỏ chuông vàng       |
+| 🐶 CHÓ BOBA  (dog_boba)       - PHASE 8 / P1     | Corgi chibi chân ngắn, vàng mật & trắng, bandana xanh chấm bi    |
+| 🐰 THỎ CLOUD (bunny_cloud)    - PHASE 8 / P1     | Netherland Dwarf, trắng tuyết má đào, kẹp mầm cây non trên tai   |
+| 🐧 PENGUIN PIP (penguin_pip)  - PHASE 8 / P1     | Cánh cụt baby dáng lê, lưng xanh đá phiến, bụng trắng, mũ len vàng|
++---------------------------------------------------------------------------------------------------------------+
+```
+
+### 2.1 Quy Tắc Pilot-First (Pilot-First Rule)
+* **Mèo Mochi (`cat_mochi`)** là nhân vật pilot hoàn thiện đầu tiên, thiết lập chuẩn mực toàn bộ quy trình sản xuất asset:
+  `Midjourney Reference → Meshy/Tripo Image-to-3D → Blender Rigging/Shapekeys → GLB Export → Three.js Runtime`.
+* **Nguyên tắc "1 Mô hình / 8 Cảm xúc":** Mỗi nhân vật dùng **đúng 1 file `model.glb` duy nhất** chứa armature, bone hierarchy phù hợp với loài đó và các morph targets (shape keys) cho biểu cảm khuôn mặt. Tuyệt đối không xuất 32 file mesh độc lập cho 32 sắc thái cảm xúc!
+* **Độc lập cấu trúc xương:** Không ép buộc cùng một cây xương (bone hierarchy) cho tất cả các loài vật khác nhau. Mỗi loài có rig giải phẫu thích hợp và được ánh xạ qua lớp giao tiếp chuẩn `semantic-map.js`.
+
+### 2.2 Canonical Emotion Schema (8 Mã Cảm Xúc Chuẩn)
+Hệ thống sử dụng duy nhất **8 mã cảm xúc chuẩn** trong toàn bộ runtime và rule engine:
+
+| Canonical ID | Tên hiển thị (VI) | Display Name (EN) | Biểu cảm & Hành vi 3D | Morph Targets & Poses |
+| :--- | :--- | :--- | :--- | :--- |
+| **`happy`** | Vui vẻ | Happy | Mắt trăng khuyết cười tít, vẫy đuôi, tai giật nhẹ, nhún nhảy | `eyes: arcHappy`, `bounce: 0.25` |
+| **`excited`** | Hào hứng | Excited | Mắt sáng sao lấp lánh, người chồm tới háo hức, hai tay vẫy | `eyes: star`, `cheek: 1.2` |
+| **`love`** | Yêu thương | Love / Kudos | Má hồng đào, mắt trái tim, ôm má nũng nịu, tim 3D bay | `eyes: heart`, `blush: 1.0` |
+| **`surprised`** | Bất ngờ | Surprised | Mắt tròn xoe, giật nảy mình, tai dựng đứng, há hốc mồm | `eyes: open`, `eyeScale: 1.35`, `jolt` |
+| **`angry`** | Cáu kỉnh | Grumpy / Angry | Má phồng to, đầu lắc nguầy nguậy, chân dậm, bốc khói 💢 | `browAngle: 0.35`, `shake: 0.4` |
+| **`sad`** | Buồn bã | Sad / Error | Mắt ầng ậng nước, tai cụp u sầu, gục đầu buồn rũ rượi | `tears: true`, `lean: -0.15` |
+| **`thinking`** | Suy tư | Thinking | Đầu nghiêng 30°, một tay chống cằm, mắt nhìn lên trên | `pitch: 0.25`, `yaw: 0.3` |
+| **`sleeping`** | Ngủ say | Sleeping / DND | Mắt nhắm nghiền, cuộn tròn người thở êm, chữ Zzz bay | `eyes: arcClosed`, `breathFreq: 0.6` |
 
 > [!NOTE]
-> Các trạng thái như `idle` (nhàn rỗi), `hidden` (tàng hình) và `focused` (chế độ tập trung) thuộc về hệ thống Hiện diện (Presence) và Vận hành (Runtime State), tách biệt hoàn toàn với 8 Canonical Emotion IDs.
-
-### Ánh xạ Sự kiện Mặc định (Default Notification Event Mapping)
-```text
-TASK_DONE   (Build xong, tải file hoàn tất)     --> happy
-NEW_PING    (Tin nhắn Slack/Zalo mới)           --> excited
-KUDOS       (Lương về, khen thưởng, thả tim)     --> love
-WARNING     (Pin yếu, CPU nóng, cảnh báo máy)   --> surprised
-OVERDUE     (Deadline sát nút, sếp réo)         --> angry
-ERROR       (Build lỗi, mất kết nối mạng)       --> sad
-LOADING     (Đang đồng bộ dữ liệu)              --> thinking
-IDLE_DND    (Chế độ Không làm phiền / Đêm)      --> sleeping
-```
+> Các trạng thái vận hành như **`idle`** (chờ nhàn rỗi), **`hidden`** (tàng hình), **`focused`** (tập trung) và **`isGrabbed`** (bị túm nhấc bổng) là **Runtime States**, hoàn toàn tách biệt với 8 Canonical Emotions. Khi thông báo bình thường kết thúc, thú cưng êm ái quay trở về trạng thái `idle`.
 
 ---
 
-# 🎨 4. BỘ PROMPTS CHUẨN SẢN XUẤT 2D VÀ 3D
+# 🎞️ 3. HỆ THỐNG HOẠT HỌA MƯỢT MÀ (SMOOTH ANIMATION SYSTEM — P0)
 
-### 4.1 Master Reference Prompts (Tỷ lệ 1:1, Nền trắng, Đứng thẳng)
-* **Mèo Mochi (`cat_mochi`):**
-  ```text
-  cute chibi Scottish Fold cat, round chubby body, cream and pastel orange fur, pink paw pads, wearing a red ribbon collar with a small gold bell, standing front view, neutral happy expression, 3D Pixar-inspired vinyl toy style, smooth matte texture, clean solid white background, consistent character proportions --ar 1:1 --no text --no watermark
-  ```
-* **Chó Boba (`dog_boba`):**
-  ```text
-  cute chibi Corgi puppy, stubby short legs, round body, golden honey and snow white fur, white bean-shaped eyebrows, wearing a light blue polka-dot bandana, standing front view, neutral happy expression, 3D Pixar-inspired vinyl toy style, smooth matte texture, clean solid white background, consistent character proportions --ar 1:1 --no text --no watermark
-  ```
-* **Thỏ Cloud (`bunny_cloud`):**
-  ```text
-  cute chibi Netherland Dwarf bunny, round plump body, snow white fur with peach-pink ear tips and rosy cheeks, wearing a small green sprout clip on the left ear, standing front view, neutral happy expression, 3D Pixar-inspired vinyl toy style, smooth matte texture, clean solid white background, consistent character proportions --ar 1:1 --no text --no watermark
-  ```
-* **Chim cánh cụt Pip (`penguin_pip`):**
-  ```text
-  cute chibi baby penguin, pear-shaped round body, short plump flippers, pastel slate-blue back and white belly, wearing a small yellow knitted beanie, standing front view, neutral happy expression, 3D Pixar-inspired vinyl toy style, smooth matte texture, clean solid white background, consistent character proportions --ar 1:1 --no text --no watermark
-  ```
+Hoạt họa mượt mà trong Three.js runtime là điều kiện tiên quyết.
 
-### 4.2 Four-View Turnaround Prompts (Tỷ lệ 16:9, 4 góc nhìn chuẩn kỹ thuật)
-* **Mèo Mochi:**
-  ```text
-  character turnaround sheet of the exact same cute chibi Scottish Fold cat with cream and pastel orange fur, red ribbon collar and small gold bell, four consistent views: front view, left side view, right side view, back view, standing symmetrical idle stance, consistent body proportions, folded ears, 3D Pixar-inspired vinyl toy style, smooth matte texture, clean solid white background, professional character design, no text or labels --ar 16:9
-  ```
-*(Các nhân vật Boba, Cloud, Pip áp dụng cấu trúc turnaround tương ứng với đặc điểm mô tả).*
+### 3.1 Năm Tầng Quản Lý Chuyển Động (5 Animation Layers)
+1. **Base Layer:** `idle` hoặc `sleeping` chạy tuần hoàn làm tư thế tham chiếu.
+2. **Action / Emotion Layer:** Clip cảm xúc (`happy`, `surprised`, `angry`...) hoặc thao tác tương tác (`hold_card`, `kick`, `pet`, `grabbed`).
+3. **Facial Morph Layer:** Shape keys / Morph targets điều khiển chớp mắt, nheo mắt cười, biến dạng miệng sau cú chớp mắt tự nhiên.
+4. **Secondary Motion Layer:** Chuyển động phụ tự nhiên của tai gập, chóp đuôi và chuông cổ lắc lư theo gia tốc.
+5. **Presentation & VFX Layer:** Thẻ thông báo thở nhịp nhàng (`--breath`), hiệu ứng hạt tim bay, dấu phẫn nộ `💢`, bóng đổ đàn hồi.
 
-### 4.3 Meshy / Tripo Multi-View Image-to-3D Prompts
-* **Mèo Mochi (`assets/pets/cat_mochi/model.glb`):**
-  ```text
-  A cute chibi Scottish Fold cat, round chubby proportions with folded ears, cream and pastel orange fur, pink paw pads, wearing a red ribbon collar with a small gold bell, smooth matte vinyl surface, Pixar-inspired stylized animated-film aesthetic, symmetrical neutral idle stance, clean geometry, simple deformation-friendly topology, low-poly game-ready character asset, optimized for real-time animation.
-  ```
-* **Shared Negative Prompt:**
-  ```text
-  no background elements, no floating particles, no text, no labels, no watermark, no thin disconnected whiskers, no disconnected parts, no extra limbs, no distorted proportions, no unnecessary accessories, no broken geometry
-  ```
+### 3.2 Quy Chuẩn Kỹ Thuật AnimationController
+* **Cross-fading động (Dynamic Blending):** Chuyển đổi giữa các clip bằng khoảng thời gian thích ứng **0.18s – 0.35s** tùy thuộc tính chất hành động (không dùng một thời gian cứng nhắc cho mọi hành vi).
+* **State Machine & Ưu tiên ngắt:** Sự kiện khẩn cấp (`surprised`) hoặc thao tác người dùng túm gáy (`isGrabbed`) có quyền ngắt ngay lập tức clip đang phát.
+* **Delta-time Guard:** Kẹp chặn `dt = Math.min(0.05, delta)` để ngăn chặn tình trạng bước nhảy thời gian khổng lồ làm vỡ khung hình khi máy tính vừa mở nắp sau sleep.
+* **Missing Clip Fallback:** Khi file `.glb` thiếu một animation clip cụ thể, controller tự động kích hoạt Procedural Fallback hoặc lùi về `happy`/`idle`, tuyệt đối không làm gãy render loop.
+* **Reduced Motion:** Hỗ trợ tùy chọn Giảm Chuyển Động trong cài đặt hệ thống (kéo dài transition, giảm biên độ rung lắc).
+* **Benchmark 60 FPS:** Đạt 60 FPS ổn định trên máy tham chiếu trong suốt quá trình phát hoạt họa. Đo đạc minh bạch FPS, Frame time (p50/p95), Dropped frames và mức tiêu thụ CPU.
 
 ---
 
-# 🎞️ 5. HỆ THỐNG HOẠT HỌA MƯỢT MÀ (SMOOTH ANIMATION SYSTEM — P0)
+# 🔊 4. BẢN SẮC ÂM THANH NHÂN VẬT (CHARACTER AUDIO IDENTITY — P0)
 
-Hoạt họa mượt mà là yêu cầu cấp thiết hàng đầu (P0) của sản phẩm. Tuyệt đối không chỉ gọi `play()` một cách thô bạo mỗi khi cảm xúc thay đổi.
+Mỗi nhân vật sở hữu một bản sắc âm thanh (Sound Identity) đặc trưng, không trùng lặp, tạo nên linh hồn cho người bạn desktop.
 
-### 5.1 Các Lỗi Nghiêm Ngặt Phải Triệt Tiêu
-1. **Pose Popping:** Đổi tư thế tức thời giữa hai clip khiến nhân vật bị giật cục.
-2. **Abrupt Snap Transitions:** Kết thúc clip đột ngột quay về gốc mà không có easing.
-3. **Clip Conflicts:** Hai animation điều khiển cùng một nhóm xương đồng thời gây rung giật.
-4. **Foot Sliding:** Bàn chân trượt trên mặt sàn khi đang trong tư thế đứng yên.
-5. **Morph Target Jumps:** Biểu cảm mắt, miệng nhảy cóc thay vì biến dạng mềm mại.
-6. **Time-Jump Jitter:** Giật khung hình sau khi máy tính thức dậy từ chế độ Sleep hoặc ứng dụng bị Suspend.
+### 4.1 Bảng Nhận Diện Âm Thanh 4 Nhân Vật
 
-### 5.2 Kiến Trúc Phân Lớp Hoạt Họa (Animation Layering)
-Hệ thống quản lý chuyển động theo 5 tầng độc lập:
-1. **Base Layer:** `idle` hoặc `sleeping` chạy ngầm làm tư thế tham chiếu.
-2. **Action/Emotion Layer:** Các clip biểu cảm (`happy`, `angry`, `surprised`...) và thao tác tương tác (`hold_card`, `kick`, `pet`, `grabbed`).
-3. **Facial Layer:** Shape keys / Morph targets điều khiển mắt chớp, miệng cười, má phồng uốn lượn.
-4. **Secondary Motion Layer:** Chuyển động phụ tự nhiên của tai, đuôi, nơ chuông lắc lư theo gia tốc.
-5. **Presentation & VFX Layer:** Thẻ thông báo thở (`--breath`), hạt tim bay, dấu `💢`, bóng đổ co dãn.
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 🐱 MÈO MOCHI — Soft & Expressive (Dịu dàng & Biểu cảm)                      │
+│    • Signature: Tiếng meo nhẹ trong trẻo + âm chuông vàng leng keng thanh mảnh   │
+│    • Happy: Meo ngắn lí lắc           • Excited: Meo kép ngân nga           │
+│    • Love: Tiếng gừ gừ (purr) êm ái   • Surprised: Meo giật mình thất thanh  │
+│    • Angry: Âm gầm gừ hờn dỗi cute   • Sad: Meo nhỏ sụt sùi u sầu           │
+│    • Thinking: Tiếng rền trill tò mò  • Sleeping: Nhịp thở khẽ êm đềm       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 🐶 CHÓ BOBA — Playful & Energetic (Tinh nghịch & Tràn đầy năng lượng)       │
+│    • Signature: Tiếng sủa "gâu" ngắn ấm áp, phấn chấn                       │
+│    • Happy: Gâu vui vẻ đuôi ngoáy      • Excited: Gâu đôi liên hồi háo hức   │
+│    • Love: Tiếng rên nhẹ âu yếm       • Surprised: Tiếng ẳng giật nảy mình  │
+│    • Angry: Tiếng gầm gừ hoạt hình cute• Thinking: Hít hà tò mò (sniff)      │
+│    • Sleeping: Nhịp thở đều êm ấm                                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 🐰 THỎ CLOUD — Gentle & Delicate (Dịu dàng & Thanh thoát)                   │
+│    • Signature: Tiếng chít (squeak) nhỏ xíu trong veo                       │
+│    • Happy: Chít đôi nhẹ nhàng        • Excited: Tiếng chít cao trong sáng  │
+│    • Love: Tiếng hít khẽ dễ thương    • Surprised: Chít ngắn giật mình       │
+│    • Angry: Tiếng dậm chân thịch nhẹ  • Thinking: Thút thít suy nghĩ         │
+│    • Sleeping: Thở êm ru như bông gòn                                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 🐧 PENGUIN PIP — Bright & Cheerful (Tươi vui & Lạc quan)                     │
+│    • Signature: Tiếng "píp píp" đôi ríu rít ấm áp                            │
+│    • Happy: Tiếng hót líu lo ngắn     • Excited: Píp dồn dập rộn rã         │
+│    • Love: Tiếng huýt sáo nhẹ nhàng   • Surprised: Tiếng píp cao ngơ ngác    │
+│    • Angry: Tiếng chuff trầm ngộ nghĩnh• Thinking: Nghiêng đầu tò mò        │
+│    • Sleeping: Thở khẽ nhịp nhàng                                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
-### 5.3 Bộ Điều Khiển Hoạt Họa Trung Tâm (Central AnimationController)
-* **Cross-fading động (Dynamic Blending):** Hòa trộn giữa hai clip bằng `fadeIn()` và `fadeOut()` với khoảng thời gian thích ứng từ **0.18s đến 0.35s** tùy thuộc vào tính chất hành động.
-* **State Machine & Priority Matrix:**
-  * Khẩn cấp / Giật mình (`surprised`, `isGrabbed`): Ưu tiên ngắt ngay lập tức clip đang phát.
-  * Tương tác vuốt ve (`pet`): Chèn đè mượt mà lên idle, sau đó tự động hòa trộn trả về trạng thái cũ.
-* **Bảo vệ Delta-Time:** Kẹp chặn (Clamp) `dt = min(0.05, delta)` để ngăn chặn bước nhảy thời gian khổng lồ khi máy tính vừa mở nắp sau sleep.
-* **An Toàn Khuyết Clip (Missing Clip Fallback):** Nếu file `.glb` thiếu một action (ví dụ chưa có `kick`), controller tự động dùng Procedural Fallback hoặc chuyển về `happy` an toàn, tuyệt đối không làm dừng render loop.
-* **Mục Tiêu Benchmark:** Đạt **60 FPS** ổn định trên máy tham chiếu trong suốt quá trình phát animation; đo đạc và công bố rõ p50/p95 frame time.
+### 4.2 Kiến Trúc AudioManager Trung Tâm
+Hệ thống âm thanh mở rộng từ `SoundKit` hiện tại, kết hợp giữa **Tổng hợp âm thanh Web Audio (Procedural Synthesis)** và **Tải file âm thanh bản quyền (`.mp3`/`.wav`)**:
+* **Bộ quản lý ngữ cảnh Web Audio:** Sử dụng 1 `AudioContext` duy nhất, tự động resume khi có tương tác người dùng, tự động đình chỉ khi rảnh để không chiếm tài nguyên âm thanh hệ thống.
+* **Cấp độ âm lượng phân tầng:**
+  * Master Volume (Âm lượng tổng ứng dụng).
+  * Notification Volume (Âm lượng thông báo).
+  * Interaction Volume (Âm lượng tiếng kêu vuốt ve, kéo thả, nhấc bổng).
+  * Per-character Volume (Âm lượng tinh chỉnh theo từng nhân vật).
+* **Tuyệt đối không can thiệp âm lượng OS:** Ứng dụng chỉ điều tiết GainNode nội bộ, không chỉnh Master Volume của máy tính.
+
+### 4.3 Cơ Chế Chống Spam Âm Thanh (Sound Anti-Spam Priority)
+Mỗi sự kiện thông báo chỉ được phát **đúng 1 âm thanh chủ đạo duy nhất**. Tuyệt đối không xếp chồng (stacking) làm đinh tai nhức óc người dùng.
+
+Thứ tự ưu tiên phát âm thanh:
+1. **Âm thanh chỉ định cụ thể do người dùng gán trong Rule Studio.**
+2. **Âm thanh biểu cảm của nhân vật theo kết quả phân loại Emotion Engine.**
+3. **Âm thanh Signature Sound mặc định của nhân vật.**
+4. **Im lặng an toàn (Silent fallback).**
+
+Bộ lọc chặn âm thanh:
+* Bỏ qua âm thanh khi rơi vào Cooldown dồn dập (Burst Cooldown).
+* Tắt tiếng hoàn toàn trong: Focus Mode, Meeting Mode, Quiet Hours, Strict Privacy Mode, Global Mute.
+* Không tự ý xin quyền Microphone để dò tìm cuộc gọi; tôn trọng cờ trạng thái Meeting Mode do người dùng chọn hoặc tín hiệu lịch họp chính thức.
 
 ---
 
-# 🔌 6. KIẾN TRÚC TÍCH HỢP — COMPOSIO + NATIVE OS + DIRECT API
+# 🧠 5. BỘ MÁY CẢM XÚC NGỮ CẢNH (CONTEXTUAL EMOTION ENGINE — P0)
 
-Hệ thống tích hợp đa kênh theo mô hình **Integration Provider Router**, không phụ thuộc cứng vào bất kỳ nhà cung cấp duy nhất nào.
+Bộ máy cảm xúc hoạt động hoàn toàn cục bộ trên máy tính (On-device), tuyệt đối không gửi nội dung tin nhắn lên cloud để phân loại.
 
 ```
-       ┌────────────────────────────────────────────────────────┐
-       │             INTEGRATION PROVIDER ROUTER                │
-       └──────────────────────────┬─────────────────────────────┘
-                                  │
-    ┌─────────────────────────────┼────────────────────────────┐
-    ▼                             ▼                            ▼
-[Composio Provider]      [Native OS Provider]        [Direct API Provider]
-(Slack, Notion, v.v.)    (macOS / Win Toast)        (Calendar, GitHub, Webhook)
-    │                             │                            │
-    └─────────────────────────────┼────────────────────────────┘
-                                  ▼
-                     [ Internal Event Normalizer ]
-                                  │
-                                  ▼
-               [ Attention Gatekeeper & Rule Engine ]
-                                  │
-                                  ▼
-               [ Desktop Notification Presentation ]
+[ Thông báo chuẩn hóa (NormalizedNotification) ]
+                       │
+                       ▼
+ 1. Kiểm tra Quy tắc Người dùng Tự định nghĩa (Custom User Rule)
+                       │ (Chưa khớp)
+                       ▼
+ 2. Kiểm tra Nhóm Người gửi / Danh bạ (Sender / Contact Group Rule)
+                       │ (Chưa khớp)
+                       ▼
+ 3. Kiểm tra Loại Ứng dụng & Sự kiện (Application / Event Rule)
+                       │ (Chưa khớp)
+                       ▼
+ 4. Phân tích Cảm xúc Nội dung Cục bộ (Local Mood Reader: Emoji + VI/EN Keyword)
+                       │ (Chưa khớp / Độ tin cậy thấp)
+                       ▼
+ 5. Cảm xúc Mặc định theo Tính cách Nhân vật (Personality Default: idle / happy)
 ```
 
-### 6.1 Phân Biệt Tuyệt Đối: Actions vs Triggers
-* **Actions:** Các thao tác do người dùng chủ động khởi tạo (ví dụ: bấm nút "Tạo issue", "Gửi phản hồi"). Một toolkit có Actions **không đồng nghĩa** là có khả năng nhận thông báo.
-* **Triggers:** Các sự kiện do ứng dụng bên ngoài phát ra khi có hoạt động mới (ví dụ: có tin nhắn Slack mới).
+### 5.1 Đầu Vào Ngữ Cảnh Cho Phép (Authorized Metadata Inputs)
+* Tên ứng dụng nguồn (`appId`, `appName`).
+* Định danh và tên người gửi (`senderId`, `senderName`).
+* Nhóm quan hệ do người dùng gán (`contactGroup`).
+* Loại sự kiện (`eventType`: tin nhắn mới, giao việc, PR review, build hoàn tất...).
+* Tính chất trò chuyện: Kênh chung, tin nhắn riêng 1-1, hay được nhắc tên (@mention).
+* Mức độ ưu tiên (`priority`: Critical, Important, Normal, Low).
+* Metadata dự án/kho mã nguồn (Jira Project, Bitbucket Repo).
+* Tiêu đề và nội dung tin nhắn: **Chỉ phân tích khi người dùng cho phép rõ ràng trong Privacy Settings.** Khi bật Strict Privacy, nội dung bị bỏ qua hoàn toàn.
 
-### 6.2 Chiến Lược Real-time Theo Từng Ứng Dụng
+### 5.2 Mười Bốn Kịch Bản Cảm Xúc Khởi Đầu (14 Core Scenarios)
+Tất cả các kịch bản bắt buộc ánh xạ về **đúng 8 Canonical Emotion IDs**:
 
-| Ứng dụng | Kênh ưu tiên Realtime | Đánh giá & Giới hạn kỹ thuật |
+| Tình huống / Ngữ cảnh | Canonical Emotion | Diễn giải phản ứng của bé |
 | :--- | :--- | :--- |
-| **Slack** | Composio Realtime Trigger hoặc Slack Events API | Hoạt động push-first qua webhook/websocket chính thức. |
-| **Microsoft Outlook** | Microsoft Graph Change Notifications | Cần quản lý vòng đời gia hạn subscription (lifecycle renewal). |
-| **Microsoft Teams** | Graph Resource Change Events | Xác thực resource scopes cụ thể, không suy diễn từ Outlook. |
-| **Gmail** | Gmail API Push + Google Cloud Pub/Sub | Tránh Composio managed polling (15 phút trễ); push báo thay đổi và sync History API. |
-| **Google Calendar** | Google Calendar Push Notification Channel | Channel trả tín hiệu resource change; ứng dụng fetch chi tiết sự kiện. |
-| **Notion** | Official Notion Webhooks / Verified Trigger | Xác thực quyền workspace và schema sự kiện. |
-| **Discord** | Discord Gateway (Bot/App được cấp quyền) | Chỉ nghe trong server/kênh bot có mặt; không phải đọc tin nhắn riêng toàn máy. |
-| **Zalo** | Official Zalo OA Webhook / Verified Toolkit | Chỉ hỗ trợ nếu có tài khoản và quyền chính thức; nếu không hiển thị `Unsupported`. |
-| **macOS / Windows** | Native Notification Center Interfaces | Sử dụng API sanctioned; không screen-scraping hay can thiệp app khác. |
+| Rủ đi cafe / trà sữa / ăn uống | **`excited`** | Mắt sáng sao, háo hức muốn đi quẩy |
+| Tin nhắn từ Người yêu / Vợ chồng | **`love`** | Má ửng hồng, mắt trái tim, ôm má nũng nịu |
+| Tin nhắn từ Gia đình / Bố mẹ | **`happy`** | Vui vẻ ấm áp, vẫy đuôi nhẹ nhàng |
+| Bạn bè thân thiết chào hỏi | **`happy`** | Mắt trăng khuyết cười tít đón chào |
+| Có Jira task mới được giao | **`thinking`** | Nghiêng đầu, chống cằm tập trung nghiên cứu |
+| Việc khẩn / Deadline sát nút | **`thinking`** hoặc **`angry`** | Lo lắng suy tư hoặc cau mày bốc khói theo setting |
+| Yêu cầu review Pull Request Bitbucket | **`thinking`** | Đăm chiêu đọc mã nguồn hỗ trợ đồng nghiệp |
+| Pull Request được đối tác Approve | **`happy`** | Vui mừng vì công sức được ghi nhận |
+| CI/CD Build thành công | **`excited`** | Nhảy nhót ăn mừng deploy thành công |
+| CI/CD Build thất bại / Lỗi hệ thống | **`sad`** | Buồn bã, tai cụp u sầu chia sẻ nỗi đau bug |
+| Sắp đến giờ họp / Nhắc lịch sự kiện | **`thinking`** | Chuẩn bị tinh thần tham gia cuộc họp |
+| Nhận lời khen, thưởng nóng, Kudos | **`love`** | Hạnh phúc bắn tim 3D ngập tràn |
+| Thông báo thường nhật, cập nhật nền | **`idle`** | Giữ thái độ bình thản, không làm phiền thị giác |
 
-### 6.3 Chế Độ Phân Phối Sự Kiện (Delivery Modes)
-* **`realtime_push`:** Sự kiện đẩy từ server đến desktop tức thì (Event-driven / Webhook / WebSocket).
-* **`near_realtime_poll`:** Quét định kỳ ngắn (10s – 60s) kèm hiển thị rõ tần suất cho người dùng.
-* **`scheduled_sync`:** Đồng bộ theo lịch (5 phút – 1 giờ).
-* **`native_os`:** Bắt trực tiếp từ hệ điều hành.
-* **`manual`:** Chỉ làm mới khi bấm nút Refresh.
+### 5.3 Phân Loại Nhóm Quan Hệ Cục Bộ (Local Relationship Groups)
+Hệ thống **không bao giờ tự ý suy đoán** ai là người yêu, gia đình, sếp hay đồng nghiệp. Người dùng chủ động phân nhóm trên máy cá nhân:
+* `partner` (Người yêu / Vợ chồng) ➔ Mặc định kích hoạt `love`.
+* `family` (Gia đình) ➔ Mặc định kích hoạt `happy`.
+* `friends` (Bạn bè) ➔ Mặc định kích hoạt `happy` / `excited`.
+* `colleagues` (Đồng nghiệp) ➔ Mặc định kích hoạt `thinking` / `happy`.
+* `manager` (Quản lý / Sếp) ➔ Nâng mức ưu tiên lên `Important`, kích hoạt `thinking`.
+* `important` (Đối tác quan trọng) ➔ Vượt qua một số cooldown thông thường.
+* `ignored` (Nguồn bỏ qua) ➔ Tự động chuyển thẳng vào Inbox, không pop-up.
 
-### 6.4 Mô Hình Public HTTPS Gateway Bảo Vệ Desktop
-Máy chủ nội bộ Desktop chỉ lắng nghe an toàn tại `http://127.0.0.1:3721`. **Tuyệt đối không bao giờ mở cổng localhost ra Internet.**
-
-```text
-External Application (Slack, Notion, Outlook...)
-      │
-      ▼
-Composio / Provider Trigger Webhook
-      │
-      ▼
-Public HTTPS Integration Gateway (Cloud Endpoint)
-      │
-      ├─ 1. Signature Verification (HMAC SHA-256)
-      ├─ 2. Timestamp & Replay Attack Defense
-      └─ 3. Idempotency Check (Chống trùng Event ID)
-      │
-      ▼
-Durable Event Queue (Hàng đợi sự kiện an toàn)
-      │
-      ▼ (Authenticated Outbound WSS / SSE Channel)
-Local Desktop Client (Cute Pet Companion)
-      │
-      ▼
-Local Pipeline (:3721) ➔ Attention Engine ➔ 3D Pet
-```
-
-* **Desktop chủ động kết nối ra ngoài:** Client desktop khởi tạo đường truyền bảo mật (WebSocket/SSE) đến Gateway để nhận sự kiện, bảo vệ người dùng sau router/firewall mà không cần port forwarding.
-* **Bảo vệ Secret:** Khóa API Composio của dự án chỉ lưu trên Gateway an toàn, không đóng gói trong file cài đặt máy người dùng.
+### 5.4 Cường Độ Biểu Cảm (Emotion Intensity Levels)
+* **Level 0 (Không phản ứng):** Chỉ hiện thẻ thông báo tĩnh, thú cưng giữ nguyên tư thế nhàn rỗi.
+* **Level 1 (Nhẹ nhàng):** Biến dạng nhẹ cơ mặt (chớp mắt, mỉm cười khẽ), không đổi tư thế toàn thân.
+* **Level 2 (Vừa phải - Mặc định):** Đổi biểu cảm khuôn mặt và cử động thân thể nhẹ nhàng.
+* **Level 3 (Mãnh liệt):** Hoạt họa toàn thân đầy đủ kèm hiệu ứng VFX (bắn tim, khói phẫn nộ, nhảy tưng bừng).
 
 ---
 
-# 🧠 7. QUẢN LÝ SỰ CHÚ Ý (ATTENTION MANAGEMENT ENGINE — P0)
+# 🎛️ 6. XƯỞNG QUY TẮC CẢM XÚC CƠ BẢN (BASIC EMOTION RULE STUDIO — P0)
 
-Hệ thống chống mỏi thông báo bảo đảm ứng dụng không bao giờ trở thành kẻ làm phiền:
+Tích hợp trực tiếp trong Control Center, cho phép người dùng tùy chỉnh phản ứng của thú cưng mà không cần chạm vào code.
+
+### 6.1 Điều Kiện Quy Tắc (Conditions)
+Người dùng có thể kết hợp các điều kiện:
+* **Ứng dụng nguồn:** Slack, Jira, Bitbucket, Teams, Mail, Calendar, System...
+* **Người gửi / Định danh:** Tên hiển thị, email hoặc username.
+* **Nhóm quan hệ:** `partner`, `family`, `friends`, `colleagues`, `manager`...
+* **Loại sự kiện:** Task mới, PR review, tin nhắn trực tiếp, cảnh báo pin...
+* **Từ khóa nội dung (Keywords):** Hỗ trợ Tiếng Việt (có dấu & không dấu) và Tiếng Anh.
+* **Mức độ ưu tiên:** Critical, Important, Normal, Low.
+
+### 6.2 Hành Động Quy Tắc (Actions)
+Khi điều kiện thỏa mãn, người dùng cấu hình:
+* **Cảm xúc áp dụng:** 1 trong 8 Canonical Emotions.
+* **Cường độ biểu cảm:** Level 0 đến Level 3.
+* **Âm thanh đi kèm:** Tắt tiếng, Signature sound, hoặc âm cảm xúc tương ứng.
+* **Cách trình diễn:** Kiểu ôm bảng (Billboard), Ló đầu (Peeker), hoặc Đưa thư (Courier).
+* **Khả năng hiển thị thẻ:** Bình thường, chỉ lưu Inbox, hoặc bỏ qua hoàn toàn.
+
+### 6.3 Thứ Tự Giải Quyết Xung Đột (Conflict Resolution Hierarchy)
+Khi một thông báo thỏa mãn nhiều quy tắc, bộ máy giải quyết theo thứ tự ưu tiên giảm dần:
+1. **Quy tắc ghi đè cụ thể của người dùng (Explicit User Override).**
+2. **Quy tắc người gửi cụ thể (Specific Sender Rule).**
+3. **Quy tắc nhóm người gửi (Contact Group Rule).**
+4. **Quy tắc ứng dụng & loại sự kiện (App & Event Rule).**
+5. **Phân tích cảm xúc nội dung cục bộ (Content Mood Classification).**
+6. **Hành vi mặc định theo tính cách nhân vật (Default Personality Preset).**
+
+> [!CAUTION]
+> **Quyền Tối Thượng Của Riêng Tư & Tập Trung:**
+> Tuyệt đối không một quy tắc cảm xúc nào được phép vượt mặt:
+> * Chế độ Bảo Mật Tuyệt Đối (Strict Privacy).
+> * Tắt tiếng toàn cục (Global Mute).
+> * Chế độ Tập Trung / Họp (Focus / Meeting Mode).
+> * Chế độ Tàng Hình (Hidden Mode).
+
+---
+
+# 🔗 7. TÍNH HÀNH ĐỘNG CỦA THÔNG BÁO & WORKFLOWS (P0)
+
+Ứng dụng không biến thành một hệ thống workflow cồng kềnh, mà tập trung giải quyết xuất sắc các thao tác tức thời, thiết thực nhất cho lập trình viên và nhân viên văn phòng.
+
+### 7.1 Deep-Linking Đích Thực (Authentic Deep Links)
+Mọi thông báo có nguồn gốc rõ ràng bắt buộc phải mở **chính xác mục tiêu**, không mở trang chủ chung chung:
+* **Jira:** Mở thẳng URL `https://*.atlassian.net/browse/{ISSUE_KEY}`.
+* **Bitbucket:** Mở thẳng trang Pull Request `https://bitbucket.org/{workspace}/{repo}/pull-requests/{id}`.
+* **Slack / Teams:** Mở thẳng kênh hoặc cuộc trò chuyện chat cụ thể.
+* **Lịch họp:** Mở thẳng link Google Meet / Teams / Zoom đã được kiểm tra an toàn.
+* **Nguyên tắc an toàn URL:** Xác thực giao thức HTTPS và tên miền hợp lệ trước khi gọi lệnh mở của hệ điều hành (`shell.openExternal`). Tuyệt đối không tự suy diễn hoặc dựng URL giả mạo.
+
+### 7.2 Thông Báo Công Việc Jira (Jira Work Notifications)
+* **Thông tin hiển thị:** Issue Key, Tiêu đề tóm tắt, Tên dự án, Người được giao (Assignee), Người tạo (Reporter), Trạng thái hiện tại và Độ ưu tiên.
+* **Phân biệt chuẩn xác Người Giao Việc (Assigned By):**
+  Hệ thống trích xuất người giao việc từ **Lịch sử thay đổi (Issue Changelog)** của Jira.
+  > [!IMPORTANT]
+  > **Tuyệt đối không đồng nhất Reporter là Người Giao Việc!** Nếu issue được tạo ra đã gán sẵn cho người dùng hoặc không có lịch sử gán, thẻ hiển thị trung thực: *"Người giao: không có thông tin"*.
+* **Hành động chính:** Bấm nút **"↗ Mở Issue"** mở tức thì trang chi tiết trên Jira.
+
+### 7.3 Quy Trình Duyệt Pull Request Bitbucket (Bitbucket PR Review)
+* **Thông tin hiển thị:** Tiêu đề PR, Tên kho mã nguồn (Repository), Mã PR (#ID), Tác giả, Người đánh giá, Nhánh nguồn ➔ Nhánh đích.
+* **Nút Approve Xác Thực Trực Tiếp (Direct API Approve):**
+  * Gọi trực tiếp API chính thức `POST /repositories/{ws}/{repo}/pullrequests/{id}/approve`.
+  * Quản lý định danh PR an toàn trong Main Process, từ chối mọi mã định danh giả mạo.
+  * Chỉ hiển thị *"✓ Đã approve"* khi API trả về mã thành công HTTP 200/201.
+  * Phân định rạch ròi giữa **Approve** và **Merge**: Thao tác Approve **tuyệt đối không tự động gộp (merge)** pull request.
+  * Bị ẩn hoàn toàn khi người dùng bật chế độ ẩn nội dung riêng tư.
+
+### 7.4 Hành Vi Thao Tác Trên Thẻ Thông Báo
+Mỗi thẻ thông báo hỗ trợ đầy đủ các thao tác cơ bản:
+* **Mở (Open):** Điều hướng tới ứng dụng hoặc trang web gốc.
+* **Đóng (Dismiss):** Cho thẻ biến mất êm dịu, thú cưng trở về tư thế `idle`.
+* **Hoãn lại (Snooze):** Đưa thông báo vào hàng đợi để nhắc lại sau 10 phút.
+* **Ghim (Pin):** Giữ thẻ hiển thị trên màn hình cho tới khi người dùng tự tay đóng.
+* **Tắt tiếng nhanh (Mute):** Tắt tiếng nhanh người gửi hoặc ứng dụng vừa phát thông báo.
+* **Sửa nhanh cảm xúc (Quick Emotion Correction):** Cho phép người dùng chỉnh lại cảm xúc của bé nếu thấy phản ứng chưa chính xác.
+
+> [!NOTE]
+> **04/11/2026 — Hoãn, Ghim, Tắt tiếng nhanh và Sửa nhanh cảm xúc đã được gỡ khỏi thẻ theo yêu cầu người dùng** (thẻ gọn hơn). Thay thế: tắt tiếng app trong Cài đặt → Thông báo, tắt tiếng người gửi bằng nhóm 🔕 Bỏ qua (Người quen), chỉnh cảm xúc bằng Quy tắc tùy chỉnh hoặc Người quen.
+
+---
+
+# 🔒 8. BẢO MẬT & BẢO VỆ DỮ LIỆU RIÊNG TƯ (PRIVACY ARCHITECTURE — P0)
+
+Quyền riêng tư là nền tảng cốt tử của sản phẩm. Người dùng luôn nắm toàn quyền quyết định dữ liệu nào được phép hiển thị trên màn hình và dữ liệu nào được phép lưu lại.
+
+### 8.1 Bốn Chế Độ Hiển Thị Thông Báo (Privacy Display Modes)
+
+| Chế độ | Nội dung trên thẻ 3D | Lưu trữ trong Hộp thư Inbox / History |
+| :--- | :--- | :--- |
+| **`full_content` (Mặc định)** | Đầy đủ tên ứng dụng, người gửi, tiêu đề, nội dung và các nút thao tác | Lưu trữ đầy đủ nội dung để xem lại |
+| **`masked` (Mặt nạ)** | Tên app + tiêu đề che dạng ký tự đầu (`H••• s•••`), nội dung bị ẩn | Nội dung bị che mờ trong lịch sử |
+| **`source_only` (Chỉ nguồn)** | *"Tin nhắn mới từ Slack"* / *"Thông báo mới từ Jira"*; không hiện nội dung | Chỉ lưu thời gian và nguồn ứng dụng |
+| **`anonymous_source_only` (Ẩn danh)** | *"Bạn có thông báo mới"*; ẩn hoàn toàn tên app, người gửi và nội dung | Chỉ lưu vết số lượng thông báo ẩn danh |
+
+### 8.2 Nguyên Tắc "Quy Tắc Chặt Hơn Sẽ Thắng" (Stricter Policy Wins)
+* Chế độ riêng tư hiệu lực là chế độ **nghiêm ngặt hơn** giữa Cài đặt toàn cục và Danh sách ứng dụng riêng tư (`privacy.hiddenApps`).
+* Một cài đặt riêng lẻ của ứng dụng không bao giờ được phép nới lỏng chế độ bảo mật toàn cục đã bật.
+* **Nút gạt tức thì:** Lối tắt *"🙈 Ẩn nội dung thông báo"* có sẵn trên Khay hệ thống (System Tray) và menu chuột phải của thú cưng để che nhanh khi chuẩn bị chia sẻ màn hình.
+
+### 8.3 Chế Độ Bảo Mật Tuyệt Đối (Strict Privacy)
+Khi kích hoạt Chế độ Bảo mật Tuyệt đối:
+* Tắt hoàn toàn việc phân tích nội dung tin nhắn (`body analysis = disabled`).
+* Tắt tính năng trích xuất mã OTP / mật mã.
+* Tuyệt đối không lưu trữ nội dung tin nhắn vào file cấu hình, bộ nhớ đệm hay Hộp thư Inbox trên đĩa.
+* Làm sạch toàn bộ nhật ký ghi log (Redacted Logs), loại bỏ mọi chuỗi nhạy cảm.
+* **Quy tắc bất biến:** Thú cưng tuyệt đối không bao giờ đọc to nội dung thông báo qua giọng nói (Text-to-Speech) trong bất kỳ trường hợp nào!
+
+---
+
+# 🧠 9. QUẢN LÝ SỰ CHÚ Ý & HIỆN DIỆN THÍCH ỨNG (ATTENTION MANAGEMENT — P0)
+
+Hệ thống bảo đảm người bạn thú cưng luôn mang lại niềm vui, không bao giờ biến thành nguồn cơn gây xao nhãng.
 
 ```
 [ Sự kiện thông báo mới ]
@@ -282,141 +408,294 @@ Hệ thống chống mỏi thông báo bảo đảm ứng dụng không bao gi�
        theo cấp độ Ưu tiên              (Không pop-up, không chuông)
 ```
 
-### 7.1 Bốn Cấp Độ Ưu Tiên (Priority Levels)
-1. **Critical (Khẩn cấp):** Cảnh báo hệ thống, pin cạn kiệt, server sập ➔ Luôn được phép vượt rào làm phiền, kích hoạt hoạt họa giật mình (`surprised`).
-2. **Important (Quan trọng):** Tin nhắn trực tiếp (DM), sếp réo, lịch họp trong 5 phút ➔ Hiển thị chuẩn.
-3. **Normal (Bình thường):** Hoàn thành tác vụ, cập nhật thông thường ➔ Tuân theo cooldown.
-4. **Low (Ít quan trọng):** Tin khuyến mãi, bản tin định kỳ ➔ Đưa thẳng vào Inbox hoặc Digest, không bật thẻ popup.
+### 9.1 Bốn Mức Độ Ưu Tiên (Priority Levels)
+1. **Critical (Khẩn cấp):** Cảnh báo hệ thống, pin cạn kiệt, server sập ➔ Luôn được phép hiển thị, kích hoạt giật mình (`surprised`).
+2. **Important (Quan trọng):** Tin nhắn trực tiếp 1-1, sếp nhắn, nhắc lịch họp trước 5 phút ➔ Hiển thị chuẩn.
+3. **Normal (Bình thường):** Hoàn thành công việc thường nhật ➔ Tuân theo cooldown dồn dập.
+4. **Low (Ít quan trọng):** Khuyến mại, bản tin cập nhật nền ➔ Chuyển thẳng vào Inbox, không pop-up.
 
----
+### 9.2 Ba Trạng Thái Hiện Diện (Adaptive Presence)
+* **Full Presence (Toàn phần):** Thú cưng ngồi góc màn hình, thở êm ái, dõi mắt theo chuột, đón nhận vuốt ve.
+* **Minimal Presence (Tối giản):** Thú cưng ngủ cuộn tròn gọn gàng ở góc nhỏ, không cử động mạnh.
+* **Hidden Mode (Tàng hình):** Ẩn hoàn toàn giao diện khi người dùng cần tập trung cao độ.
 
-# 🌙 8. HIỆN DIỆN THÍCH ỨNG & CHẾ ĐỘ TẬP TRUNG (FOCUS MODES — P0)
-
-### 8.1 Ba Trạng Thái Hiện Diện (Adaptive Presence)
-* **Full Presence (Đồng hành Toàn phần):** Thú cưng ngồi góc màn hình, thở nhịp nhàng, dõi mắt theo chuột, đón nhận vuốt ve.
-* **Minimal Presence (Tối giản):** Thú cưng ngủ cuộn tròn gọn gàng ở góc nhỏ, không cử động mạnh hay làm xao nhãng.
-* **Hidden Mode (Tàng hình Hoàn toàn):** Ẩn toàn bộ giao diện thú cưng khi người dùng cần sự tập trung tuyệt đối.
-
-### 8.2 Sáu Chế Độ Tập Trung (Focus Operating Modes)
+### 9.3 Sáu Chế Độ Tập Trung (Focus Operating Modes)
 * **Work Mode:** Lọc bỏ thông báo giải trí; thú cưng giữ vẻ nghiêm túc, chăm chỉ.
 * **Deep Focus Mode:** Tắt toàn bộ âm thanh và hoạt họa giật mình; chỉ thông báo khẩn cấp mới được hiện.
 * **Meeting Mode:** Thú cưng chuyển sang `sleeping`, tắt tiếng chuông và hiệu ứng.
 * **Gaming Mode:** Tự động phát hiện ứng dụng toàn màn hình, hạ mức sử dụng CPU của WebGL xuống 0%.
 * **Relax Mode:** Bật toàn bộ tương tác xúc giác, âm thanh vui tươi, chào đón cưng nựng.
-* **Sleep Mode:** Giữ im lặng tuyệt đối theo khung giờ hẹn trước (Quiet Hours).
+* **Sleep Mode (Quiet Hours):** Giữ im lặng tuyệt đối theo khung giờ hẹn trước qua đêm.
+
+### 9.4 Hộp Thư Bắt Kịp (Catch-up Inbox & Digest)
+Khi thoát khỏi Focus Mode hoặc Meeting Mode, ứng dụng **tuyệt đối không phát lại dồn dập toàn bộ thông báo đã lỡ**. Thay vào đó:
+* Lưu trữ an toàn trong một Hộp thư Inbox duy nhất (`src/core/inbox-store.js`).
+* Cung cấp bản tóm tắt **Catch-up Digest** phân loại khoa học: Liên hệ quan trọng, Công việc khẩn cấp, Sự kiện lập trình và Thông báo thường nhật.
 
 ---
 
-# 🖐️ 9. TƯƠNG TÁC VẬT LÝ, KÉO THẢ & TRẠNG THÁI BỊ NHẤC BỔNG
+# 🖐️ 10. TƯƠNG TÁC VẬT LÝ, KÉO THẢ & TRẠNG THÁI BỊ NHẤC BỔNG
 
-### 9.1 Kéo Thả Tự Do (Free Drag & Drop Desktop Positioning)
+### 10.1 Kéo Thả Tự Do (Free Drag & Drop Desktop Positioning)
 Người dùng có thể nhấn giữ chuột trái vào Mèo Mochi và di chuyển bé đi khắp mọi vị trí trên màn hình:
-* Tự do đặt tại bất kỳ tọa độ `(x, y)` nào.
+* Tự do đặt tại bất kỳ tọa độ `(x, y)` nào trên desktop.
 * Tự động lưu tọa độ vào `settings.appearance.customPosition`.
-* Có nút **"↺ Đặt lại vị trí mặc định"** trong Control Center để đưa bé về lại dock góc màn hình.
+* Cung cấp nút **"↺ Đặt lại vị trí mặc định"** trong Control Center để đưa bé về lại dock góc màn hình.
 
-### 9.2 Trạng Thái Bị Túm Gáy / Nhấc Bổng (`isGrabbed`)
-Khi người dùng nhấn giữ chuột và kéo di chuyển, thú cưng lập tức kích hoạt phản ứng:
+### 10.2 Trạng Thái Bị Túm Gáy / Nhấc Bổng (`isGrabbed`)
+Khi người dùng nhấn giữ chuột và kéo di chuyển, thú cưng lập tức kích hoạt phản ứng sinh động:
 * **Mochi Scruff Stretch:** Thân mèo kéo dãn dọc đàn hồi (`scale.y: 1.18, scale.x: 0.9`).
 * **Dangling Paws:** Hai chân sau lơ lửng đung đưa tự do theo quán tính chuyển động chuột.
 * **Paw Flailing:** Hai chân trước giơ lên quạt nhẹ hốt hoảng tìm chỗ bám.
 * **Startled Face & Bell Jingle:** Mắt mở to tròn xoe ngơ ngác, miệng chữ O; chiếc chuông vàng trên cổ rung lắc dữ dội phát ra tiếng kêu leng keng liên hồi.
-* **Bong bóng thoại la hét hài hước:**
+* **Bong bóng thoại la hét hài hước (Song ngữ):**
   * *Tiếng Việt:* *"Á á buông tui ra!"*, *"Sen nhấc tui đi đâu đấy?! 🙀"*, *"Thả tui ra mauuu! 🐾"*, *"Oái oái lơ lửng rồi!"*.
   * *English:* *"Ahhh put me down!"*, *"Where are you taking me?! 🙀"*, *"Unhand me, human! 🐾"*, *"Whoa I'm floating in mid-air!"*.
-* **Tiếp đất êm ái (Landing Bounce):** Khi thả chuột, thú cưng tiếp đất với cú nhún nảy đàn hồi (`landing squash bounce`) và thở phào nhẹ nhõm: *"Phù, được tiếp đất rồi! 😌"*.
+* **Tiếp đất êm ái (Landing Bounce):** Khi thả chuột, thú cưng tiếp đất với cú nhún nảy đàn hồi mềm mại (`landing squash bounce`) kèm tiếng thở phào: *"Phù, được tiếp đất rồi! 😌"*.
 
-### 9.3 Tương Tác Xúc Giác & Thao Tác Thẻ
+### 10.3 Tương Tác Xúc Giác & Thao Tác Thẻ
 * **Xoa đầu (Head Petting):** Di chuột nhanh trên đỉnh đầu kích hoạt squash má, nheo mắt cười và bắn tim 3D.
 * **Né tránh (Evasion):** Khi gặp thông báo khó chịu, thú cưng ngả người lùi sau né tránh chuột ("Tránh xa ra, đừng chạm vào tui!").
-* **Đá bay thông báo (Kick Action):** Người dùng bấm "😒 Đá bay!" ➔ thú cưng tung cú đá xoay 360 độ đá văng thẻ thông báo khỏi màn hình.
+* **Đá bay thông báo (Kick Action):** Người dùng bấm *"😒 Đá bay!"* ➔ thú cưng tung cú đá xoay 360 độ đá văng thẻ thông báo khỏi màn hình.
 
 ---
 
-# 🎨 10. GIAO DIỆN THẺ (5 THEMES) & ĐA NGÔN NGỮ (i18n)
+# 🎨 11. GIAO DIỆN THẺ (5 THEMES) & ĐA NGÔN NGỮ (i18n)
 
-### 10.1 Năm Bộ Giao Diện (Five Visual Themes)
+### 11.1 Năm Bộ Giao Diện Trình Diễn (5 Visual Themes)
 1. **Cute Pastel (Mặc định):** Màu kem đào sữa ấm áp, viền 3D mềm mại phong cách Art Toy Pop Mart.
-2. **Minimal White:** Trắng tinh khiết, viền mỏng hiện đại, tối giản cho bàn làm việc chuyên nghiệp.
+2. **Minimal White:** Trắng tinh khiết, viền mỏng hiện đại, tối giản cho không gian làm việc chuyên nghiệp.
 3. **Dark Mode:** Tím than đậm huyền bí, chữ phát sáng dịu mắt, chống mỏi mắt ban đêm cho lập trình viên.
 4. **Glassmorphism:** Hiệu ứng kính mờ phủ sương `backdrop-filter: blur(28px)`, viền phản chiếu ánh sáng sang trọng.
 5. **Transparent Acrylic:** Nhựa acrylic trong suốt nhẹ tênh, nhìn xuyên qua các cửa sổ làm việc bên dưới.
 
-### 10.2 Hệ Thống Song Ngữ (Dual Language Engine)
+### 11.2 Hệ Thống Song Ngữ (Dual Language Engine)
 * Hỗ trợ đầy đủ **Tiếng Việt 🇻🇳** và **English 🇺🇸**.
-* Chuyển đổi tức thì trong mục Cài đặt của Control Center, cập nhật ngay lập tức giao diện nút bấm thẻ và toàn bộ lời thoại của thú cưng.
+* Chuyển đổi tức thì trong Cài đặt của Control Center, cập nhật ngay lập tức giao diện nút bấm thẻ và toàn bộ lời thoại của thú cưng.
 
 ---
 
-# ⚙️ 11. TRUNG TÂM ĐIỀU KHIỂN DESKTOP (CONTROL CENTER — 10 PHÂN HỆ)
+# 🔌 12. KIẾN TRÚC TÍCH HỢP NHIỀU NGUỒN (INTEGRATION ROUTER)
+
+Hệ thống tích hợp đa kênh theo mô hình **Integration Provider Router**, không phụ thuộc cứng vào bất kỳ nhà cung cấp duy nhất nào:
+
+```
+       ┌────────────────────────────────────────────────────────┐
+       │             INTEGRATION PROVIDER ROUTER                │
+       └──────────────────────────┬─────────────────────────────┘
+                                  │
+    ┌─────────────────────────────┼────────────────────────────┐
+    ▼                             ▼                            ▼
+[Composio Provider]      [Native OS Provider]        [Direct API Provider]
+(Slack, Jira, Bitbucket)  (macOS / Win Toast)        (Calendar, GitHub, Webhook)
+    │                             │                            │
+    └─────────────────────────────┼────────────────────────────┘
+                                  ▼
+                     [ Internal Event Normalizer ]
+                                  │
+                                  ▼
+                [ Attention Gatekeeper & Rule Engine ]
+                                  │
+                                  ▼
+                [ Desktop Notification Presentation ]
+```
+
+### 12.1 Phân Định Tuyệt Đối: Actions vs Triggers
+* **Actions:** Các thao tác do người dùng chủ động khởi tạo (ví dụ: bấm nút "Tạo issue", "Approve PR"). Một toolkit có Actions **không đồng nghĩa** là có khả năng nhận thông báo thời gian thực.
+* **Triggers:** Các sự kiện do ứng dụng bên ngoài phát ra khi có hoạt động mới (ví dụ: có tin nhắn Slack mới).
+
+### 12.2 Chế Độ Phân Phối Sự Kiện Minh Bạch (Delivery Modes)
+* **`realtime_push`:** Sự kiện đẩy từ server đến desktop tức thì qua WebSocket / SSE.
+* **`near_realtime_poll`:** Quét định kỳ ngắn (mặc định 2 phút với Jira, Bitbucket, Gmail qua Composio) kèm nhãn minh bạch thời gian trễ cho người dùng.
+* **`scheduled_sync`:** Đồng bộ theo lịch hẹn trước.
+* **`native_os`:** Bắt trực tiếp từ Trung tâm Thông báo hệ điều hành.
+* **`manual`:** Chỉ làm mới khi bấm nút Refresh.
+
+### 12.3 Mô Hình Public HTTPS Gateway Bảo Vệ Desktop
+Máy chủ nội bộ Desktop chỉ lắng nghe an toàn tại `http://127.0.0.1:3721`. **Tuyệt đối không bao giờ mở cổng localhost ra Internet.**
+* **Client desktop chủ động kết nối ra ngoài:** Kết nối bảo mật (Outbound WSS/SSE) tới Gateway công khai để nhận sự kiện.
+* **Bảo vệ Secret:** Toàn bộ OAuth client secrets và webhook signing keys chỉ lưu trên Gateway an toàn, không đóng gói trong file cài đặt máy người dùng.
+
+---
+
+# ⚙️ 13. TRUNG TÂM ĐIỀU KHIỂN DESKTOP (CONTROL CENTER — 10 PHÂN HỆ)
 
 Duy trì địa chỉ cục bộ `http://127.0.0.1:3721` và cửa sổ Native Desktop Settings với 10 phân hệ hoàn chỉnh:
 1. **Dashboard:** Tổng quan trạng thái thú cưng, Live 3D Stage, hàng đợi thông báo và độ trễ tích hợp.
-2. **Pet Characters:** Chọn nhân vật (Mochi, Boba, Cloud, Pip), xem Live 3D Preview, nhập file `.glb`.
+2. **Pet Characters:** Chọn nhân vật (Mochi, Boba, Cloud, Pip), xem Live 3D Preview, nạp file `.glb`.
 3. **Emotion & Personality:** 5 Preset tính cách, độ nhạy cảm xúc, tùy biến quy tắc Keyword & App Rules.
 4. **Notifications:** Kiểu cầm thẻ (Billboard, Peeker, Courier), 5 Theme, kích cỡ, thời gian hiển thị.
 5. **Attention Management:** Mức ưu tiên, khoảng thời gian giãn cách (cooldown), gom nhóm, bộ lọc tắt tiếng nguồn.
 6. **Application Connections:** Quản lý kết nối Composio, Direct API, trạng thái xác thực và độ trễ thực tế.
 7. **Appearance & Position:** Tùy chọn Kéo Thả Tự Do, nút đặt lại vị trí mặc định, khoảng cách viền, đa màn hình.
-8. **Sounds & Animations:** Âm lượng, tiếng kêu (Meo, Gâu, Chíp, Píp), độ nhạy vuốt ve, chế độ Giảm Chuyển Động (Reduced Motion).
+8. **Sounds & Animations:** Âm lượng, tiếng kêu (Meo, Gâu, Chít, Píp), độ nhạy vuốt ve, chế độ Giảm Chuyển Động (Reduced Motion).
 9. **Focus & Presence:** Chuyển đổi Full / Minimal / Hidden và 6 chế độ làm việc (Work, Focus, Meeting, Gaming, Relax, Sleep).
 10. **Privacy & Settings:** Khởi động cùng hệ thống, chọn ngôn ngữ (VI / EN), bảo mật mã khóa OS Keychain và xóa lịch sử.
 
 ---
 
-# 🚦 12. LỘ TRÌNH PHÁT TRIỂN & TIÊU CHUẨN NGHIỆM THU (PHASES & GATES)
+# 📊 14. TIẾN ĐỘ THỰC HIỆN & BẢNG THEO DÕI CÁC PHASE (PHASE COMPLETION TRACKER)
 
-### P0 — NỀN TẢNG MVP (BẮT BUỘC HOÀN THIỆN ĐẦU TIÊN)
+Phần này theo dõi chính xác và trung thực tiến độ triển khai của toàn bộ dự án từ **Phase 0 đến Phase 14**, phân loại theo các cấp độ ưu tiên **P0 (Cốt lõi MVP)**, **P1 (Trưởng thành sản phẩm)** và **P2 (Nâng cao tùy chọn)**.
 
-| Giai đoạn | Mục tiêu kỹ thuật | Tiêu chuẩn nghiệm thu (Acceptance Gate) |
-| :--- | :--- | :--- |
-| **Phase 0** | Khảo sát kỹ thuật & Khả thi Tích hợp | Báo cáo kiến trúc, bảng năng lực tích hợp Composio/Direct API, giải pháp Gateway và mô hình bảo mật. |
-| **Phase 1** | Pilot Mèo Mochi (`cat_mochi`) | Mô hình 3D thực tế, rig, 8 cảm xúc và các clip tương tác nạp ổn định vào Three.js runtime. |
-| **Phase 2** | Smooth Animation Runtime + Emotion Engine | Central AnimationController hoạt động hoàn hảo; chuyển mượt 8 cảm xúc (cross-fade 0.18s–0.35s); không pose pop/jitter; đạt 60 FPS mục tiêu. |
-| **Phase 3** | Attention Management Engine | Phân cấp ưu tiên, cooldown, deduplication, batching, hàng đợi Queue và hộp thư Inbox. |
-| **Phase 4** | Adaptive Presence & Quick Controls | Chuyển đổi mượt Full / Minimal / Hidden và 6 Focus Modes; lệnh thủ công luôn có quyền ưu tiên cao nhất. |
-| **Phase 5** | Notification Presentation & Drag & Drop | Billboard/Peeker/Courier, 5 Themes, kéo thả tự do, phản ứng nhấc bổng `isGrabbed` và không cản trở thao tác chuột máy tính. |
-| **Phase 6** | Real-time Integration POC | Ít nhất 1 kênh native OS và 1 kênh Composio realtime trigger (hoặc Direct API push) chạy thực tế; đo đạc latency đầy đủ. |
-
-> [!CRITICAL]
-> **MVP Release Gate:**
-> 1. Mèo Mochi chạy hoàn thiện.
-> 2. Đầy đủ 8 cảm xúc quy chuẩn.
-> 3. Hệ thống animation mượt mà (Smooth Animation Controller).
-> 4. Bộ máy Emotion & Rule Classifier độc lập.
-> 5. Quản lý sự chú ý (Attention Management) kiểm soát tốt spam.
-> 6. Hiện diện thích ứng (Adaptive Presence) và Chế độ Tập trung (Focus Modes).
-> 7. Trình diễn thông báo 3D và phản ứng xúc giác (Petting, Drag & Drop).
-> 8. Tối thiểu 1 luồng sự kiện Native OS thật.
-> 9. Tối thiểu 1 luồng sự kiện Realtime Push thật từ ứng dụng bên ngoài qua end-to-end test.
-> 10. Đảm bảo toàn vẹn bảo mật, quyền riêng tư và hiệu năng CPU.
-
-### P1 — PRODUCT MATURITY (TRIỂN KHAI SAU KHI MVP ĐẠT CHUẨN)
-* **Phase 7:** Hoàn thiện toàn diện 10 phân hệ của Control Center.
-* **Phase 8:** Mở rộng 3 nhân vật tiếp theo (Boba, Cloud, Pip) trên pipeline đã chứng minh.
-* **Phase 9:** Mở rộng kết nối Slack, Outlook, Teams, Gmail, Calendar, Notion theo bảng năng lực đã kiểm chứng.
-* **Phase 10:** Tự động hóa lịch biểu (Calendar-aware Focus) và tính năng Digest nâng cao.
-* **Phase 11:** Khả năng tiếp cận (Accessibility), Reduced Motion hoàn chỉnh và kiểm thử hồi quy đa nền tảng.
-
-### P2 — NÂNG CAO TÙY CHỌN (KHÔNG ĐƯỢC LÀM CHẬM MVP)
-* **Phase 12:** Phụ kiện thời trang (Accessories), gói âm thanh và lời thoại tùy biến.
-* **Phase 13:** Bộ giao diện theo mùa (Seasonal Themes).
-* **Phase 14:** Phân loại thông báo bằng AI cục bộ (chỉ bật khi người dùng cấp quyền rõ ràng).
+Quy ước trạng thái:
+* `[x] HOÀN THÀNH (Completed)`: Đã có mã nguồn hoạt động, có unit/integration test xác nhận, không có lỗi chặn.
+* `[-] MỘT PHẦN / ĐANG LÀM (In Progress / Partially Completed)`: Đã có khung kiến trúc hoặc chạy được với dữ liệu nội bộ/procedural, đang chờ kiểm thử tài khoản live hoặc hoàn thiện UI mở rộng.
+* `[ ] CHƯA THỰC HIỆN (Pending)`: Thuộc kế hoạch giai đoạn tiếp theo, chưa triển khai mã nguồn.
 
 ---
 
-# 📊 13. QUY ĐỊNH BÁO CÁO NGHIỆM THU THỰC TẾ (EVIDENCE-BASED REPORTS)
+### BẢNG TỔNG HỢP TIẾN ĐỘ THEO PHASE
 
-Mọi đánh giá sau khi hoàn thành các giai đoạn phát triển phải được lập thành văn bản báo cáo chi tiết đặt tại thư mục `docs/reports/` bằng Tiếng Việt:
+| Phase | Phân loại | Tên giai đoạn | Trạng thái | Module / File phụ trách | Bằng chứng kiểm thử & Ghi chú thực tế |
+| :---: | :---: | :--- | :---: | :--- | :--- |
+| **Phase 0** | **P0** | **Khảo Sát Hiện Trạng & Kiểm Toán Mã Nguồn** | `[x]` | `docs/reports/*`, `IMPLEMENTATION_STATUS.md` | Hoàn thành kiểm toán toàn bộ module, lập 9 báo cáo kỹ thuật minh bạch |
+| **Phase 1** | **P0** | **Nền Tảng Âm Thanh Cốt Lõi (Core Audio)** | `[x]` | `src/renderer/js/sound.js`, `settings-store.js` | Procedural Web Audio 4 nhân vật (meow, woof, squeak, chirp), 8 cảm xúc, cooldown, mute |
+| **Phase 2** | **P0** | **Bộ Máy Cảm Xúc Ngữ Cảnh (Contextual Emotion Engine)** | `[x]` | `src/core/mood-reader.js`, `src/core/emotion-engine.js` | 5 tầng phân loại, 5 preset tính cách, đọc emoji + từ khóa VI/EN, bảo vệ ReDoS (41/41 test pass) |
+| **Phase 3** | **P0** | **Xưởng Quy Tắc Cảm Xúc Cơ Bản (Basic Rule Studio)** | `[x]` | `src/control/control.js`, `src/core/emotion-engine.js` | Tạo/sửa/xóa quy tắc app, từ khóa, kiểm thử độ nhạy trực tiếp trong Control Center |
+| **Phase 4** | **P0** | **Thông Báo Hành Động & Quyền Riêng Tư (Workflows & Privacy)** | `[x]` | `src/core/privacy.js`, `src/integrations/*`, `nc-deeplink.js` | 4 mức Privacy, Jira changelog assigner, Bitbucket PR review & unit test approve (75/75 pass) |
+| **Phase 5** | **P0** | **Quản Lý Chú Ý & Hoạt Họa Mượt Mà (Attention & Animation)** | `[x]` | `src/core/attention-engine.js`, `animation-controller.js` | 4 ưu tiên, cooldown 3 tin/10s, Focus modes, blend 0.18s–0.35s, 60 FPS (74.9 FPS đo thực tế) |
+| **Phase 6** | **P1** | **Hồ Sơ Quan Hệ Cá Nhân Hóa (Contact Personality Profiles)** | `[x]` | `src/core/chat-filter.js`, `emotion-engine.js`, `attention-engine.js`, `control.js` | 7 nhóm quan hệ do người dùng gán (không tự đoán), khớp tên không dấu; manager/important nâng ưu tiên, ignored vào Inbox; panel "👥 Người quen" (81/81 test pass, E2E trên Windows 04/11/2026) |
+| **Phase 7** | **P1** | **Rule Studio Nâng Cao & Giả Lập Cảm Xúc (Emotion Simulator)** | `[-]` | `src/control/control.js`, `src/control/index.html` | Đã có bộ test câu thoại và thanh chỉnh độ nhạy; đang hoàn thiện giả lập tương tác 3D trực tiếp |
+| **Phase 8** | **P1** | **Trích Xuất Thông Minh & Thao Tác Nhanh (Smart Payloads)** | `[-]` | `src/adapters/ics-parser.js`, `src/core/privacy.js` | Trích xuất link họp an toàn; Jira/Bitbucket deep links; đang chờ module copy OTP an toàn |
+| **Phase 9** | **P1** | **Mở Rộng Thư Viện Âm Thanh (Audio Asset Packs)** | `[ ]` | `assets/pets/*/sounds/` | Đang dùng Procedural Web Audio chất lượng cao; chờ nạp gói file âm thanh `.mp3` studio |
+| **Phase 10**| **P1** | **Nâng Cấp Digest & Mở Rộng Ứng Dụng (Advanced Digest)** | `[-]` | `src/core/inbox-store.js` | Hộp thư Inbox bền vững qua khởi động lại, gom nhóm cơ bản; đang hoàn thiện phân nhóm 4 mục chi tiết |
+| **Phase 11**| **P2** | **YouTube Pet Video Frame (Khung Video Thu Nhỏ)** | `[ ]` | *Đã gỡ bỏ theo yêu cầu người dùng ngày 04/11/2026* | Giữ ở danh mục tùy chọn P2; không triển khai trong MVP để đảm bảo gọn nhẹ |
+| **Phase 12**| **P2** | **Bộ Nhớ Cảm Xúc Thông Minh (Smart Emotion Memory)** | `[ ]` | `src/core/emotion-engine.js` | Kế hoạch P2: Gợi ý quy tắc từ lịch sử điều chỉnh của người dùng |
+| **Phase 13**| **P2** | **Hồ Sơ Tính Cách Theo Khung Giờ (Daily Personality Profiles)**| `[ ]` | `src/core/settings-store.js` | Kế hoạch P2: Chuyển đổi tự động hồ sơ Ngày làm việc / Buổi tối thư giãn |
+| **Phase 14**| **P2** | **Tùy Biến Nâng Cao & Chủ Đề Theo Mùa (Seasonal Themes)** | `[-]` | `src/renderer/css/style.css`, `src/control/control.css` | Đã có 5 Visual Themes hoàn chỉnh; các phụ kiện trang trí theo mùa sẽ bổ sung ở P2 |
 
-1. **`FINAL_IMPLEMENTATION_REPORT.md`:** Báo cáo tổng kết toàn diện kiến trúc trước/sau, luồng sự kiện, kết quả kiểm thử, độ trễ đo được, hướng dẫn cài đặt và các việc cần làm tiếp theo.
-2. **`IMPLEMENTATION_STATUS.md`:** Bảng trạng thái chi tiết từng tính năng (`Completed`, `Partially Completed`, `Not Implemented`, `Blocked`, `Not Tested`, `Unsupported`).
-3. **`TEST_RESULTS.md`:** Nhật ký và output thực tế của các lệnh kiểm thử tự động và thủ công.
-4. **`ANIMATION_QUALITY_REPORT.md`:** Báo cáo kiểm định độ mượt chuyển động, FPS trung bình, p50/p95 frame time và kiểm tra ma trận chuyển trạng thái.
-5. **`REALTIME_INTEGRATION_CAPABILITY_MATRIX.md`:** Bảng kiểm toán năng lực thực tế của từng ứng dụng (Actions, Triggers, Delivery Mode, Latency).
-6. **`COMPOSIO_INTEGRATION_REPORT.md`:** Chi tiết tích hợp Composio SDK, OAuth flow, cấu hình webhook và xử lý sự kiện.
-7. **`SECURITY_AND_PRIVACY_REPORT.md`:** Đánh giá an toàn cổng nội bộ, xác thực webhook HMAC, mã hóa token trong OS Keychain.
-8. **`PERFORMANCE_REPORT.md`:** Báo cáo đo lường sử dụng RAM, CPU khi idle và active trên macOS/Windows.
-9. **`KNOWN_LIMITATIONS.md`:** Danh sách công khai các hạn chế kỹ thuật chưa khắc phục để người dùng và đội ngũ nắm rõ.
+---
 
-> **Cam kết chất lượng:** Không tuyên bố tính năng đã hoàn thành khi chưa có kiểm thử thực tế. Không gọi nhà cung cấp là realtime nếu chỉ dùng cơ chế polling. Không tuyên bố animation mượt mà nếu chưa chạy thử trong Three.js runtime.
+### CHI TIẾT CHECKLIST TỪNG PHASE
+
+#### 🔹 P0 — CỐT LÕI SẢN PHẨM (MUST COMPLETE FIRST)
+
+- [x] **Phase 0: Khảo Sát Hiện Trạng & Kiểm Toán Mã Nguồn (Existing Implementation Audit)**
+  - [x] Rà soát toàn bộ kiến trúc và các module hiện hữu trong `src/core`, `src/renderer`, `src/adapters`.
+  - [x] Lập danh mục phân loại trạng thái: Working, Partially Working, Not Tested, Missing.
+  - [x] Xác lập 9 báo cáo nghiệm thu minh bạch tại `docs/reports/`.
+  - [x] Loại bỏ triệt để các đề xuất trùng lặp module hoặc viết lại không cần thiết.
+
+- [x] **Phase 1: Nền Tảng Âm Thanh Cốt Lõi (Core Audio Foundation)**
+  - [x] Xây dựng bộ tổng hợp âm thanh Web Audio đa âm sắc `SoundKit` trong `src/renderer/js/sound.js`.
+  - [x] Cấp âm sắc nhận diện riêng biệt cho cả 4 nhân vật: `meow` (Mochi), `woof` (Boba), `squeak` (Cloud), `chirp` (Pip).
+  - [x] Ánh xạ âm thanh đầy đủ cho 8 Canonical Emotions và các hành vi tương tác (`purr`, `pop`, `bell`, `whoosh`, `hmph`).
+  - [x] Kiểm soát âm lượng Master, Preview âm thanh, Mute và ngăn ngừa chồng chéo âm thanh (Sound Anti-Spam).
+
+- [x] **Phase 2: Bộ Máy Cảm Xúc Ngữ Cảnh (Contextual Emotion Engine)**
+  - [x] Tích hợp `mood-reader.js` phân tích emoji, từ khóa Tiếng Việt (có/không dấu) và Tiếng Anh hoàn toàn cục bộ.
+  - [x] Xử lý từ phủ định ("không ổn", "chưa được"), từ khuếch đại ("!!!", CAPSLOCK) và ngưỡng nhạy (low, medium, high).
+  - [x] Tích hợp `emotion-engine.js` phân tầng 5 cấp độ và 5 preset tính cách (Sweet, Sarcastic, Grumpy, Calm, Playful).
+  - [x] Đạt 41/41 unit tests pass, chống tấn công ReDoS regex.
+
+- [x] **Phase 3: Xưởng Quy Tắc Cảm Xúc Cơ Bản (Basic Emotion Rule Studio)**
+  - [x] Giao diện quản lý quy tắc trực quan trong tab *Cảm xúc & Tính cách* của Control Center.
+  - [x] Hỗ trợ cấu hình quy tắc theo Ứng dụng nguồn và Từ khóa tùy chọn.
+  - [x] Ô thử nghiệm độ nhạy cảm xúc theo thời gian thực (Live Sentiment Tester).
+  - [x] Cơ chế giải quyết xung đột: Quy tắc người dùng luôn có quyền ưu tiên cao nhất so với preset mặc định.
+
+- [x] **Phase 4: Thông Báo Hành Động & Quyền Riêng Tư (Actionable Notifications & Privacy)**
+  - [x] Tích hợp 4 chế độ Privacy hiển thị (`full_content`, `masked`, `source_only`, `anonymous_source_only`).
+  - [x] Kiểm soát bảo mật qua một điểm kiểm duyệt duy nhất `src/core/privacy.js`; không rò rỉ dữ liệu nhạy cảm vào log hay đĩa.
+  - [x] Tích hợp Jira: Phân tích đúng changelog để tìm người giao việc thật, không đoán mò từ reporter; deep-link tới issue.
+  - [x] Tích hợp Bitbucket: Trích xuất PR chờ review, unit test duyệt PR an toàn qua API chính thức.
+  - [x] Thao tác trên thẻ: Mở / Đóng / Đá bay / Approve. *Snooze, Ghim, Tắt nhanh, Sửa nhanh cảm xúc (§7.4) đã làm rồi **gỡ bỏ theo yêu cầu người dùng ngày 04/11/2026** (thấy không cần thiết). Tắt tiếng app vẫn làm được trong Cài đặt → Thông báo; tắt tiếng người gửi qua nhóm 🔕 Bỏ qua; sửa cảm xúc qua Quy tắc tùy chỉnh.*
+  - [x] Thái độ quyết định phản ứng (`mood.followAttitude`, mặc định bật theo yêu cầu người dùng 04/11/2026): mọi thông báo được đón bằng cảm xúc của thái độ đã chọn; chỉ quy tắc tùy chỉnh, người quen và `forceEmotion` ghi đè. Độ ưu tiên vẫn tính theo cảm xúc **nội dung** (`contentEmotion`), không theo thái độ.
+
+- [x] **Phase 5: Quản Lý Chú Ý & Hoạt Họa Mượt Mà (Attention & Smooth Animation)**
+  - [x] Bộ lọc Attention Gatekeeper: Bỏ trùng trong 30s, Cooldown 3 tin/10s, gom chùm tin nhắn dồn dập.
+  - [x] Hỗ trợ 4 cấp độ ưu tiên, 6 Focus Modes và 3 trạng thái Hiện diện (Full, Minimal, Hidden).
+  - [x] Central AnimationController 5 tầng, hòa trộn động 0.18s–0.35s, chống nhảy pose, kẹp chặn delta-time khi sleep resume.
+  - [x] Đạt 74.9 FPS trung bình trên màn hình tham chiếu, 0 FPS khi nhàn rỗi, CPU < 2%.
+
+---
+
+#### 🔸 P1 — TRƯỞNG THÀNH SẢN PHẨM (PERSONALIZATION & MATURITY)
+
+- [x] **Phase 6: Hồ Sơ Quan Hệ Cá Nhân Hóa (Contact Personality Profiles)**
+  - [x] Phân loại tin nhắn riêng 1-1, nhắc tên (@mention), @all trong `chat-filter.js`.
+  - [x] Tắt tiếng người gửi: thêm người đó vào nhóm `ignored` (tin vào Inbox). *Đính chính 04/11/2026: bản trước ghi `mutedSenders` đã có nhưng mã nguồn chưa từng có trường này; nay thay bằng nhóm `ignored`.*
+  - [x] Panel "👥 Người quen" trong Control Center (trang Thú cưng): 7 nhóm `partner`, `family`, `friends`, `colleagues`, `manager`, `important`, `ignored`; cảm xúc riêng cho từng người (tùy chọn).
+  - [x] Khớp người gửi theo tên chính xác, không phân biệt dấu: trường `sender`, dòng "Tên: …" của tin nhóm, hoặc tiêu đề cuộc chat. Không bao giờ tự suy đoán quan hệ.
+  - [x] Thứ tự §6.3: quy tắc tùy chỉnh → người quen → (thái độ, nếu bật) → nội dung/ứng dụng/từ khóa → mặc định.
+
+- [-] **Phase 7: Rule Studio Nâng Cao & Giả Lập Cảm Xúc (Advanced Rules & Simulator)**
+  - [x] Bộ thử nghiệm cảm xúc từ chuỗi văn bản mẫu trong Control Center.
+  - [ ] Hỗ trợ điều kiện kết hợp logic AND/OR và sao chép quy tắc (Duplicate Rule).
+  - [ ] Khung giả lập hiển thị trực tiếp phản ứng hoạt họa 3D và âm thanh tương ứng với payload mẫu.
+
+- [-] **Phase 8: Trích Xuất Thông Minh & Thao Tác Nhanh (Smart Payloads & Quick Actions)**
+  - [x] Trích xuất URL phòng họp từ file lịch iCal và sự kiện lịch an toàn.
+  - [x] Deep link trực tiếp tới Jira Issue và Bitbucket PR.
+  - [ ] Cơ chế trích xuất mã OTP một chạm (One-click Copy) không lưu vào bộ nhớ đệm và chỉ copy khi bấm nút.
+
+- [ ] **Phase 9: Mở Rộng Thư Viện Âm Thanh (Audio Asset Packs)**
+  - [x] Bản sắc âm thanh tổng hợp Web Audio riêng cho 4 nhân vật hoạt động mượt mà.
+  - [ ] Nạp gói file âm thanh tự nhiên thu âm chuyên biệt (`.mp3`/`.wav`) cho Chó Boba, Thỏ Cloud và Chim cánh cụt Pip.
+
+- [-] **Phase 10: Nâng Cấp Hộp Thư Digest & Mở Rộng Ứng Dụng (Advanced Digest & Apps)**
+  - [x] Hộp thư Inbox lưu trữ bền vững qua các lần tắt mở ứng dụng.
+  - [ ] Tự động tổng hợp Digest phân nhóm 4 mục: Liên hệ ưu tiên, Việc khẩn cấp, Sự kiện dev, Thông báo nền.
+
+---
+
+#### 🔹 P2 — NÂNG CAO TÙY CHỌN (OPTIONAL ENHANCEMENTS)
+
+- [ ] **Phase 11: Khung Video Thú Cưng YouTube (YouTube Pet Video Frame)**
+  - [x] Đã gỡ bỏ khỏi phiên bản v3.4.0 theo yêu cầu người dùng ngày 04/11/2026 để đảm bảo ứng dụng nhẹ nhàng, tập trung.
+  - [ ] Lưu trữ mã nguồn dự phòng; chỉ xem xét kích hoạt lại khi có yêu cầu đặc biệt từ người dùng.
+
+- [ ] **Phase 12: Bộ Nhớ Cảm Xúc Thông Minh (Smart Emotion Memory)**
+  - [ ] Ghi nhận phản hồi sửa cảm xúc của người dùng cục bộ.
+  - [ ] Chủ động đề xuất quy tắc mới khi phát hiện hành vi điều chỉnh lặp lại (luôn hỏi ý kiến người dùng trước khi lưu).
+
+- [ ] **Phase 13: Hồ Sơ Tính Cách Theo Khung Giờ (Daily Personality Profiles)**
+  - [ ] Hẹn giờ tự động chuyển trạng thái tính cách theo nhịp sinh học (Work, Relax, Quiet).
+
+- [-] **Phase 14: Tùy Biến Nâng Cao & Chủ Đề Theo Mùa (Advanced Customization & Seasonal)**
+  - [x] 5 Theme visual đỉnh cao (Cute Pastel, Minimal White, Dark Mode, Glassmorphism, Acrylic).
+  - [x] Tương tác vật lý xúc giác: Vuốt ve xoa đầu, né tránh, đá bay thẻ, kéo thả tự do và nhấc bổng la hét.
+  - [ ] Bộ phụ kiện nón len Noel, hoa mai Tết, bí ngô Halloween cho thú cưng theo mùa.
+
+---
+
+### TIÊU CHUẨN NGHIỆM THU PHÁT HÀNH (P0 RELEASE GATE)
+
+Ứng dụng chỉ được phát hành chính thức bản v3.6.0 khi đạt trọn vẹn 10 tiêu chuẩn:
+1. **Toàn vẹn tính năng hiện hữu:** Tất cả các chức năng đã xây dựng ở các phiên bản trước được kế thừa trọn vẹn, không gãy đổ.
+2. **Bản sắc âm thanh 4 nhân vật:** Tiếng kêu của Mochi, Boba, Cloud, Pip tách bạch, rõ nét, không lỗi âm thanh.
+3. **Mèo Mochi hoàn thiện:** Nhân vật pilot hoạt động trơn tru với đầy đủ 8 cảm xúc quy chuẩn.
+4. **Bộ máy cảm xúc ngữ cảnh hoạt động chuẩn xác:** Phản ứng đúng với các kịch bản mẫu (rủ cafe, người yêu nhắn, việc mới, build lỗi).
+5. **Xưởng quy tắc cơ bản hoạt động:** Người dùng thêm, sửa, xóa quy tắc trực tiếp trên Control Center và có hiệu lực tức thì.
+6. **Thao tác Jira & Bitbucket đáng tin cậy:** Mở đúng link issue, phân biệt đúng người giao việc, nút Approve PR an toàn.
+7. **Kiểm soát bảo mật & quyền riêng tư nghiêm ngặt:** Chế độ ẩn thông tin hoạt động hoàn hảo, không rò rỉ dữ liệu nhạy cảm vào log.
+8. **Quản lý sự chú ý chống spam hiệu quả:** Bỏ trùng, cooldown và gom nhóm hoạt động ổn định khi nhận bão thông báo.
+9. **Hoạt họa 3D mượt mà đạt chuẩn 60 FPS:** Không pose pop, không giật cục khi chuyển trạng thái, tự hồi phục sau khi máy tính sleep.
+10. **Đo đạc kiểm thử minh bạch:** Toàn bộ 75+ test tự động vượt qua (pass 100%), hiệu năng CPU và RAM được kiểm chứng thực tế.
+
+---
+
+# 📊 15. QUY CHUẨN BÁO CÁO NGHIỆM THU (EVIDENCE-BASED REPORTS)
+
+Tất cả các đánh giá kỹ thuật và kết quả đo đạc bắt buộc phải được lập thành văn bản báo cáo chi tiết đặt tại thư mục `docs/reports/` bằng Tiếng Việt:
+
+1. **`FINAL_IMPLEMENTATION_REPORT.md`:** Báo cáo tổng kết toàn diện kiến trúc trước/sau, thay đổi mã nguồn, kết quả kiểm thử, độ trễ và hướng dẫn vận hành.
+2. **`IMPLEMENTATION_STATUS.md`:** Bảng trạng thái chi tiết từng tính năng (`Completed`, `Partially Completed`, `Not Implemented`, `Not Tested`, `Unsupported`).
+3. **`TEST_RESULTS.md`:** Nhật ký và output thực tế của toàn bộ các lệnh kiểm thử tự động và kiểm thử thật với tài khoản kết nối.
+4. **`ANIMATION_QUALITY_REPORT.md`:** Báo cáo đo đạc FPS trung bình, p50/p95 frame time, kiểm tra chuyển trạng thái cross-fade và phục hồi sau sleep.
+5. **`AUDIO_IDENTITY_REPORT.md`:** Báo cáo bản sắc âm thanh, kết quả thử nghiệm Web Audio synthesis và cơ chế chống chồng chéo âm thanh.
+6. **`CONTEXTUAL_EMOTION_ENGINE_REPORT.md`:** Báo cáo độ chính xác phân loại cảm xúc theo 14 kịch bản và ma trận giải quyết xung đột quy tắc.
+7. **`NOTIFICATION_ACTIONS_REPORT.md`:** Báo cáo chi tiết luồng xử lý Jira (người giao vs người tạo), Bitbucket PR Review và quy trình xác thực API Approve.
+8. **`PRIVACY_VERIFICATION_REPORT.md`:** Báo cáo kiểm định an toàn chuỗi nhạy cảm (Synthetic Secret Marker test) qua 4 chế độ hiển thị.
+9. **`PERFORMANCE_REPORT.md`:** Báo cáo tiêu thụ RAM, CPU khi idle (0 frame) và khi render active trên cả macOS và Windows.
+10. **`KNOWN_LIMITATIONS.md`:** Danh sách công khai các giới hạn kỹ thuật chưa khắc phục để người dùng và đội ngũ phát triển nắm rõ.
+
+---
+
+> [!TIP]
+> **Cam Kết Chất Lượng Tuyệt Đối:**
+> * Không bao giờ tuyên bố tính năng đã hoàn thành nếu chưa có kiểm thử thực tế chứng minh.
+> * Không gắn nhãn polling là realtime.
+> * Không tuyên bố hoạt họa mượt mà nếu chưa chạy thử nghiệm thực tế trong Three.js runtime.
+> * Luôn giữ vững 3 giá trị: **Hữu Ích (Useful) — Cá Nhân Hóa (Personal) — Tôn Trọng Người Dùng (Respectful)**.

@@ -13,6 +13,12 @@ const { spawn, execFile, execFileSync } = require('child_process');
 const readline = require('readline');
 const { ApplicationAdapter, STATUS } = require('./base-adapter');
 
+/** AUMIDs look like "com.vng.zalo", "MSTeams_8wekyb3d8bbwe!MSTeams" or "{GUID}\Path\app.exe".
+ *  Allowlist the characters so nothing else can reach explorer.exe's command line. */
+function isSafeAumid(id) {
+  return typeof id === 'string' && id.length > 0 && id.length <= 260 && /^[A-Za-z0-9._!{}\\ ()-]+$/.test(id) && !id.includes('..');
+}
+
 class WindowsNotificationAdapter extends ApplicationAdapter {
   constructor(ctx, platform = process.platform) {
     super(ctx, {
@@ -38,6 +44,7 @@ class WindowsNotificationAdapter extends ApplicationAdapter {
     this.process = null;
     this.rl = null;
     this.seenIds = new Set();
+    this.appIds = new Map(); // notification id → sender's AppUserModelID (for "Mở app")
 
     if (platform !== 'win32') {
       this.setStatus(STATUS.UNSUPPORTED, 'Chỉ có trên Windows 10 (bản 1607 trở lên) và Windows 11.');
@@ -153,6 +160,11 @@ class WindowsNotificationAdapter extends ApplicationAdapter {
       if (this.config.skipSystemUpdates && /windows update|security/i.test(`${ev.appName} ${ev.title}`)) return;
 
       if (process.env.CPC_TRACE) this.ctx.log(`[windows_nc] capture→node +${Date.now() - (ev.timestamp || Date.now())}ms`);
+      // Remember which app sent it, so "Mở app" on the card can bring that app to the front.
+      if (isSafeAumid(ev.aumid)) {
+        this.appIds.set(ev.id, ev.aumid);
+        if (this.appIds.size > 500) this.appIds.delete(this.appIds.keys().next().value);
+      }
       this.publish(ev);
     } else if (ev.type === 'error') {
       this.setStatus(STATUS.ERROR, ev.message);
@@ -173,6 +185,19 @@ class WindowsNotificationAdapter extends ApplicationAdapter {
       openLabel: 'app',
       sourceCreatedAt: n.timestamp || Date.now()
     };
+  }
+
+  /**
+   * Card "Mở app": bring the sending app to the front via its AppUserModelID
+   * (`shell:AppsFolder\<AUMID>` launches it, or focuses the running window).
+   * Windows offers no API for a third party to activate someone else's toast, so the exact
+   * conversation can't be opened — the app opens where the user left it.
+   */
+  async handleNotificationAction(action, externalId) {
+    if (this.platform !== 'win32' || action !== 'open') return;
+    const aumid = this.appIds.get(String(externalId || ''));
+    if (!aumid) return;
+    execFile('explorer.exe', [`shell:AppsFolder\\${aumid}`], { windowsHide: true }, () => {});
   }
 
   async runAction(id) {
@@ -207,4 +232,4 @@ class WindowsNotificationAdapter extends ApplicationAdapter {
   }
 }
 
-module.exports = { WindowsNotificationAdapter };
+module.exports = { WindowsNotificationAdapter, isSafeAumid };

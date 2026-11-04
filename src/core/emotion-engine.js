@@ -18,6 +18,7 @@ const { EMOTION_IDS, NOTIFICATION_EVENT_MAPPINGS, isEmotion } = require('../shar
 const PERSONALITY_PRESETS = Object.freeze({
   sweet_friendly: {
     id: 'sweet_friendly',
+    reactEmotion: 'happy', // how this attitude reacts to EVERY notification (when mood.followAttitude)
     restEmotion: 'happy', // pose while waiting with no card on screen
     name: 'Ngọt ngào',
     nameEn: 'Sweet & Friendly',
@@ -32,6 +33,7 @@ const PERSONALITY_PRESETS = Object.freeze({
   },
   sarcastic_sassy: {
     id: 'sarcastic_sassy',
+    reactEmotion: 'thinking', // how this attitude reacts to EVERY notification (when mood.followAttitude)
     restEmotion: 'thinking', // pose while waiting with no card on screen
     name: 'Cà khịa',
     nameEn: 'Sarcastic & Sassy',
@@ -46,6 +48,7 @@ const PERSONALITY_PRESETS = Object.freeze({
   },
   grumpy_dramatic: {
     id: 'grumpy_dramatic',
+    reactEmotion: 'angry', // how this attitude reacts to EVERY notification (when mood.followAttitude)
     restEmotion: 'angry', // pose while waiting with no card on screen
     name: 'Cáu kỉnh',
     nameEn: 'Grumpy & Dramatic',
@@ -60,6 +63,7 @@ const PERSONALITY_PRESETS = Object.freeze({
   },
   calm_gentle: {
     id: 'calm_gentle',
+    reactEmotion: 'happy', // how this attitude reacts to EVERY notification (when mood.followAttitude)
     restEmotion: 'idle', // pose while waiting with no card on screen
     name: 'Điềm đạm',
     nameEn: 'Calm & Gentle',
@@ -74,6 +78,7 @@ const PERSONALITY_PRESETS = Object.freeze({
   },
   energetic_playful: {
     id: 'energetic_playful',
+    reactEmotion: 'excited', // how this attitude reacts to EVERY notification (when mood.followAttitude)
     restEmotion: 'excited', // pose while waiting with no card on screen
     name: 'Hào hứng',
     nameEn: 'Energetic & Playful',
@@ -173,6 +178,7 @@ function metadataEmotion(notif) {
 }
 
 const { readMood } = require('./mood-reader');
+const { contactOf, CONTACT_GROUPS } = require('./chat-filter');
 
 function getPreset(id) {
   return PERSONALITY_PRESETS[id] || PERSONALITY_PRESETS.sweet_friendly;
@@ -202,6 +208,14 @@ function classify(notif = {}, cfg = {}) {
       result = { emotion: rule.emotion, matchedBy: 'custom', rule: rule.name || `${rule.field || 'any'} ${rule.match || 'contains'} "${rule.pattern}"` };
       break;
     }
+  }
+
+  // 1a. The user's relationship groups (Blueprint §5.3): a contact's own emotion, else the group's.
+  const contact = contactOf(notif, cfg.contacts);
+  if (!result && contact) {
+    const group = CONTACT_GROUPS[contact.group];
+    const emotion = isEmotion(contact.emotion) ? contact.emotion : group.emotion;
+    if (isEmotion(emotion)) result = { emotion, matchedBy: 'contact', rule: `${group.label}: ${contact.name}` };
   }
 
   // 1b. Mood reading — the message's own emoji / words (on by default; Settings → Thú cưng).
@@ -241,13 +255,19 @@ function classify(notif = {}, cfg = {}) {
   if (!result) result = { emotion: preset.defaultEmotion, matchedBy: 'default', rule: `default (${preset.name})` };
 
   const baseEmotion = result.emotion;
-  // Personality remap never overrides an explicit user custom rule.
-  if (result.matchedBy !== 'custom' && preset.remap[baseEmotion]) {
+  const userDefined = result.matchedBy === 'custom' || result.matchedBy === 'contact';
+  if (!userDefined && cfg.mood && cfg.mood.followAttitude === true && isEmotion(preset.reactEmotion)) {
+    // The chosen attitude decides how the pet reacts — content/app/keyword guesses don't override
+    // it. Only the user's own custom rules (and a sender's explicit forceEmotion) do.
+    result = { emotion: preset.reactEmotion, matchedBy: 'attitude', rule: `attitude (${preset.name})`, contentGuess: baseEmotion };
+  } else if (!userDefined && preset.remap[baseEmotion]) {
+    // Personality remap never overrides an explicit user custom rule.
     result.emotion = preset.remap[baseEmotion];
   }
 
   return {
     ...result,
+    contactGroup: contact ? contact.group : null,
     baseEmotion,
     annoying: preset.annoyingEmotions.includes(result.emotion),
     personality: preset.id

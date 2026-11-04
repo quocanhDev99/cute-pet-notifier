@@ -48,10 +48,12 @@ function normalizePriority(v) {
 function derivePriority(n) {
   const explicit = normalizePriority(n.priority);
   if (explicit) return explicit;
+  if (n.contactGroup === 'manager' || n.contactGroup === 'important') return 'important';
   const text = `${n.title || ''} ${n.message || ''}`.toLowerCase();
   if (LOW_KEYWORDS.some(k => text.includes(k))) return 'low';
-  if (n.emotion === 'surprised' && n.app === 'system') return 'critical';
-  if (n.app === 'calendar' || n.emotion === 'angry') return 'important';
+  const emotion = n.contentEmotion || n.emotion; // content, not the attitude's display emotion
+  if (emotion === 'surprised' && n.app === 'system') return 'critical';
+  if (n.app === 'calendar' || emotion === 'angry') return 'important';
   if (n.app === 'slack' && /nhắn riêng|direct|📣|@/.test(n.title || '')) return 'important';
   return 'normal';
 }
@@ -109,6 +111,7 @@ class AttentionEngine {
     const critical = priority === 'critical' && a.criticalBypass !== false;
 
     if ((a.mutedApps || []).includes(n.app) && !critical) return { ...base, action: 'inbox', reason: 'app_muted' };
+    if (n.contactGroup === 'ignored' && !critical) return { ...base, action: 'inbox', reason: 'contact_ignored' };
     if (presence === 'hidden' && !critical) return { ...base, action: 'inbox', reason: 'presence_hidden' };
     if (mode.hidePet && !critical) return { ...base, action: 'inbox', reason: `mode_${mode.id}` };
     if (mode.blockCategories.includes(category) && !critical) return { ...base, action: 'inbox', reason: `mode_${mode.id}_blocks_${category}` };
@@ -116,7 +119,7 @@ class AttentionEngine {
     if (priority === 'low' && a.lowToInbox !== false && mode.id !== 'relax') return { ...base, action: 'inbox', reason: 'low_priority' };
 
     // Per-app cooldown (rate limit), critical bypasses it.
-    if (!critical) {
+    if (!critical && n.contactGroup !== 'important') {
       const windowMs = (a.cooldownWindowSec ?? 10) * 1000;
       const limit = a.cooldownCount ?? 3;
       const now = this.now();

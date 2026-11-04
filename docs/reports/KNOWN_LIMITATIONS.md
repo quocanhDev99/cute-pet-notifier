@@ -33,4 +33,12 @@
 15. **Nội dung vẫn tới máy trước khi bị ẩn.** Nội dung đi qua macOS Notification Center, Composio (đám mây) hoặc Gateway rồi mới bị ẩn trên máy. Cảm xúc của bé vẫn được suy ra từ nội dung.
 
 ## Windows
-16. **Chưa chạy thử trên máy Windows thật** (Toast Listener, khay hệ thống, đóng gói).
+16. **Đã chạy trên Windows 11 thật (04/11/2026):** Toast Listener, tắt banner + âm thanh gốc, đóng gói NSIS. Khay hệ thống chưa kiểm kỹ.
+17. **Thay thế thông báo Windows chỉnh registry của người dùng** (`HKCU…NotificationsSettings`: `ShowBanner`, `SoundFile`, `NOC_GLOBAL_SETTING_ALLOW_NOTIFICATION_SOUND`). Giá trị gốc được sao lưu vào `%APPDATA%Cute Pet Companionwindows-banners.json` và khôi phục khi tắt tính năng / thoát app / lần mở sau nếu app bị crash. **Gỡ app khi app đang chạy có thể để banner tắt** — hãy tắt "Thay thế thông báo của Windows" trước khi gỡ.
+18. **Âm thanh gốc của Windows được tắt bằng giá trị registry giống Windows Settings, nhưng chưa nghe thử bằng tai** trên mọi bản Windows.
+19. **Ứng dụng mới gửi thông báo lần đầu** có thể hiện banner gốc một lần (rất nhanh) trước khi app kịp tắt banner cho nó.
+
+24. **Windows: "Mở app" mở đúng ứng dụng nhưng không mở đúng cuộc chat.** App lấy ID ứng dụng (AUMID) của thông báo rồi đưa app đó lên trên cùng, ví dụ Zalo hiện ở cuộc chat bạn đang mở dở. Windows không có API cho app khác kích hoạt thông báo của Zalo/Teams, nên không làm được như macOS (bấm hộ vào banner thật). Thông báo từ web (Chrome/Edge) không mở đúng trang.
+
+## Người quen
+20. **Người quen khớp theo tên chính xác** (không phân biệt dấu/hoa thường). Tên hiển thị khác trong thông báo (vd. biệt danh) cần thêm đúng tên đó. Với tin nhóm, chỉ nhận ra khi app ghi dạng "Tên: nội dung".

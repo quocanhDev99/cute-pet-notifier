@@ -78,3 +78,15 @@ test('Windows notification adapter: Event emission and deduplication', async () 
   assert.equal(emitted[0].appName, 'Slack');
 });
 
+
+test('Windows "Mở app": remembers the sender AUMID per notification; only safe AUMIDs pass', () => {
+  const { isSafeAumid } = require('../src/adapters/windows-nc-adapter');
+  for (const ok of ['com.vng.zalo', 'MSTeams_8wekyb3d8bbwe!MSTeams', 'Telegram.TelegramDesktop', 'FACEBOOK.317180B0BB486_8xx8rvfyw5nnt!App']) assert.equal(isSafeAumid(ok), true, ok);
+  for (const bad of ['', 'a & calc.exe', 'x"; rm', 'C:\..\..\evil', 'x|y', null, 'a'.repeat(300)]) assert.equal(isSafeAumid(bad), false, String(bad));
+
+  const adapter = new WindowsNotificationAdapter(mockCtx(), 'win32');
+  adapter.handleEvent({ type: 'notification', id: 'win_1', appName: 'Zalo', aumid: 'com.vng.zalo', title: 'Cẩm Ý', body: 'nhắn' });
+  adapter.handleEvent({ type: 'notification', id: 'win_2', appName: 'Evil', aumid: 'x & calc', title: 't', body: 'b' });
+  assert.equal(adapter.appIds.get('win_1'), 'com.vng.zalo');
+  assert.equal(adapter.appIds.has('win_2'), false, 'unsafe AUMID is never stored');
+});

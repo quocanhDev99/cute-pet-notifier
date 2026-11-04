@@ -13,6 +13,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   activePet: 'cat_mochi',
   personality: 'sweet_friendly',
   customRules: [],
+  contacts: [], // [{ name, group, emotion? }] — relationship groups set by the user (never guessed)
   appRules: {},
   keywordRules: [],
   notifications: {
@@ -74,6 +75,7 @@ const DEFAULT_SETTINGS = Object.freeze({
     presence: 'full'
   },
   mood: {
+    followAttitude: true, // every notification is answered in the chosen attitude's emotion
     enabled: true,
     sensitivity: 'medium'
   },
@@ -216,6 +218,17 @@ function mergeValidated(base, patch, defaults, prefix = '') {
     }
     if (dPath === 'chat.names') {
       if (Array.isArray(val)) out[key] = [...new Set(val.map(v => String(v).replace(/[\u0000-\u001f]/g, '').trim().slice(0, 40)).filter(Boolean))].slice(0, 10);
+      continue;
+    }
+    if (dPath === 'contacts') {
+      const { CONTACT_GROUPS } = require('./chat-filter');
+      if (Array.isArray(val)) {
+        out[key] = val.slice(0, 300).filter(c => c && CONTACT_GROUPS[c.group]).map(c => ({
+          name: String(c.name || '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 80),
+          group: c.group,
+          emotion: isEmotion(c.emotion) ? c.emotion : null
+        })).filter(c => c.name);
+      }
       continue;
     }
     if (dPath === 'attention.mutedApps') {

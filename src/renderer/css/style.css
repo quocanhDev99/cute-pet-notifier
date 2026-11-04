@@ -400,3 +400,4 @@ body.reduced-motion .pet-badge.bump { animation: none; }
 
 /* Arrival date & time on the card */
 .card .card-time { display: block; margin: 6px 0 -2px; font-size: 11.5px; font-weight: 600; color: var(--muted); letter-spacing: .1px; font-variant-numeric: tabular-nums; }
+

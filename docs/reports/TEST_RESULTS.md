@@ -1,5 +1,25 @@
 # TEST_RESULTS — Nhật ký kiểm thử
 
+## v3.4.2 — 04/11/2026 · Windows 11 Pro (26300) · Node v24.19.0 · Electron 33.4.11
+`npm test` → **83 test: 79 pass, 0 fail, 4 skipped** (bỏ qua 4 test chỉ chạy trên macOS), ≈ 0.6 s.
+
+Test mới trong đợt này: tin mới thay thẻ sau 2,5 s + thẻ bị thay vào Inbox; tin kém ưu tiên không chen tin quan trọng; thái độ quyết định phản ứng (cả 5 thái độ) nhưng không đổi độ ưu tiên; quy tắc tùy chỉnh / `forceEmotion` vẫn thắng; người quen (khớp không dấu, dòng "Tên: …", không khớp tên một phần, manager → Quan trọng, ignored → Inbox).
+
+Kiểm thử thật trên Windows (app chạy thật, toast thật bắn qua WinRT, đọc DOM qua DevTools Protocol, chụp màn hình):
+
+| Hạng mục | Kết quả đo |
+|---|---|
+| Toast → listener bắt được | 140–300 ms (poll 250 ms; mỗi lần đọc ≈ 8 ms) |
+| Listener → thẻ vẽ khung đầu tiên | 23–33 ms (`[latency] desktop→render`) |
+| Trước khi sửa: thẻ hiện sau ≈ 1,5–2 s | Nguyên nhân: chế độ "Đưa thư" giấu thẻ 1,42 s → rút còn ≈ 0,65 s |
+| Banner gốc của Windows | Không còn xuất hiện ở mọi khung hình chụp (250 ms → 7 s) |
+| Sao lưu / khôi phục registry (banner + âm thanh) | 71/71 giá trị khôi phục y hệt ban đầu |
+| Tin dồn (3 toast cách 0,6 s) | Thẻ 2 thay thẻ 1 sau ≈ 2,5 s; chấm đỏ đếm 1 → 2 |
+| Thái độ Cáu kỉnh + tin "Lương về rồi 🎉" | Thẻ 😾 Cáu kỉnh, né vuốt ve |
+| Thái độ Ngọt ngào + tin "deadline gấp" | Thẻ 😸 Vui vẻ |
+| Dáng lúc rảnh có hiệu ứng (Cáu kỉnh) | ≈ 19 fps (trước: 0 fps → trông như đứng hình); giới hạn 24 fps |
+| Người quen "Mai Pham" (💞) nhắn | Thẻ 💖 Yêu thương |
+
 ## v3.4.0 — 04/11/2026 · Apple M2, macOS 14.6.1 · Node v22.11.0 · Electron 33.4.11
 `npm test` → **75/75 pass** (≈ 2.5 s), 17 file:
 

@@ -9,6 +9,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Spawned hidden by Electron, PowerShell writes stdout in the OEM code page (e.g. 437), which turns
+# Vietnamese into "C?m Y". Node reads UTF-8, so force UTF-8 without BOM (a BOM would corrupt line 1).
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
+
 function Emit-JSON($obj) {
     $json = ConvertTo-Json -InputObject $obj -Compress
     [Console]::WriteLine($json)
@@ -199,6 +203,7 @@ while ($true) {
                 id = "win_$id"
                 rawId = $id
                 appName = $appName
+                aumid = $aumid
                 title = $title
                 body = $body
                 dismissedNative = $dismissed

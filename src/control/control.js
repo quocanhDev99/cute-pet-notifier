@@ -103,6 +103,7 @@ function queueSave(patch, immediate = false) {
   pendingPatch = deepMerge(pendingPatch, patch);
   deepMerge(S.settings, patch);
   applyPreviewSettings();
+  if (patch.mood && 'followAttitude' in patch.mood) setTimeout(() => render(), 0);
   if (patch.personality && stage) { setPreviewEmotion('idle'); stage.play('wave'); } // show the new attitude (the desktop pet follows via settings)
   clearTimeout(saveTimer);
   saveTimer = setTimeout(flushSave, immediate ? 0 : 280);
@@ -205,6 +206,32 @@ function applyTheme(id) {
 
 /* ================================================================== 3D preview */
 
+/** 👥 Relationship groups (Blueprint §5.3): the user names people; the pet never guesses. */
+function contactsPanel() {
+  const groups = S.contactGroups || {};
+  const list = S.settings.contacts || [];
+  const groupOpts = Object.entries(groups).map(([id, g]) => `<option value="${id}">${g.emoji} ${esc(g.label)}</option>`).join('');
+  const effect = (g, c) => {
+    const e = c && c.emotion ? c.emotion : g.emotion;
+    return [e ? `${emo(e).emoji} ${emo(e).label}` : '', g.priority === 'important' ? '⭐ ưu tiên' : '', g.bypassCooldown ? 'không giới hạn tin' : '', g.inbox ? '📥 vào Hộp thư' : ''].filter(Boolean).join(' · ');
+  };
+  return `
+      <section class="panel contacts-panel">
+        <h3>👥 Người quen <small class="muted">bé nhận ra người gửi theo đúng tên bạn nhập — không tự đoán</small></h3>
+        <div class="contact-add">
+          <input id="ct-name" type="text" maxlength="80" autocomplete="off" placeholder="Tên hiện trong thông báo, vd: Mai Phạm">
+          <select id="ct-group">${groupOpts}</select>
+          <select id="ct-emo"><option value="">Cảm xúc theo nhóm</option>${emotionOptions('')}</select>
+          <button class="btn btn-primary small" data-action="contact-add">＋ Thêm</button>
+        </div>
+        ${list.length ? `<ul class="contact-list">${list.map((c, i) => { const g = groups[c.group] || { emoji: '👤', label: c.group }; return `
+          <li><span class="ct-emoji">${g.emoji}</span><div><b>${esc(c.name)}</b><small>${esc(g.label)} · ${esc(effect(g, c))}</small></div>
+          <button class="icon-btn" data-action="contact-remove" data-arg="${i}" title="Xóa">✕</button></li>`; }).join('')}</ul>`
+        : '<p class="muted">Chưa có ai. Ví dụ: thêm người yêu vào 💞 để bé luôn bắn tim khi họ nhắn, hay thêm sếp vào 👔 để tin của sếp luôn được ưu tiên.</p>'}
+        <p class="muted small">Tên người quen thắng cả thái độ đã chọn. Bé so khớp với người gửi, dòng "Tên: …" trong tin nhóm, hoặc tiêu đề cuộc chat.</p>
+      </section>`;
+}
+
 function presetFor(id) { return S.presets[id] || S.presets.sweet_friendly; }
 
 function ensureStage() {
@@ -231,7 +258,7 @@ function applyPreviewSettings() {
   sound.configure({ enabled: S.settings.sounds.enabled, volume: S.settings.sounds.volume });
 }
 
-function setPreviewEmotion(id) {
+function setPreviewEmotion(id, kind = 'try') {
   previewEmotion = id;
   ensureStage();
   // "Waiting" previews the personality's resting pose, exactly as the desktop pet shows it.
@@ -242,7 +269,7 @@ function setPreviewEmotion(id) {
   stage.setAnnoying(preset.annoyingEmotions.includes(shown));
   document.querySelectorAll('[data-preview-emotion]').forEach(b => b.classList.toggle('active', b.dataset.previewEmotion === id));
   const label = document.getElementById('preview-label');
-  if (label) label.textContent = id === 'idle' ? `${preset.emoji} ${preset.name} · lúc rảnh` : `Thử phản ứng: ${emo(id).emoji} ${emo(id).label}`;
+  if (label) label.textContent = id === 'idle' ? `${preset.emoji} ${preset.name} · lúc rảnh` : `${kind === 'notif' ? 'Vừa nhận thông báo' : 'Thử phản ứng'}: ${emo(id).emoji} ${emo(id).label}`;
 }
 
 function bubble(text) {
@@ -315,7 +342,7 @@ const H = {
 
 const PRIORITY_LABEL = { critical: '🚨 Khẩn cấp', important: '⭐ Quan trọng', normal: '• Bình thường', low: '💤 Ít quan trọng' };
 const FRIENDLY_REASON = {
-  low_priority: 'Ít quan trọng', cooldown: 'Nhiều tin liên tiếp', app_muted: 'Ứng dụng đã tắt tiếng', presence_hidden: 'Lúc thú cưng đang ẩn',
+  low_priority: 'Ít quan trọng', cooldown: 'Nhiều tin liên tiếp', app_muted: 'Ứng dụng đã tắt tiếng', contact_ignored: 'Người quen đang để Bỏ qua', presence_hidden: 'Lúc thú cưng đang ẩn',
   presence_minimal: 'Chế độ tối giản', queue_overflow: 'Quá nhiều tin cùng lúc', manual_test: 'Thử nghiệm', not_mentioned: 'Tin nhóm không nhắc tên bạn'
 };
 const friendlyReason = (r) => FRIENDLY_REASON[r] || (/^mode_/.test(r || '') ? 'Đang ở chế độ tập trung' : '');
@@ -468,13 +495,16 @@ const pages = {
             ${Object.values(S.presets).map(p => `
               <button class="preset row ${S.settings.personality === p.id ? 'selected' : ''}" data-choice="personality" data-value="${p.id}">
                 <span class="preset-emoji">${p.emoji}</span>
-                <span><b>${esc(p.name)} <i class="muted">${esc(p.nameEn || '')}</i></b><small>${esc(p.description)}</small><small class="rest">Lúc rảnh: ${p.restEmotion && p.restEmotion !== 'idle' ? `${emo(p.restEmotion).emoji} ${emo(p.restEmotion).label}` : '🐾 đứng yên nhẹ nhàng'}</small></span>
+                <span><b>${esc(p.name)} <i class="muted">${esc(p.nameEn || '')}</i></b><small>${esc(p.description)}</small><small class="rest">Lúc rảnh: ${p.restEmotion && p.restEmotion !== 'idle' ? `${emo(p.restEmotion).emoji} ${emo(p.restEmotion).label}` : '🐾 đứng yên nhẹ nhàng'}</small>${S.settings.mood.followAttitude !== false && p.reactEmotion ? `<small class="rest">Khi có thông báo: ${emo(p.reactEmotion).emoji} ${emo(p.reactEmotion).label}</small>` : ''}</span>
               </button>`).join('')}
           </div>
+          ${H.toggle('mood.followAttitude', 'Bé luôn phản ứng theo thái độ đã chọn', 'Mọi thông báo đều được bé đón bằng đúng cảm xúc của thái độ. Tắt đi nếu muốn bé tự đoán cảm xúc từ nội dung tin nhắn.')}
         </section>
       </div>
-      <section class="panel mood-panel">
+      ${contactsPanel()}
+      <section class="panel mood-panel ${S.settings.mood.followAttitude !== false ? 'is-off' : ''}">
         <h3>🎭 Bé đọc cảm xúc tin nhắn</h3>
+        ${S.settings.mood.followAttitude !== false ? '<p class="notice">Đang tắt vì bé phản ứng theo thái độ đã chọn. Tắt công tắc "Bé luôn phản ứng theo thái độ đã chọn" ở trên để dùng.</p>' : ''}
         <div class="grid-2 flat">
           <div>
             ${H.toggle('mood.enabled', 'Bé đoán cảm xúc từ nội dung', 'Dựa vào emoji và câu chữ (tiếng Việt có hoặc không dấu, tiếng Anh). Xử lý ngay trên máy, không gửi đi đâu.')}
@@ -962,7 +992,7 @@ async function eventsModal(toolkit) {
 
 const DELIVERY_LABEL = { realtime_push: '⚡ Realtime push', near_realtime_poll: '⏱️ Near real-time (poll)', scheduled_sync: '🗓️ Scheduled sync', native_os: '🖥️ System event', manual: '✋ Manual' };
 const REASON_LABEL = {
-  allowed: 'Hiển thị', low_priority: 'Ít quan trọng → Inbox', cooldown: 'Quá nhiều tin cùng app (cooldown)', app_muted: 'App đã tắt tiếng',
+  allowed: 'Hiển thị', low_priority: 'Ít quan trọng → Inbox', cooldown: 'Quá nhiều tin cùng app (cooldown)', app_muted: 'App đã tắt tiếng', contact_ignored: 'Người quen: Bỏ qua',
   presence_hidden: 'Đang ẩn thú cưng', presence_minimal: 'Hiện tối giản', critical_bypass: 'Khẩn cấp — vượt rào', queue_overflow: 'Hàng đợi đầy', manual_test: 'Thử nghiệm', not_mentioned: 'Chat không nhắc tên → Inbox'
 };
 const reasonLabel = (r) => REASON_LABEL[r] || (r || '').replace(/^mode_(\w+)_min_(\w+)$/, 'Chế độ $1 chỉ cho mức ≥ $2').replace(/^mode_(\w+)_blocks_(\w+)$/, 'Chế độ $1 chặn nhóm $2').replace(/^mode_(\w+)$/, 'Chế độ $1');
@@ -1274,7 +1304,7 @@ function bindUploads() {
   }));
 }
 
-const MOOD_BY = { mood: 'Bé đọc từ nội dung', app: 'Theo ứng dụng', keyword: 'Theo từ khóa', custom: 'Theo quy tắc của bạn', metadata: 'Theo mức ưu tiên', default: 'Cảm xúc mặc định của bé', forced: 'Ứng dụng chỉ định' };
+const MOOD_BY = { contact: 'Theo người quen', attitude: 'Theo thái độ đã chọn', mood: 'Bé đọc từ nội dung', app: 'Theo ứng dụng', keyword: 'Theo từ khóa', custom: 'Theo quy tắc của bạn', metadata: 'Theo mức ưu tiên', default: 'Cảm xúc mặc định của bé', forced: 'Ứng dụng chỉ định' };
 let moodTimer = null;
 function bindMoodTry() {
   const inp = document.getElementById('mood-try');
@@ -1307,7 +1337,7 @@ function bindRules() {
     try {
       const r = await api('/api/classify', { method: 'POST', body: { title, message, app } });
       const c = r.classification;
-      const labels = { custom: '① Quy tắc tùy chỉnh', mood: '①ᵇ Bé đọc nội dung', app: '② Theo ứng dụng', keyword: '③ Từ khóa', metadata: '④ Metadata', default: '⑤ Mặc định', forced: 'Ép buộc' };
+      const labels = { contact: '👥 Người quen', attitude: '🎭 Theo thái độ', custom: '① Quy tắc tùy chỉnh', mood: '①ᵇ Bé đọc nội dung', app: '② Theo ứng dụng', keyword: '③ Từ khóa', metadata: '④ Metadata', default: '⑤ Mặc định', forced: 'Ép buộc' };
       out.innerHTML = `<div class="cls-emo emo-bg-${c.emotion}">${emo(c.emotion).emoji}</div>
         <div><b>${emo(c.emotion).label} <code>${c.emotion}</code></b><small>${labels[c.matchedBy]} · ${esc(c.rule)}${c.baseEmotion !== c.emotion ? ` · tính cách đổi từ ${c.baseEmotion}` : ''}${c.annoying ? ' · 😤 né tránh vuốt ve' : ''}</small>
         <small>${r.attention ? `${PRIORITY_LABEL[r.attention.priority]} · ${r.attention.action === 'show' ? '🪧 Hiện thẻ' : '📥 Vào Inbox'} — ${esc(reasonLabel(r.attention.reason))}` : ''}</small></div>`;
@@ -1511,6 +1541,22 @@ const actions = {
     queueSave({ privacy: { hiddenApps: [...cur] } }, true);
     setTimeout(render, 300);
   },
+  'contact-add'() {
+    const name = (document.getElementById('ct-name').value || '').trim();
+    const group = document.getElementById('ct-group').value;
+    const emotion = document.getElementById('ct-emo').value || null;
+    if (!name) { toast('Nhập tên người gửi trước nhé', 'error'); return; }
+    const list = (S.settings.contacts || []).filter(c => c.name.toLowerCase() !== name.toLowerCase());
+    queueSave({ contacts: [...list, { name, group, emotion }] }, true);
+    toast(`Đã thêm ${name}`, 'ok');
+    setTimeout(render, 300);
+  },
+  'contact-remove'(i) {
+    const list = [...(S.settings.contacts || [])];
+    list.splice(Number(i), 1);
+    queueSave({ contacts: list }, true);
+    setTimeout(render, 300);
+  },
   'toggle-mute'(app) {
     const cur = new Set(S.settings.attention.mutedApps || []);
     if (cur.has(app)) cur.delete(app); else cur.add(app);
@@ -1644,7 +1690,7 @@ function connectEvents() {
     const d = JSON.parse(e.data);
     S.pipeline.lastEmotion = d.emotion;
     S.pipeline.stats.byEmotion[d.emotion] = (S.pipeline.stats.byEmotion[d.emotion] || 0) + 1;
-    if (route === 'home') setPreviewEmotion(d.emotion); // mirror the desktop pet
+    if (route === 'home') setPreviewEmotion(d.emotion, 'notif'); // mirror the desktop pet
   });
   es.addEventListener('characters', (e) => { S.characters = JSON.parse(e.data); });
   es.addEventListener('inbox', (e) => {

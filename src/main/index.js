@@ -384,6 +384,7 @@ function getState() {
     secureStorage: secrets.available(),
     settings: s,
     presets: PERSONALITY_PRESETS,
+    contactGroups: require('../core/chat-filter').CONTACT_GROUPS,
     defaults: { appRules: DEFAULT_APP_RULES, keywordRules: DEFAULT_KEYWORD_RULES },
     emotions: EMOTION_SCHEMA,
     characters: characterList(),

@@ -48,7 +48,8 @@ test('higher priority jumps the queue; bursts are grouped', () => {
   p.ingest({ title: 'first', app: 'z' }); // displayed
   p.ingest({ title: 'calm', app: 'a' });
   p.ingest({ title: 'deadline gấp', app: 'b' });
-  assert.strictEqual(p.queue[0].emotion, 'angry');
+  assert.strictEqual(p.queue[0].title, 'deadline gấp', 'urgent content jumps the queue');
+  assert.strictEqual(p.queue[0].priority, 'important');
   p.ingest({ title: 's1', app: 'slack' });
   p.ingest({ title: 's2', app: 'slack' });
   p.ingest({ title: 's3', app: 'slack' });
@@ -162,4 +163,31 @@ test('a lower-priority notification never cuts a more important card short', (t)
   p.ingest({ title: 'chit-chat', app: 'b', priority: 'normal' });
   t.mock.timers.tick(5000);
   assert.deepStrictEqual(shown, ['urgent']);
+});
+
+test('the chosen attitude changes the reaction, never the priority', () => {
+  for (const personality of ['grumpy_dramatic', 'sweet_friendly', 'calm_gentle']) {
+    const { p, s } = mk();
+    s.personality = personality;
+    p.ingest({ title: 'first', app: 'z' }); // occupies the screen
+    p.ingest({ title: 'ăn trưa không', app: 'a' });
+    p.ingest({ title: 'deadline gấp', app: 'b' });
+    const [top, calm] = p.queue;
+    assert.strictEqual(top.title, 'deadline gấp', personality);
+    assert.strictEqual(top.priority, 'important', personality);
+    assert.strictEqual(calm.priority, 'normal', `${personality}: a grumpy attitude must not make everything important`);
+    assert.strictEqual(top.emotion, require('../src/core/emotion-engine').PERSONALITY_PRESETS[personality].reactEmotion);
+  }
+});
+
+test('contact groups drive attention: manager = important, ignored = Inbox', () => {
+  const s = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+  s.contacts = [{ name: 'Sếp Lan', group: 'manager' }, { name: 'Spam Bot', group: 'ignored' }];
+  const inbox = { items: [], add(i) { this.items.push(i); } };
+  const p = new NotificationPipeline({ getSettings: () => s, inbox });
+  const boss = p.ingest({ title: 'Sếp Lan', message: 'em qua phòng anh chút', app: 'teams' });
+  assert.strictEqual(boss.item.priority, 'important');
+  const bot = p.ingest({ title: 'Spam Bot', message: 'khuyến mãi', app: 'zalo' });
+  assert.strictEqual(bot.inboxed, true);
+  assert.strictEqual(bot.reason, 'contact_ignored');
 });

@@ -51,3 +51,44 @@ test('regex rules are guarded', () => {
 });
 
 test('5 presets exist', () => assert.strictEqual(Object.keys(PERSONALITY_PRESETS).length, 5));
+
+test('followAttitude: every notification reacts with the chosen attitude', () => {
+  const mood = { followAttitude: true, enabled: true };
+  const grumpy = classify({ title: 'Lương về rồi 🎉', message: 'thưởng tết', app: 'zalo' }, { personality: 'grumpy_dramatic', mood });
+  assert.strictEqual(grumpy.emotion, PERSONALITY_PRESETS.grumpy_dramatic.reactEmotion);
+  assert.strictEqual(grumpy.matchedBy, 'attitude');
+  assert.strictEqual(grumpy.annoying, true, 'a grumpy reaction also dodges petting');
+  const sweet = classify({ title: 'deadline gấp', message: 'server lỗi' }, { personality: 'sweet_friendly', mood });
+  assert.strictEqual(sweet.emotion, PERSONALITY_PRESETS.sweet_friendly.reactEmotion);
+  for (const p of Object.values(PERSONALITY_PRESETS)) {
+    assert.strictEqual(classify({ title: 'x' }, { personality: p.id, mood }).emotion, p.reactEmotion, p.id);
+  }
+});
+
+test('followAttitude: the user\'s own rules and forceEmotion still win', () => {
+  const mood = { followAttitude: true };
+  const custom = classify({ title: 'Mẹ gọi' }, { personality: 'grumpy_dramatic', mood, customRules: [{ field: 'title', match: 'contains', pattern: 'Mẹ', emotion: 'love' }] });
+  assert.strictEqual(custom.emotion, 'love');
+  assert.strictEqual(classify({ title: 'x', forceEmotion: 'sad' }, { personality: 'grumpy_dramatic', mood }).emotion, 'sad');
+});
+
+test('followAttitude off: content still decides (old behaviour)', () => {
+  const c = classify({ title: 'deadline gấp' }, { personality: 'sweet_friendly', mood: { followAttitude: false } });
+  assert.strictEqual(c.emotion, 'angry');
+});
+
+test('contact groups: the user names people, the group decides the reaction (beats the attitude)', () => {
+  const cfg = { personality: 'grumpy_dramatic', mood: { followAttitude: true }, contacts: [
+    { name: 'Mai Phạm', group: 'partner' }, { name: 'Anh Hùng', group: 'manager' }, { name: 'Bố', group: 'family', emotion: 'excited' }
+  ] };
+  const dm = classify({ title: 'Mai Pham', message: 'tối nay ăn gì', app: 'zalo' }, cfg); // accent-insensitive
+  assert.strictEqual(dm.emotion, 'love');
+  assert.strictEqual(dm.matchedBy, 'contact');
+  assert.strictEqual(dm.contactGroup, 'partner');
+  const group = classify({ title: 'Nhóm dự án', message: 'Anh Hùng: họp lúc 3h nhé', app: 'teams' }, cfg); // "Name: …" prefix
+  assert.strictEqual(group.contactGroup, 'manager');
+  assert.strictEqual(classify({ title: 'Bố', message: 'về ăn cơm', app: 'zalo' }, cfg).emotion, 'excited', "a contact's own emotion wins over the group's");
+  const stranger = classify({ title: 'Người lạ', message: 'hi', app: 'zalo' }, cfg);
+  assert.strictEqual(stranger.matchedBy, 'attitude', 'never guessed for people not in the list');
+  assert.strictEqual(classify({ title: 'Mai', message: 'hi', app: 'zalo' }, cfg).contactGroup, null, 'partial names do not match');
+});
