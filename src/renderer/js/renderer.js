@@ -347,6 +347,8 @@ function onStageEvent(type) {
     const lines = getLang() === 'en' ? t('reject') : ((preset && preset.rejectLines && preset.rejectLines.length) ? preset.rejectLines : t('reject'));
     say(lines[Math.floor(Math.random() * lines.length)], 'angry');
     sound.hmph();
+  } else if (type === 'body-double') {
+    if (api) api.openControlCenter();
   } else if (type === 'kick-impact') {
     if (current && current.el) {
       current.el.classList.add('kicked');
@@ -697,7 +699,8 @@ document.addEventListener('contextmenu', (e) => {
   if (current && current.el && current.el.contains(e.target)) { api.showContextMenu({ cardId: current.item.id }); return; }
   if (onPetBody(e)) api.showContextMenu();
 });
-document.addEventListener('dblclick', (e) => { if (onPetBody(e) && api && !current) api.openControlCenter(); });
+// Opening the Control Center from the pet = a double tap on its BODY (PetStage 'body-double').
+// The head is for petting only, and clicks on card buttons never open it.
 
 /* ------------------------------------------------------------------ Drag & Drop Desktop Positioning */
 

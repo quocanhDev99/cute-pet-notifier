@@ -311,6 +311,7 @@ Quy tắc hiển thị:
   * 👀 **Ló đầu (peeker)** — bé ló lên từ sau mép trên thẻ (xếp dọc), mắt dõi theo chuột.
   * ✉️ **Đưa thư (courier)** — bé chạy vào từ mép màn hình (0.45s), thẻ "mở ra" từ phong bì.
 * **Bong bóng thoại** trên đầu bé: trắng, bo 16, chữ 13/800 `#4B3B47`, đuôi nhọn xoay 45°, tối đa 230px; tự dịch ngang để không tràn mép màn hình (đuôi vẫn chỉ vào bé). Biến thể giận `#FFE4E4/#B42318`, yêu `#FFE9F2/#C2185B`.
+* **Chạm vào bé:** **đầu** = vuốt ve (chạm hoặc xoa; bé đang bực thì né); **thân** chạm 1 lần = bé vẫy tay (chờ 0.32s để phân biệt nhấp đúp), **nhấp đúp vào thân** = mở Control Center (cả khi đang có thẻ); nhấn giữ + kéo = bế bé đi; chuột phải = menu. Bấm nút trên thẻ **không bao giờ** mở Control Center (app bỏ qua sự kiện "activate" của macOS khi chuột đang/vừa ở trên bé hoặc thẻ trong 2.5s).
 * **Số chưa đọc** trên bé: viên đỏ gradient `#FF5A5F→#E53945`, viền trắng 2px, chữ trắng 13/800, nảy khi tăng; bấm mở Hộp thư.
 
 ### 8.2 Thẻ thông báo 3D "acrylic"

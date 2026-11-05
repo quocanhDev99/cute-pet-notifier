@@ -41,7 +41,13 @@ if (!isPrimaryInstance) {
   // macOS: opening the app again from Finder/Launchpad while it runs fires "activate", not
   // "second-instance" — show the Control Center so the click does something visible.
   // Electron also fires "activate" for the very first launch (e.g. login item) → ignore that one.
-  app.on('activate', () => { if (activateReady) openControlCenter(); });
+  // Clicking the pet or a card button also makes macOS activate the app: that must NOT pop the
+  // Control Center up, so ignore activations while / right after the cursor is on the overlay.
+  app.on('activate', () => {
+    if (!activateReady) return;
+    if (cursorInRect || Date.now() - lastOverlayUse < 2500) return;
+    openControlCenter();
+  });
 }
 
 let overlay = null;
@@ -214,6 +220,7 @@ function pushBadge(force = false) {
    resize) OR the real cursor is inside one of the reported interactive rectangles. */
 let rendererWantsMouse = false;
 let cursorInRect = false;
+let lastOverlayUse = 0; // last time the cursor was on the pet / a card (see the 'activate' guard)
 let hitRects = [];
 let hitTimer = null;
 let overlayIgnoring = true;
@@ -230,6 +237,7 @@ function pollCursor() {
   const b = overlay.getBounds();
   const x = p.x - b.x, y = p.y - b.y;
   const inside = hitRects.some(r => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
+  if (inside) lastOverlayUse = Date.now();
   if (inside !== cursorInRect) { cursorInRect = inside; applyMouseCapture(); }
 }
 
@@ -484,6 +492,7 @@ function registerIpc() {
   });
   ipcMain.on('notification:action', (e, msg = {}) => {
     if (!overlay || e.sender !== overlay.webContents) return;
+    lastOverlayUse = Date.now();
     const { action, id, url, source, externalId } = msg;
     if (action === 'click') {
       if (typeof url === 'string' && /^https?:\/\//.test(url)) shell.openExternal(url);

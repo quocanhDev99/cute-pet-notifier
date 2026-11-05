@@ -381,7 +381,28 @@ export class PetStage {
     target.addEventListener('click', (e) => {
       if (ignore(e)) return;
       if (this.suppressClick) { this.suppressClick = false; if (routed && hitTest(e).over) { e.stopPropagation(); e.preventDefault(); } return; }
-      if (hitTest(e).over) { e.stopPropagation(); if (routed) e.preventDefault(); this.touch(); }
+      const hit = hitTest(e);
+      if (!hit.over) return;
+      e.stopPropagation(); if (routed) e.preventDefault();
+      // Head = petting (a tap or a rub, never anything else). Body = one tap waves, a DOUBLE tap
+      // asks the host to open the Control Center ('body-double'). The single tap waits a moment
+      // so a double tap doesn't also wave.
+      if (hit.head) { this.touch(); return; }
+      const now = performance.now();
+      if (this.bodyTapAt && now - this.bodyTapAt < 320) {
+        clearTimeout(this.bodyTapTimer);
+        this.bodyTapAt = 0;
+        this.onEvent('body-double', {});
+        return;
+      }
+      this.bodyTapAt = now;
+      clearTimeout(this.bodyTapTimer);
+      this.bodyTapTimer = setTimeout(() => {
+        this.bodyTapAt = 0;
+        if (this.anim.grabbed || this.disposed) return;
+        this.play('wave');
+        this.onEvent('body-tap', {});
+      }, 320);
     }, routed ? { capture: true } : false);
   }
 
