@@ -13,7 +13,12 @@ const DEFAULT_SETTINGS = Object.freeze({
   activePet: 'cat_mochi',
   personality: 'sweet_friendly',
   customRules: [],
-  contacts: [], // [{ name, group, emotion? }] — relationship groups set by the user (never guessed)
+  // Familiar contacts — set by the user, never guessed:
+  // [{ id, name, kind: person|chat, app|null, targetId|null, group, label|null, emotion|null,
+  //    attention: auto|important|normal|silent|inbox, enabled, createdAt, updatedAt }]
+  contacts: [],
+  // Per-relationship policy: { [group]: { quietEnabled, quietStart, quietEnd, afterHours, digest } }
+  relationships: {},
   appRules: {},
   keywordRules: [],
   notifications: {
@@ -66,7 +71,9 @@ const DEFAULT_SETTINGS = Object.freeze({
     keepHistory: true,
     historyLimit: 100,
     displayMode: 'full_content',
-    hiddenApps: []
+    hiddenApps: [],
+    learnContacts: true, // remember chat/sender NAMES seen in notifications for the "Người quen" picker
+    adaptiveMemory: true // the pet adapts to someone's habits (metadata only: frequency, importance)
   },
   system: {
     autoLaunch: false,
@@ -222,12 +229,51 @@ function mergeValidated(base, patch, defaults, prefix = '') {
     }
     if (dPath === 'contacts') {
       const { CONTACT_GROUPS } = require('./chat-filter');
+      const { CONTACT_ATTENTION } = require('./contact-rules');
+      const clean = (v, n) => String(v || '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, n);
       if (Array.isArray(val)) {
-        out[key] = val.slice(0, 300).filter(c => c && CONTACT_GROUPS[c.group]).map(c => ({
-          name: String(c.name || '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 80),
+        const now = Date.now();
+        const seen = new Set();
+        out[key] = val.slice(0, 300).filter(c => c && CONTACT_GROUPS[c.group]).reverse().map(c => ({
+          id: /^[a-z0-9_-]{4,40}$/i.test(String(c.id || '')) ? String(c.id) : `c_${now.toString(36)}${Math.random().toString(36).slice(2, 8)}`,
+          name: clean(c.name, 80),
+          kind: c.kind === 'chat' ? 'chat' : 'person',
+          app: c.app ? String(c.app).toLowerCase().replace(/[^a-z0-9_.-]/g, '').slice(0, 40) || null : null,
+          targetId: c.targetId ? clean(c.targetId, 200) : null,
           group: c.group,
-          emotion: isEmotion(c.emotion) ? c.emotion : null
-        })).filter(c => c.name);
+          label: c.group === 'other' && c.label ? clean(c.label, 40) : null,
+          emotion: isEmotion(c.emotion) ? c.emotion : null,
+          attention: CONTACT_ATTENTION[c.attention] ? c.attention : 'auto',
+          enabled: c.enabled !== false,
+          createdAt: Number(c.createdAt) || now,
+          updatedAt: Number(c.updatedAt) || now
+        })).filter(c => {
+          // One rule per (app, kind, name): the later one wins.
+          const k = `${c.app || '*'}|${c.kind}|${c.name.toLowerCase()}`;
+          if (!c.name || seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        }).reverse();
+      }
+      continue;
+    }
+    if (dPath === 'relationships') {
+      const { CONTACT_GROUPS } = require('./chat-filter');
+      if (val && typeof val === 'object' && !Array.isArray(val)) {
+        const hhmm = (v, d) => (/^([01]\d|2[0-3]):[0-5]\d$/.test(String(v)) ? String(v) : d);
+        const next = { ...(out[key] || {}) };
+        for (const [g, r] of Object.entries(val)) {
+          if (!CONTACT_GROUPS[g] || !r || typeof r !== 'object') continue;
+          const prev = next[g] || {};
+          next[g] = {
+            quietEnabled: 'quietEnabled' in r ? !!r.quietEnabled : !!prev.quietEnabled,
+            quietStart: hhmm(r.quietStart, prev.quietStart || '18:00'),
+            quietEnd: hhmm(r.quietEnd, prev.quietEnd || '08:00'),
+            afterHours: 'afterHours' in r ? !!r.afterHours : !!prev.afterHours,
+            digest: 'digest' in r ? !!r.digest : !!prev.digest
+          };
+        }
+        out[key] = next;
       }
       continue;
     }

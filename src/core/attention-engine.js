@@ -103,15 +103,21 @@ class AttentionEngine {
   decide(n) {
     const s = this.getSettings();
     const a = s.attention || {};
-    const priority = derivePriority(n);
+    // Familiar contacts (person > group chat > relationship > adaptive memory) — see contact-rules.js.
+    const cp = n.contactPolicy || null;
+    let priority = derivePriority(n);
+    if (cp && cp.priority && priority !== 'critical') priority = cp.priority;
     const category = categoryOf(n);
-    const mode = this.mode();
+    let mode = this.mode();
+    // "Cho phép ngoài giờ": this relationship still shows during the scheduled quiet hours.
+    if (cp && cp.afterHours && mode.source === 'quiet_hours') mode = { ...FOCUS_MODES.none, source: 'contact_after_hours' };
     const presence = (s.system && s.system.presence) || 'full';
-    const base = { priority, category, mode: mode.id, modeSource: mode.source, silent: !mode.sound, motion: mode.motion };
+    const base = { priority, category, mode: mode.id, modeSource: mode.source, silent: !mode.sound || !!(cp && cp.silent), motion: mode.motion };
     const critical = priority === 'critical' && a.criticalBypass !== false;
 
     if ((a.mutedApps || []).includes(n.app) && !critical) return { ...base, action: 'inbox', reason: 'app_muted' };
-    if (n.contactGroup === 'ignored' && !critical) return { ...base, action: 'inbox', reason: 'contact_ignored' };
+    if (cp && cp.inbox && !critical) return { ...base, action: 'inbox', reason: cp.reason || 'contact_inbox' };
+    if (!cp && n.contactGroup === 'ignored' && !critical) return { ...base, action: 'inbox', reason: 'contact_ignored' };
     if (presence === 'hidden' && !critical) return { ...base, action: 'inbox', reason: 'presence_hidden' };
     if (mode.hidePet && !critical) return { ...base, action: 'inbox', reason: `mode_${mode.id}` };
     if (mode.blockCategories.includes(category) && !critical) return { ...base, action: 'inbox', reason: `mode_${mode.id}_blocks_${category}` };
@@ -119,7 +125,7 @@ class AttentionEngine {
     if (priority === 'low' && a.lowToInbox !== false && mode.id !== 'relax') return { ...base, action: 'inbox', reason: 'low_priority' };
 
     // Per-app cooldown (rate limit), critical bypasses it.
-    if (!critical && n.contactGroup !== 'important') {
+    if (!critical && n.contactGroup !== 'important' && !(cp && cp.bypassCooldown)) {
       const windowMs = (a.cooldownWindowSec ?? 10) * 1000;
       const limit = a.cooldownCount ?? 3;
       const now = this.now();

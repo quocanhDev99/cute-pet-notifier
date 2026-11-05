@@ -11,7 +11,8 @@
 const { EventEmitter } = require('events');
 const crypto = require('crypto');
 const { classify } = require('./emotion-engine');
-const { AttentionEngine, normalizePriority, PRIORITY_RANK, inQuietHours } = require('./attention-engine');
+const { AttentionEngine, normalizePriority, PRIORITY_RANK, inQuietHours, derivePriority } = require('./attention-engine');
+const { contactPolicy } = require('./contact-rules');
 const { LatencyRecorder } = require('./latency');
 const { chatDecision } = require('./chat-filter');
 const privacy = require('./privacy');
@@ -47,6 +48,31 @@ function cleanTime(v) {
   if (!Number.isFinite(t)) return null;
   if (t > Date.now() + 864e5 || t < 946684800000) return null; // absurd clocks
   return t;
+}
+
+/**
+ * Ticket details for Jira / Bitbucket cards — allowlisted, short strings only.
+ * { kind, event, key, type, status, statusTone: todo|progress|done|review|danger, priority,
+ *   labels[], people: [{ label, value }], repo, branch }
+ */
+function cleanMeta(m) {
+  if (!m || typeof m !== 'object') return null;
+  const kind = ['jira', 'bitbucket'].includes(m.kind) ? m.kind : null;
+  if (!kind) return null;
+  const str = (v, n) => cleanText(v, n) || null;
+  return {
+    kind,
+    event: str(m.event, 60),
+    key: str(m.key, 40),
+    type: str(m.type, 30),
+    status: str(m.status, 40),
+    statusTone: ['todo', 'progress', 'done', 'review', 'danger'].includes(m.statusTone) ? m.statusTone : null,
+    priority: str(m.priority, 20),
+    labels: Array.isArray(m.labels) ? m.labels.map(l => cleanText(l, 30)).filter(Boolean).slice(0, 5) : [],
+    people: Array.isArray(m.people) ? m.people.filter(x => x && x.label && x.value).slice(0, 3).map(x => ({ label: cleanText(x.label, 20), value: cleanText(x.value, 60) })) : [],
+    repo: str(m.repo, 80),
+    branch: str(m.branch, 120)
+  };
 }
 
 /** Normalize any payload into the app's NormalizedNotification contract (guide §B9). */
@@ -85,6 +111,7 @@ function normalize(raw = {}, source = 'webhook', defaults = {}) {
       url: cleanUrl(it && it.url),
       actions: Array.isArray(it && it.actions) ? it.actions.filter(a => ['approve'].includes(a)) : []
     })).filter(it => it.key && it.title) : [],
+    meta: cleanMeta(r.meta), // structured ticket info (Jira / Bitbucket) for a readable card
     chatDirect: typeof r.chatDirect === 'boolean' ? r.chatDirect : null, // known only for some sources (Slack)
     chatMention: typeof r.chatMention === 'boolean' ? r.chatMention : null,
     moreCount: Number.isInteger(r.moreCount) && r.moreCount > 0 ? Math.min(r.moreCount, 999) : 0,
@@ -107,11 +134,12 @@ function normalize(raw = {}, source = 'webhook', defaults = {}) {
 }
 
 class NotificationPipeline extends EventEmitter {
-  /** @param {{getSettings: () => object, inbox?: import('./inbox-store').InboxStore}} opts */
-  constructor({ getSettings, inbox = null }) {
+  /** @param {{getSettings: () => object, inbox?: import('./inbox-store').InboxStore, directory?: import('./contact-directory').ContactDirectory}} opts */
+  constructor({ getSettings, inbox = null, directory = null }) {
     super();
     this.getSettings = getSettings;
     this.inbox = inbox;
+    this.directory = directory; // ContactDirectory — learns chat/sender names for the "Người quen" picker
     this.attention = new AttentionEngine({ getSettings });
     this.latency = new LatencyRecorder();
     this.queue = [];
@@ -131,7 +159,9 @@ class NotificationPipeline extends EventEmitter {
     const n = normalize(raw, raw && raw.app || 'test');
     const classification = classify(n, this.getSettings());
     const probe = new AttentionEngine({ getSettings: this.getSettings });
-    const attention = probe.decide({ ...n, emotion: classification.emotion, contentEmotion: classification.baseEmotion, contactGroup: classification.contactGroup });
+    const policy = contactPolicy(n, this.getSettings(), { directory: this.directory });
+    const attention = probe.decide({ ...n, emotion: classification.emotion, contentEmotion: classification.baseEmotion, contactGroup: classification.contactGroup, contactPolicy: policy });
+    if (policy) classification.contactLayer = policy.layer;
     return { notification: n, classification, attention };
   }
 
@@ -179,8 +209,26 @@ class NotificationPipeline extends EventEmitter {
     }
     this.recentKeys.set(item.deduplicationKey, now);
 
+    // What the CONTENT alone says (no contact rule / memory) — what the adaptive memory learns from,
+    // so it can never feed on its own decisions.
+    const contentPriority = derivePriority({ ...item, contactGroup: null, contactPolicy: null });
+    // Familiar contacts: person > group chat > relationship > adaptive memory (contact-rules.js).
+    item.contactPolicy = opts.bypassAttention ? null : contactPolicy(item, s, { directory: this.directory });
+    if (item.contactPolicy) item.contactLayer = item.contactPolicy.layer;
+
     // Chat mode: "only when it's about me" sends other chat messages to the Inbox.
+    // A chat the pet already knows is a GROUP stays a group even when this message has no
+    // "Name: …" prefix (photos, stickers…) — otherwise it would pass as a 1-1 message.
+    if (this.directory && item.chatDirect == null) {
+      const known = this.directory.knownKind(item);
+      if (known === 'group') item.chatDirect = false;
+    }
     const chat = opts.bypassAttention ? null : chatDecision(item, s);
+    // "Only when it's about me" stays strict: a familiar contact passes it only when the user made
+    // them important (⭐ "Luôn báo ngay", or the Sếp / Quan trọng relationship) — not every group
+    // chat that merely has a relationship set.
+    const cpol = item.contactPolicy;
+    if (chat && !chat.show && cpol && cpol.contact && !cpol.inbox && cpol.priority === 'important') { chat.show = true; chat.reason = null; }
     if (chat && chat.chat && (chat.mentioned || (chat.show && chat.direct && s.chat && s.chat.mode === 'mentions'))) item.priority = 'important';
     // Attention Gatekeeper
     const decision = opts.bypassAttention
@@ -193,6 +241,11 @@ class NotificationPipeline extends EventEmitter {
     item.silent = decision.silent;
     item.motion = decision.motion;
     item.attentionReason = decision.reason;
+    delete item.contactPolicy; // names inside: never sent to the overlay / Control Center / Inbox
+    // Learn who/which chat this was (names only) BEFORE privacy projection masks the title.
+    if (this.directory && item.source !== 'test') {
+      this.directory.learn(item, now, { important: (PRIORITY_RANK[contentPriority] || 2) >= PRIORITY_RANK.important });
+    }
     // Privacy projection — before the card, Control Center, history and the persisted Inbox ever
     // see the item (emotion/priority were decided above, on-device, from the full content).
     const pmode = privacy.effectiveMode(item, s);

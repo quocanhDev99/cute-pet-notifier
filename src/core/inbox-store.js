@@ -8,7 +8,7 @@ const fs = require('fs');
 const { EventEmitter } = require('events');
 const path = require('path');
 
-const KEEP_FIELDS = ['id', 'source', 'app', 'title', 'message', 'url', 'emotion', 'priority', 'category', 'deliveryMode', 'reason', 'receivedAt', 'sourceEventId', 'read'];
+const KEEP_FIELDS = ['id', 'source', 'app', 'appName', 'sender', 'privacy', 'meta', 'title', 'message', 'url', 'emotion', 'priority', 'category', 'deliveryMode', 'reason', 'receivedAt', 'sourceEventId', 'read'];
 
 class InboxStore extends EventEmitter {
   constructor(dir, { getSettings }) {

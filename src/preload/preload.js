@@ -15,7 +15,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   reportBattery: (info) => ipcRenderer.send('system:battery', info),
   openControlCenter: (section) => ipcRenderer.send('overlay:open-control', section),
   onBadge: (cb) => ipcRenderer.on('pet:badge', (_e, d) => cb(d)),
-  showContextMenu: () => ipcRenderer.send('overlay:context-menu'),
+  showContextMenu: (opts) => ipcRenderer.send('overlay:context-menu', opts && typeof opts.cardId === 'string' ? { cardId: opts.cardId } : null),
   onBreakStart: (cb) => ipcRenderer.on('break:start', (_e, d) => cb(d)),
   onActionResult: (cb) => ipcRenderer.on('notification:action-result', (_e, d) => cb(d))
 });

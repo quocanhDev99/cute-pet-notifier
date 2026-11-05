@@ -1,9 +1,17 @@
-# 🐾 CUTE PET COMPANION — MASTER ARCHITECTURAL BLUEPRINT V3.6
+# 🐾 CUTE PET COMPANION — MASTER ARCHITECTURAL BLUEPRINT V3.7
 ## Smart Desktop Companion — Smart Notifications, Personalized Emotions & 3D Interactive Desktop Pet
-*Document Version: 3.6.0 — Production Blueprint & Phase Completion Specification*
-*Last Updated: 04/11/2026 · Target Platforms: macOS (Apple Silicon & Intel) & Windows 10/11*
+*Document Version: 3.7.0 — Production Blueprint & Phase Completion Specification*
+*Last Updated: 05/11/2026 · Target Platforms: macOS (Apple Silicon & Intel) & Windows 10/11*
 
 ---
+
+> ### 📌 CẬP NHẬT TRỌNG TÂM PHIÊN BẢN V3.7.0 (05/11/2026)
+> 1. **Familiar Contacts & Adaptive Relationship Intelligence (§5.3):** "👥 Người quen" chọn theo *ứng dụng → cuộc chat → thành viên* thay vì gõ tên; 11 mối quan hệ; quy tắc cho **một người** hoặc **cả nhóm chat**, gắn theo ứng dụng; hành vi riêng (ưu tiên / bình thường / nhẹ nhàng / chỉ Hộp thư); bật/tắt từng quy tắc.
+> 2. **Khám phá danh sách chat:** Microsoft Teams qua **Microsoft Graph** (Composio Connect), Slack qua Web API; các app không có API (Zalo, Messenger, Telegram, iMessage) dùng **danh bạ tự học từ thông báo** (chỉ tên) + nhập tay. Bước ① tự **phát hiện app nhắn tin đã cài / đang chạy** trên máy (icon thật).
+> 3. **Gợi ý "Hay nhắn nhất" & Xếp nhóm nhanh:** gợi ý người/nhóm nhắn nhiều chưa phân loại (chỉ gợi ý); xếp nhóm ngay từ **chuột phải vào thẻ thông báo** hoặc nút **👥 Xếp nhóm** trong Hộp thư.
+> 4. **Giờ theo mối quan hệ & Bộ nhớ thích nghi:** mỗi quan hệ có giờ riêng / vẫn hiện trong giờ yên tĩnh / gom digest; bé tự điều chỉnh theo thói quen (chỉ metadata), có thể xem lại, tắt và xóa.
+> 5. **Thứ tự ưu tiên mới trong engine (§6.3):** người > nhóm chat > quan hệ > ứng dụng > chung > mặc định — nằm trong `contact-rules.js` + `attention-engine.js`, không chỉ ở UI.
+> 6. **Jira & Bitbucket đầy đủ hơn (§7.2–7.3):** thêm bình luận / @nhắc tên / cập nhật của người khác (Jira) và approve / yêu cầu sửa / bình luận trên PR của bạn (Bitbucket); trạng thái "đã thấy" lưu xuống đĩa nên khởi động lại không nuốt sự kiện.
 
 > ### 📌 CẬP NHẬT TRỌNG TÂM PHIÊN BẢN V3.6.0
 > 1. **Đồng bộ toàn diện với Master Development Prompt V3.6:** Chuẩn hóa 3 giá trị cốt lõi (*Smart Desktop Companion*, *Personalized Pet Experience*, *Comfortable Daily Usage*) và quy tắc Scope Control chống phình tính năng (Anti-bloat).
@@ -254,15 +262,43 @@ Tất cả các kịch bản bắt buộc ánh xạ về **đúng 8 Canonical Em
 | Nhận lời khen, thưởng nóng, Kudos | **`love`** | Hạnh phúc bắn tim 3D ngập tràn |
 | Thông báo thường nhật, cập nhật nền | **`idle`** | Giữ thái độ bình thản, không làm phiền thị giác |
 
-### 5.3 Phân Loại Nhóm Quan Hệ Cục Bộ (Local Relationship Groups)
-Hệ thống **không bao giờ tự ý suy đoán** ai là người yêu, gia đình, sếp hay đồng nghiệp. Người dùng chủ động phân nhóm trên máy cá nhân:
-* `partner` (Người yêu / Vợ chồng) ➔ Mặc định kích hoạt `love`.
-* `family` (Gia đình) ➔ Mặc định kích hoạt `happy`.
-* `friends` (Bạn bè) ➔ Mặc định kích hoạt `happy` / `excited`.
-* `colleagues` (Đồng nghiệp) ➔ Mặc định kích hoạt `thinking` / `happy`.
-* `manager` (Quản lý / Sếp) ➔ Nâng mức ưu tiên lên `Important`, kích hoạt `thinking`.
-* `important` (Đối tác quan trọng) ➔ Vượt qua một số cooldown thông thường.
-* `ignored` (Nguồn bỏ qua) ➔ Tự động chuyển thẳng vào Inbox, không pop-up.
+### 5.3 Người Quen & Mối Quan Hệ (Familiar Contacts & Relationship Intelligence)
+Hệ thống **không bao giờ tự ý suy đoán** ai là người yêu, gia đình, sếp hay đồng nghiệp, và không phân tích nội dung trò chuyện để đoán quan hệ. Người dùng chủ động chỉ cho bé; bé chỉ **gợi ý** và **ghi nhớ metadata** khi được phép.
+
+**A. Mười một mối quan hệ** (`CONTACT_GROUPS`, `src/core/chat-filter.js`):
+
+| Mã | Nhãn | Mặc định |
+| :--- | :--- | :--- |
+| `partner` | 💕 Người yêu / Vợ chồng | cảm xúc `love` |
+| `family` | 👨‍👩‍👧 Gia đình | `happy` |
+| `relatives` | 👨‍👩‍👦 Người thân | `happy` |
+| `close_friends` | 👫 Bạn thân | `excited` |
+| `friends` | 🤝 Bạn bè | `happy` |
+| `manager` | 💼 Sếp / Quản lý | `thinking`, ưu tiên `important` |
+| `colleagues` | 👨‍💻 Đồng nghiệp | `thinking` |
+| `teacher` | 🎓 Thầy cô | `thinking` |
+| `important` | ⭐ Quan trọng | ưu tiên `important`, vượt cooldown |
+| `other` | ✏️ Khác (tên quan hệ tự đặt) | — |
+| `ignored` | 🔕 Bỏ qua | thẳng vào Hộp thư |
+
+**B. Quy tắc người quen** (`settings.contacts[]`): `{ id, name, kind: person|chat, app|null, targetId|null, group, label, emotion|null (tự động theo quan hệ), attention: auto|important|normal|silent|inbox, enabled, createdAt, updatedAt }`. Trùng (cùng app + loại + tên) được gộp, bản sau thắng.
+* `kind: person` khớp người gửi (trường `sender`, dòng "Tên: …" của tin nhóm, tiêu đề chat 1-1, hoặc người trong tiêu đề hoạt động "X @mentioned you").
+* `kind: chat` khớp **cả nhóm chat** (tiêu đề cuộc chat; với thông báo hoạt động thì lấy tên nhóm từ tiền tố nội dung).
+* `app` giới hạn quy tắc trong một ứng dụng ("Mẹ" trên Messenger ≠ "Mẹ" trên Zalo). So khớp chính xác, không phân biệt dấu.
+
+**C. Nguồn danh sách chat cho bộ chọn** (bước ① ứng dụng → ② cuộc chat / thành viên → ③ quan hệ + cảm xúc + hành vi):
+* **Ứng dụng trên máy** (`src/main/messaging-apps.js`): dò app nhắn tin đã cài / đang chạy (danh sách tiến trình + đường dẫn cài đặt, icon thật qua QuickLook) — không đọc gì bên trong app.
+* **API chính thức** (`src/integrations/chat-sources.js`): *Teams* — Microsoft Graph `/me/chats` (không `$expand`, 25–50 chat/trang), tên chat 1-1 qua `$batch` `/chats/{id}/members`, thành viên nhóm tải khi mở; *Slack* — `conversations.list/members`, `users.info`. Chỉ tên & id, không bao giờ đọc tin nhắn hay `lastMessagePreview`. Danh sách (chỉ tên) lưu `chat-sources-cache.json`, mở tức thì, làm mới nền sau 5 phút. Trạng thái trung thực: `ready · not_connected · unsupported · permission · error`.
+* **Danh bạ tự học** (`src/core/contact-directory.js`): với Zalo, Messenger, Telegram, iMessage… (không có API danh sách chat cho tài khoản cá nhân) — học app, tên chat, 1-1/nhóm, tên người gửi, số tin theo ngày (14 ngày), số tin quan trọng. **Không lưu nội dung.** Không học khi nội dung bị ẩn (Privacy ≠ full) hoặc khi tắt `privacy.learnContacts`.
+* Bộ chọn gộp mục trùng (cùng loại + cùng tên), gộp thành viên trùng ("Nhuc" → "Nhuc Nguyen" khi chỉ có một người khớp), lọc *Chat / Cuộc họp / Tất cả*, tìm không dấu kể cả thành viên, phím ↑↓ Enter Esc, cuộn vô hạn.
+
+**D. Gợi ý "Hay nhắn nhất":** người / nhóm có nhiều tin nhất 7 ngày qua mà chưa có quy tắc → nút *Xếp nhóm* điền sẵn bước ③. Chỉ gợi ý, không bao giờ tự tạo quy tắc.
+
+**E. Xếp nhóm nhanh:** chuột phải vào **thẻ thông báo** → menu "👤 X là… / 👥 Cả nhóm Y là…" (đủ 11 quan hệ + gỡ); nút **👥 Xếp nhóm** trên dòng Hộp thư. Không cần mở Control Center.
+
+**F. Giờ theo mối quan hệ** (`settings.relationships[group]`): `quietEnabled + quietStart/quietEnd` (ngoài giờ → Hộp thư, lý do `relationship_hours`), `afterHours` (vẫn hiện trong giờ yên tĩnh toàn cục), `digest` (luôn gom vào Hộp thư, `relationship_digest`). Hành vi riêng của một người luôn thắng quy tắc của quan hệ.
+
+**G. Bộ nhớ thích nghi** (`privacy.adaptiveMemory`, mặc định bật, chỉ metadata): người gửi có ≥ 5 tin và ≥ 50 % quan trọng theo *nội dung* → ưu tiên `important`; nhóm ≥ 40 tin/ngày → hiện nhẹ nhàng, không kêu. Học từ mức ưu tiên của nội dung (không tự học từ quyết định của chính nó), không bao giờ ghi đè quy tắc người dùng; hiển thị "Bé nhận thấy…", tắt được, xóa bằng "🧹 Quên danh sách đã gặp" (không đụng quy tắc, kết nối hay tin nhắn gốc).
 
 ### 5.4 Cường Độ Biểu Cảm (Emotion Intensity Levels)
 * **Level 0 (Không phản ứng):** Chỉ hiện thẻ thông báo tĩnh, thú cưng giữ nguyên tư thế nhàn rỗi.
@@ -295,12 +331,15 @@ Khi điều kiện thỏa mãn, người dùng cấu hình:
 
 ### 6.3 Thứ Tự Giải Quyết Xung Đột (Conflict Resolution Hierarchy)
 Khi một thông báo thỏa mãn nhiều quy tắc, bộ máy giải quyết theo thứ tự ưu tiên giảm dần:
-1. **Quy tắc ghi đè cụ thể của người dùng (Explicit User Override).**
-2. **Quy tắc người gửi cụ thể (Specific Sender Rule).**
-3. **Quy tắc nhóm người gửi (Contact Group Rule).**
-4. **Quy tắc ứng dụng & loại sự kiện (App & Event Rule).**
-5. **Phân tích cảm xúc nội dung cục bộ (Content Mood Classification).**
-6. **Hành vi mặc định theo tính cách nhân vật (Default Personality Preset).**
+1. **Quy tắc ghi đè cụ thể của người dùng (Explicit User Override / Custom Rule).**
+2. **Quy tắc riêng của một người (Person Rule)** — vd. sếp nhắn trong nhóm đồng nghiệp vẫn được đối xử như sếp.
+3. **Quy tắc của nhóm chat (Group-Chat Rule).**
+4. **Quy tắc theo mối quan hệ (Relationship Policy)** — giờ riêng, digest, vẫn hiện ngoài giờ.
+5. **Quy tắc ứng dụng & loại sự kiện (App & Event Rule).**
+6. **Quy tắc thông báo chung / phân tích cảm xúc nội dung cục bộ (General Rules / Content Mood).**
+7. **Hành vi mặc định theo tính cách nhân vật (Default Personality Preset).**
+
+Bộ nhớ thích nghi (§5.3 G) chỉ áp dụng khi **không** có quy tắc 2–4. Người quen thắng cả bộ lọc chat "Chỉ khi liên quan đến tôi". Thực thi trong engine: `src/core/contact-rules.js → contactPolicy()` → `AttentionEngine.decide()`; tin nhắn khẩn cấp (`critical`) vẫn vượt mọi lớp như trước.
 
 > [!CAUTION]
 > **Quyền Tối Thượng Của Riêng Tư & Tập Trung:**
@@ -331,6 +370,8 @@ Mọi thông báo có nguồn gốc rõ ràng bắt buộc phải mở **chính 
   > [!IMPORTANT]
   > **Tuyệt đối không đồng nhất Reporter là Người Giao Việc!** Nếu issue được tạo ra đã gán sẵn cho người dùng hoặc không có lịch sử gán, thẻ hiển thị trung thực: *"Người giao: không có thông tin"*.
 * **Hành động chính:** Bấm nút **"↗ Mở Issue"** mở tức thì trang chi tiết trên Jira.
+* **Hoạt động trên việc liên quan tới bạn (V3.7):** JQL `(assignee | reporter | watcher = currentUser()) AND updated >= -3d` qua `/rest/api/3/search/jql`; với mỗi việc vừa đổi: bình luận mới của người khác → *"💬 X bình luận KEY"*, có @nhắc bạn trong ADF → *"📣 X nhắc bạn ở KEY"* (ưu tiên `important`), không có bình luận → *"✏️ X cập nhật KEY"* từ changelog. Bỏ qua thay đổi của chính bạn và thay đổi trạng thái/người giao trên việc của bạn (đã có thẻ riêng).
+* **Giới hạn trung thực:** chuông thông báo trên web là trung tâm thông báo chung của Atlassian — **không có API công khai**; app tái tạo các sự kiện quan trọng qua API chính thức.
 
 ### 7.3 Quy Trình Duyệt Pull Request Bitbucket (Bitbucket PR Review)
 * **Thông tin hiển thị:** Tiêu đề PR, Tên kho mã nguồn (Repository), Mã PR (#ID), Tác giả, Người đánh giá, Nhánh nguồn ➔ Nhánh đích.
@@ -340,6 +381,8 @@ Mọi thông báo có nguồn gốc rõ ràng bắt buộc phải mở **chính 
   * Chỉ hiển thị *"✓ Đã approve"* khi API trả về mã thành công HTTP 200/201.
   * Phân định rạch ròi giữa **Approve** và **Merge**: Thao tác Approve **tuyệt đối không tự động gộp (merge)** pull request.
   * Bị ẩn hoàn toàn khi người dùng bật chế độ ẩn nội dung riêng tư.
+* **Hoạt động trên PR của bạn (V3.7):** `/workspaces/{ws}/pullrequests/{me}` (endpoint `/pullrequests/{user}` cũ đã bị Bitbucket khai tử) so với ảnh chụp lần trước → *"✅ X đã approve"*, *"⛔ X yêu cầu sửa"* (`important`), *"💬 X bình luận PR của bạn"*. Bỏ qua bình luận của chính bạn.
+* **Không mất sự kiện khi khởi động lại:** trạng thái "đã thấy" (chỉ id, mốc thời gian, bộ đếm) lưu ở `userData/composio-seen.json`; trước đây mỗi lần khởi động lại đều ghi mốc lại và bỏ qua thay đổi trong khoảng đó.
 
 ### 7.4 Hành Vi Thao Tác Trên Thẻ Thông Báo
 Mỗi thẻ thông báo hỗ trợ đầy đủ các thao tác cơ bản:
@@ -506,7 +549,7 @@ Hệ thống tích hợp đa kênh theo mô hình **Integration Provider Router*
 
 ### 12.2 Chế Độ Phân Phối Sự Kiện Minh Bạch (Delivery Modes)
 * **`realtime_push`:** Sự kiện đẩy từ server đến desktop tức thì qua WebSocket / SSE.
-* **`near_realtime_poll`:** Quét định kỳ ngắn (mặc định 2 phút với Jira, Bitbucket, Gmail qua Composio) kèm nhãn minh bạch thời gian trễ cho người dùng.
+* **`near_realtime_poll`:** Quét định kỳ ngắn (mặc định 2 phút với Jira, Bitbucket, Gmail qua Composio) kèm nhãn minh bạch thời gian trễ cho người dùng. Phản hồi lớn của Composio chỉ trả `data_preview` (bản rút gọn) — client phải xin ít dữ liệu hơn (ít trường / trang nhỏ) thay vì coi bản rút gọn là đầy đủ.
 * **`scheduled_sync`:** Đồng bộ theo lịch hẹn trước.
 * **`native_os`:** Bắt trực tiếp từ Trung tâm Thông báo hệ điều hành.
 * **`manual`:** Chỉ làm mới khi bấm nút Refresh.
@@ -522,7 +565,7 @@ Máy chủ nội bộ Desktop chỉ lắng nghe an toàn tại `http://127.0.0.1
 
 Duy trì địa chỉ cục bộ `http://127.0.0.1:3721` và cửa sổ Native Desktop Settings với 10 phân hệ hoàn chỉnh:
 1. **Dashboard:** Tổng quan trạng thái thú cưng, Live 3D Stage, hàng đợi thông báo và độ trễ tích hợp.
-2. **Pet Characters:** Chọn nhân vật (Mochi, Boba, Cloud, Pip), xem Live 3D Preview, nạp file `.glb`.
+2. **Pet Characters:** Chọn nhân vật (Mochi, Boba, Cloud, Pip), xem Live 3D Preview, nạp file `.glb`; panel **👥 Người quen** (§5.3: ứng dụng → cuộc chat → quan hệ/cảm xúc/hành vi, Hay nhắn nhất, danh sách người quen, giờ theo quan hệ, bộ nhớ).
 3. **Emotion & Personality:** 5 Preset tính cách, độ nhạy cảm xúc, tùy biến quy tắc Keyword & App Rules.
 4. **Notifications:** Kiểu cầm thẻ (Billboard, Peeker, Courier), 5 Theme, kích cỡ, thời gian hiển thị.
 5. **Attention Management:** Mức ưu tiên, khoảng thời gian giãn cách (cooldown), gom nhóm, bộ lọc tắt tiếng nguồn.
@@ -555,13 +598,13 @@ Quy ước trạng thái:
 | **Phase 3** | **P0** | **Xưởng Quy Tắc Cảm Xúc Cơ Bản (Basic Rule Studio)** | `[x]` | `src/control/control.js`, `src/core/emotion-engine.js` | Tạo/sửa/xóa quy tắc app, từ khóa, kiểm thử độ nhạy trực tiếp trong Control Center |
 | **Phase 4** | **P0** | **Thông Báo Hành Động & Quyền Riêng Tư (Workflows & Privacy)** | `[x]` | `src/core/privacy.js`, `src/integrations/*`, `nc-deeplink.js` | 4 mức Privacy, Jira changelog assigner, Bitbucket PR review & unit test approve (75/75 pass) |
 | **Phase 5** | **P0** | **Quản Lý Chú Ý & Hoạt Họa Mượt Mà (Attention & Animation)** | `[x]` | `src/core/attention-engine.js`, `animation-controller.js` | 4 ưu tiên, cooldown 3 tin/10s, Focus modes, blend 0.18s–0.35s, 60 FPS (74.9 FPS đo thực tế) |
-| **Phase 6** | **P1** | **Hồ Sơ Quan Hệ Cá Nhân Hóa (Contact Personality Profiles)** | `[x]` | `src/core/chat-filter.js`, `emotion-engine.js`, `attention-engine.js`, `control.js` | 7 nhóm quan hệ do người dùng gán (không tự đoán), khớp tên không dấu; manager/important nâng ưu tiên, ignored vào Inbox; panel "👥 Người quen" (81/81 test pass, E2E trên Windows 04/11/2026) |
+| **Phase 6** | **P1** | **Người Quen & Mối Quan Hệ (Familiar Contacts & Relationship Intelligence)** | `[x]` | `chat-filter.js`, `contact-rules.js`, `contact-directory.js`, `integrations/chat-sources.js`, `main/messaging-apps.js`, `attention-engine.js`, `control.js` | 11 quan hệ; quy tắc người / nhóm chat / theo app; Teams Graph (467 chat thật, 05/11/2026) + Slack + danh bạ tự học; Hay nhắn nhất; xếp nhóm nhanh từ thẻ & Hộp thư; giờ theo quan hệ; ưu tiên người > nhóm > quan hệ (106/107 test pass — 1 lỗi Windows có từ trước) |
 | **Phase 7** | **P1** | **Rule Studio Nâng Cao & Giả Lập Cảm Xúc (Emotion Simulator)** | `[-]` | `src/control/control.js`, `src/control/index.html` | Đã có bộ test câu thoại và thanh chỉnh độ nhạy; đang hoàn thiện giả lập tương tác 3D trực tiếp |
 | **Phase 8** | **P1** | **Trích Xuất Thông Minh & Thao Tác Nhanh (Smart Payloads)** | `[-]` | `src/adapters/ics-parser.js`, `src/core/privacy.js` | Trích xuất link họp an toàn; Jira/Bitbucket deep links; đang chờ module copy OTP an toàn |
 | **Phase 9** | **P1** | **Mở Rộng Thư Viện Âm Thanh (Audio Asset Packs)** | `[ ]` | `assets/pets/*/sounds/` | Đang dùng Procedural Web Audio chất lượng cao; chờ nạp gói file âm thanh `.mp3` studio |
 | **Phase 10**| **P1** | **Nâng Cấp Digest & Mở Rộng Ứng Dụng (Advanced Digest)** | `[-]` | `src/core/inbox-store.js` | Hộp thư Inbox bền vững qua khởi động lại, gom nhóm cơ bản; đang hoàn thiện phân nhóm 4 mục chi tiết |
 | **Phase 11**| **P2** | **YouTube Pet Video Frame (Khung Video Thu Nhỏ)** | `[ ]` | *Đã gỡ bỏ theo yêu cầu người dùng ngày 04/11/2026* | Giữ ở danh mục tùy chọn P2; không triển khai trong MVP để đảm bảo gọn nhẹ |
-| **Phase 12**| **P2** | **Bộ Nhớ Cảm Xúc Thông Minh (Smart Emotion Memory)** | `[ ]` | `src/core/emotion-engine.js` | Kế hoạch P2: Gợi ý quy tắc từ lịch sử điều chỉnh của người dùng |
+| **Phase 12**| **P2** | **Bộ Nhớ Cảm Xúc Thông Minh (Smart Emotion Memory)** | `[-]` | `src/core/contact-directory.js`, `contact-rules.js` | Đã có bộ nhớ thích nghi theo người gửi/nhóm (chỉ metadata, xem lại/tắt/xóa được) + gợi ý "Hay nhắn nhất"; chưa có gợi ý quy tắc từ lịch sử sửa cảm xúc |
 | **Phase 13**| **P2** | **Hồ Sơ Tính Cách Theo Khung Giờ (Daily Personality Profiles)**| `[ ]` | `src/core/settings-store.js` | Kế hoạch P2: Chuyển đổi tự động hồ sơ Ngày làm việc / Buổi tối thư giãn |
 | **Phase 14**| **P2** | **Tùy Biến Nâng Cao & Chủ Đề Theo Mùa (Seasonal Themes)** | `[-]` | `src/renderer/css/style.css`, `src/control/control.css` | Đã có 5 Visual Themes hoàn chỉnh; các phụ kiện trang trí theo mùa sẽ bổ sung ở P2 |
 
@@ -613,12 +656,15 @@ Quy ước trạng thái:
 
 #### 🔸 P1 — TRƯỞNG THÀNH SẢN PHẨM (PERSONALIZATION & MATURITY)
 
-- [x] **Phase 6: Hồ Sơ Quan Hệ Cá Nhân Hóa (Contact Personality Profiles)**
-  - [x] Phân loại tin nhắn riêng 1-1, nhắc tên (@mention), @all trong `chat-filter.js`.
-  - [x] Tắt tiếng người gửi: thêm người đó vào nhóm `ignored` (tin vào Inbox). *Đính chính 04/11/2026: bản trước ghi `mutedSenders` đã có nhưng mã nguồn chưa từng có trường này; nay thay bằng nhóm `ignored`.*
-  - [x] Panel "👥 Người quen" trong Control Center (trang Thú cưng): 7 nhóm `partner`, `family`, `friends`, `colleagues`, `manager`, `important`, `ignored`; cảm xúc riêng cho từng người (tùy chọn).
-  - [x] Khớp người gửi theo tên chính xác, không phân biệt dấu: trường `sender`, dòng "Tên: …" của tin nhóm, hoặc tiêu đề cuộc chat. Không bao giờ tự suy đoán quan hệ.
-  - [x] Thứ tự §6.3: quy tắc tùy chỉnh → người quen → (thái độ, nếu bật) → nội dung/ứng dụng/từ khóa → mặc định.
+- [x] **Phase 6: Người Quen & Mối Quan Hệ (Familiar Contacts & Relationship Intelligence)**
+  - [x] Phân loại tin nhắn riêng 1-1, nhắc tên (@mention), @all trong `chat-filter.js`; tiêu đề hoạt động ("X @mentioned you", "forwarded a message", "reacted…") được tách đúng người gửi và nhóm.
+  - [x] 11 mối quan hệ (§5.3 A); quy tắc cho một người hoặc cả nhóm chat, gắn theo ứng dụng; cảm xúc + hành vi riêng; bật/tắt; sửa; xóa; tìm & sắp xếp danh sách người quen.
+  - [x] Bộ chọn ứng dụng → cuộc chat → thành viên (chọn nhiều): app đã cài/đang chạy (icon thật), Teams qua Microsoft Graph, Slack Web API, danh bạ tự học cho app không có API; gộp mục trùng; lọc Chat/Cuộc họp; tìm không dấu; cuộn vô hạn.
+  - [x] Gợi ý "Hay nhắn nhất" (chỉ gợi ý) và xếp nhóm nhanh từ thẻ thông báo (chuột phải) và Hộp thư.
+  - [x] Giờ theo mối quan hệ, vẫn hiện ngoài giờ, gom digest — tích hợp Attention Engine, Focus Mode, Quiet Hours.
+  - [x] Thứ tự §6.3 trong engine: người > nhóm chat > quan hệ > ứng dụng > chung > mặc định; người quen thắng bộ lọc "chỉ tin dành cho tôi".
+  - [x] Riêng tư: chỉ lưu tên/metadata, không học khi nội dung bị ẩn, tắt được, "Quên danh sách đã gặp" có xác nhận. Báo cáo: `docs/reports/FAMILIAR_CONTACTS_REPORT.md`.
+  - [ ] Dịch tiếng Anh cho panel mới; kiểm thử Slack API với bot token thật.
 
 - [-] **Phase 7: Rule Studio Nâng Cao & Giả Lập Cảm Xúc (Advanced Rules & Simulator)**
   - [x] Bộ thử nghiệm cảm xúc từ chuỗi văn bản mẫu trong Control Center.
@@ -646,7 +692,8 @@ Quy ước trạng thái:
   - [x] Đã gỡ bỏ khỏi phiên bản v3.4.0 theo yêu cầu người dùng ngày 04/11/2026 để đảm bảo ứng dụng nhẹ nhàng, tập trung.
   - [ ] Lưu trữ mã nguồn dự phòng; chỉ xem xét kích hoạt lại khi có yêu cầu đặc biệt từ người dùng.
 
-- [ ] **Phase 12: Bộ Nhớ Cảm Xúc Thông Minh (Smart Emotion Memory)**
+- [-] **Phase 12: Bộ Nhớ Cảm Xúc Thông Minh (Smart Emotion Memory)**
+  - [x] Bộ nhớ thích nghi theo người gửi / nhóm chat từ metadata (tần suất, mức quan trọng theo nội dung), xem lại "Bé nhận thấy…", tắt và xóa được.
   - [ ] Ghi nhận phản hồi sửa cảm xúc của người dùng cục bộ.
   - [ ] Chủ động đề xuất quy tắc mới khi phát hiện hành vi điều chỉnh lặp lại (luôn hỏi ý kiến người dùng trước khi lưu).
 
@@ -662,7 +709,7 @@ Quy ước trạng thái:
 
 ### TIÊU CHUẨN NGHIỆM THU PHÁT HÀNH (P0 RELEASE GATE)
 
-Ứng dụng chỉ được phát hành chính thức bản v3.6.0 khi đạt trọn vẹn 10 tiêu chuẩn:
+Ứng dụng chỉ được phát hành chính thức bản v3.7.0 khi đạt trọn vẹn 10 tiêu chuẩn:
 1. **Toàn vẹn tính năng hiện hữu:** Tất cả các chức năng đã xây dựng ở các phiên bản trước được kế thừa trọn vẹn, không gãy đổ.
 2. **Bản sắc âm thanh 4 nhân vật:** Tiếng kêu của Mochi, Boba, Cloud, Pip tách bạch, rõ nét, không lỗi âm thanh.
 3. **Mèo Mochi hoàn thiện:** Nhân vật pilot hoạt động trơn tru với đầy đủ 8 cảm xúc quy chuẩn.
@@ -672,7 +719,7 @@ Quy ước trạng thái:
 7. **Kiểm soát bảo mật & quyền riêng tư nghiêm ngặt:** Chế độ ẩn thông tin hoạt động hoàn hảo, không rò rỉ dữ liệu nhạy cảm vào log.
 8. **Quản lý sự chú ý chống spam hiệu quả:** Bỏ trùng, cooldown và gom nhóm hoạt động ổn định khi nhận bão thông báo.
 9. **Hoạt họa 3D mượt mà đạt chuẩn 60 FPS:** Không pose pop, không giật cục khi chuyển trạng thái, tự hồi phục sau khi máy tính sleep.
-10. **Đo đạc kiểm thử minh bạch:** Toàn bộ 75+ test tự động vượt qua (pass 100%), hiệu năng CPU và RAM được kiểm chứng thực tế.
+10. **Đo đạc kiểm thử minh bạch:** Toàn bộ test tự động vượt qua (hiện 106/107 — còn 1 test trạng thái Windows listener hỏng từ trước, phải sửa trước khi phát hành), hiệu năng CPU và RAM được kiểm chứng thực tế.
 
 ---
 
@@ -690,6 +737,7 @@ Tất cả các đánh giá kỹ thuật và kết quả đo đạc bắt buộc
 8. **`PRIVACY_VERIFICATION_REPORT.md`:** Báo cáo kiểm định an toàn chuỗi nhạy cảm (Synthetic Secret Marker test) qua 4 chế độ hiển thị.
 9. **`PERFORMANCE_REPORT.md`:** Báo cáo tiêu thụ RAM, CPU khi idle (0 frame) và khi render active trên cả macOS và Windows.
 10. **`KNOWN_LIMITATIONS.md`:** Danh sách công khai các giới hạn kỹ thuật chưa khắc phục để người dùng và đội ngũ phát triển nắm rõ.
+11. **`FAMILIAR_CONTACTS_REPORT.md`:** Người quen & mối quan hệ — mô hình dữ liệu, thứ tự ưu tiên, nguồn danh sách chat, quyền riêng tư, kiểm thử, giới hạn.
 
 ---
 

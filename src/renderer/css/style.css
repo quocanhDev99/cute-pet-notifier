@@ -202,6 +202,25 @@ html, body {
   font-size: 13.5px; font-weight: 600; line-height: 1.45; color: var(--muted);
   display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
 }
+/* ---------------- Jira / Bitbucket ticket body */
+.tk-event { position: relative; z-index: 1; font-size: 12.5px; font-weight: 800; color: color-mix(in srgb, var(--c) 70%, #3a2e39); margin: -2px 0 6px; }
+.tk-line { position: relative; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 4px; }
+.tk-key { font: 800 11.5px/1 ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: .02em; padding: 4px 7px; border-radius: 7px; background: #EEF3FF; color: #2453B8; }
+.tk-type { font-size: 11.5px; font-weight: 700; color: var(--muted); }
+.tk-tags { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 5px; margin: 2px 0 8px; }
+.tk-tags > span { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 999px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.tk-status i { font-style: normal; font-size: 10px; }
+.tk-status.tone-todo { background: #EEF0F4; color: #4D5B70; }
+.tk-status.tone-progress { background: #E3EEFF; color: #1F5BC7; }
+.tk-status.tone-review { background: #F1E8FF; color: #6B3FC4; }
+.tk-status.tone-done { background: #DFF5E8; color: #187A47; }
+.tk-status.tone-danger { background: #FFE4E4; color: #B42318; }
+.tk-prio { background: #FFF1DE; color: #A35A00; }
+.tk-label { background: rgba(0,0,0,.05); color: #5A4B57; font-weight: 700 !important; }
+.card .message.tk-quote { padding: 6px 10px; border-left: 3px solid color-mix(in srgb, var(--c) 45%, transparent); background: rgba(255,255,255,.45); border-radius: 0 10px 10px 0; color: #4b3f49; -webkit-line-clamp: 3; }
+.tk-foot { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px; font-size: 11.5px; color: var(--muted); }
+.tk-foot b { color: #3a2e39; font-weight: 800; }
+.tk-branch { font: 700 11px/1.4 ui-monospace, "SF Mono", Menlo, monospace; color: #5A4B57; }
 .card footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; position: relative; z-index: 1; }
 /* Hint sits on its own line under the buttons so it never squeezes or overlaps them
    (fonts/widths differ between machines). */
@@ -254,6 +273,12 @@ html, body {
 }
 .theme-dark .chip { background: rgba(255,255,255,.08); color: #D8D0F5; }
 .theme-dark .chip.emo { background: color-mix(in srgb, var(--ec, var(--c)) 25%, #1d1a35); color: color-mix(in srgb, var(--ec, var(--c)) 60%, white); }
+.theme-dark .tk-key { background: rgba(120,160,255,.18); color: #B9CCFF; }
+.theme-dark .tk-tags > span { filter: saturate(.9) brightness(.92); }
+.theme-dark .tk-label { background: rgba(255,255,255,.08); color: #D8D0F5; }
+.theme-dark .tk-foot b, .theme-dark .tk-branch, .theme-dark .card .message.tk-quote { color: #E6E0F8; }
+.theme-dark .card .message.tk-quote { background: rgba(255,255,255,.06); }
+.theme-dark .tk-event { color: color-mix(in srgb, var(--c) 55%, white); }
 .theme-dark .icon-btn.close { background: rgba(255,255,255,.08); color: #D8D0F5; }
 .theme-dark .card-inner { box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 1.5px 0 var(--edge1), 0 3px 0 var(--edge1), 0 4.5px 0 var(--edge2), 0 6px 0 var(--edge2), 0 24px 44px -12px rgba(0,0,0,.6); }
 

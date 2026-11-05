@@ -375,6 +375,36 @@ function formatArrival(ts) {
   return { text: `${time} · ${date}`, iso: d.toISOString() };
 }
 
+/**
+ * Jira / Bitbucket card body: what happened → key · type · repo → title → status / priority / labels
+ * → the comment (quoted) → people and branch. Everything comes from item.meta (already sanitized).
+ */
+const TONE_DOT = { todo: '○', progress: '◐', review: '◑', done: '●', danger: '■' };
+function ticketHtml(item) {
+  const m = item.meta;
+  const title = m.key && String(item.title).startsWith(`${m.key} `) ? String(item.title).slice(m.key.length + 1) : item.title;
+  const prioUp = /highest|critical|blocker/i.test(m.priority || '') ? '⏫' : /high/i.test(m.priority || '') ? '🔺' : /low/i.test(m.priority || '') ? '🔻' : '▪️';
+  const tags = [
+    m.status ? `<span class="tk-status tone-${esc(m.statusTone || 'todo')}"><i>${TONE_DOT[m.statusTone] || '○'}</i>${esc(m.status)}</span>` : '',
+    m.priority && !/^(medium|normal|trung bình)$/i.test(m.priority) ? `<span class="tk-prio">${prioUp} ${esc(m.priority)}</span>` : '',
+    ...(m.labels || []).map(l => `<span class="tk-label">#${esc(l)}</span>`)
+  ].filter(Boolean).join('');
+  return `
+      ${m.event ? `<div class="tk-event">${esc(m.event)}</div>` : ''}
+      <div class="tk-line">
+        ${m.key ? `<span class="tk-key">${esc(m.key)}</span>` : ''}
+        ${m.type ? `<span class="tk-type">${esc(m.type)}</span>` : ''}
+        ${m.repo ? `<span class="tk-type">📦 ${esc(m.repo)}</span>` : ''}
+      </div>
+      <h3 class="title">${esc(title)}</h3>
+      ${tags ? `<div class="tk-tags">${tags}</div>` : ''}
+      ${item.message ? `<p class="message tk-quote">${esc(item.message).replace(/\n/g, '<br>')}</p>` : ''}
+      ${(m.people || []).length || m.branch ? `<div class="tk-foot">
+        ${(m.people || []).map(p => `<span><small>${esc(p.label)}</small> <b>${esc(p.value)}</b></span>`).join('')}
+        ${m.branch ? `<span class="tk-branch">⎇ ${esc(m.branch)}</span>` : ''}
+      </div>` : ''}`;
+}
+
 function buildCard(item) {
   const base = APP_META[item.app] || { label: item.app && item.app !== 'default' ? item.app : t('defaultApp'), icon: '🔔' };
   const app = { ...base, label: item.appName || (getLang() === 'en' && I18N.en.apps[item.app]) || base.label };
@@ -393,8 +423,8 @@ function buildCard(item) {
         ${prio ? `<span class="chip prio prio-${esc(item.priority)}">${esc(prio)}</span>` : ''}
       </header>
       <time class="card-time" datetime="${arrival.iso}">🕒 ${esc(arrival.text)}</time>
-      <h3 class="title">${esc(item.title)}</h3>
-      ${item.message ? `<p class="message">${esc(item.message).replace(/\n/g, '<br>')}</p>` : ''}
+      ${item.meta ? ticketHtml(item) : `<h3 class="title">${esc(item.title)}</h3>
+      ${item.message ? `<p class="message">${esc(item.message).replace(/\n/g, '<br>')}</p>` : ''}`}
       ${(item.items || []).length ? `<ul class="rows">${item.items.map(r => `
         <li class="row" data-key="${esc(r.key)}">
           <div class="row-main"><b>${esc(r.title)}</b>${r.subtitle ? `<small>${esc(r.subtitle)}</small>` : ''}</div>
@@ -648,7 +678,10 @@ document.addEventListener('mousemove', (e) => {
 
 document.addEventListener('contextmenu', (e) => {
   e.preventDefault(); // the overlay never shows Chromium's own menu
-  if (onPetBody(e) && api && api.showContextMenu) api.showContextMenu();
+  if (!api || !api.showContextMenu) return;
+  // Right-click a card → "Xếp nhóm nhanh" for its sender / chat (main builds the menu).
+  if (current && current.el && current.el.contains(e.target)) { api.showContextMenu({ cardId: current.item.id }); return; }
+  if (onPetBody(e)) api.showContextMenu();
 });
 document.addEventListener('dblclick', (e) => { if (onPetBody(e) && api && !current) api.openControlCenter(); });
 

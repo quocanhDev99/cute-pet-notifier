@@ -50,6 +50,7 @@ function project(item, mode, lang = 'vi') {
     items: [],
     moreCount: 0,
     actions: [],
+    meta: null, // ticket key / status / labels are content too
     rule: 'hidden', reasons: undefined, // classification details may quote the message
     members: Array.isArray(item.members) ? item.members.map(m => project(m, mode, lang)) : item.members
   };

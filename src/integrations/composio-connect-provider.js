@@ -21,6 +21,30 @@ const logoOf = (slug) => `https://logos.composio.dev/api/${encodeURIComponent(sl
 const slugOf = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 60);
 const pick = (o, ...keys) => { for (const k of keys) { const v = k.split('.').reduce((x, p) => (x == null ? x : x[p]), o); if (v != null && v !== '') return v; } return undefined; };
 const arrAt = (o, ...keys) => { for (const k of keys) { const v = pick(o, k); if (Array.isArray(v)) return v; } return Array.isArray(o) ? o : []; };
+/** Jira status → colour tone for the card (by status category, refined by name). */
+const jiraTone = (name, cat) => {
+  const n = String(name || '').toLowerCase();
+  if (/block|reject|fail|cancel|hủy|huỷ/.test(n)) return 'danger';
+  if (/review|qa|test|verify|uat|kiểm/.test(n)) return 'review';
+  const c = String(cat || '').toLowerCase();
+  if (c === 'done' || /done|closed|resolved|xong|hoàn/.test(n)) return 'done';
+  if (c === 'indeterminate' || /progress|doing|đang/.test(n)) return 'progress';
+  return 'todo';
+};
+/** Card details shared by every Jira card. */
+const jiraMeta = (o) => ({
+  kind: 'jira', key: o.key, type: o.type || null, status: o.status || null, statusTone: o.status ? jiraTone(o.status, o.statusCat) : null,
+  priority: o.priority || null, labels: Array.isArray(o.labels) ? o.labels.slice(0, 5) : [], people: o.people || [], event: o.event || null
+});
+
+/** Plain text of an Atlassian Document Format body (comments); mentions become "@Name". */
+const adfText = (n) => {
+  if (!n || typeof n !== 'object') return typeof n === 'string' ? n : '';
+  if (n.type === 'text') return String(n.text || '');
+  if (n.type === 'mention') return String((n.attrs && n.attrs.text) || '@…');
+  const inner = Array.isArray(n.content) ? n.content.map(adfText).join(n.type === 'doc' ? ' ' : '') : '';
+  return inner.replace(/\s+/g, ' ').trim();
+};
 const toTime = (v) => { if (v == null || v === '') return null; const n = Number(v); const t = Number.isFinite(n) && n > 1e11 ? n : Number.isFinite(n) && n > 1e9 ? n * 1000 : Date.parse(v); return Number.isFinite(t) ? t : null; };
 
 /**
@@ -62,10 +86,10 @@ const RECIPES = {
     notifyExisting: true // a meeting that is about to start is news even on the first poll
   },
   jira: {
-    name: 'Jira', event: 'Việc mới giao cho bạn / việc đổi trạng thái', app: 'jira',
+    name: 'Jira', event: 'Việc mới giao cho bạn, đổi trạng thái, bình luận & @nhắc tên', app: 'jira',
     // Open issues assigned to me. Item id = key@status → a card only for a NEW assignment or a
     // STATUS change, not for every edit (comments, own edits…).
-    tool: () => ({ tool_slug: 'JIRA_SEARCH_FOR_ISSUES_USING_JQL_GET', arguments: { jql: 'assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC', max_results: 20, fields: ['summary', 'updated', 'status', 'priority', 'reporter'] } }),
+    tool: () => ({ tool_slug: 'JIRA_SEARCH_FOR_ISSUES_USING_JQL_GET', arguments: { jql: 'assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC', max_results: 20, fields: ['summary', 'updated', 'status', 'priority', 'reporter', 'labels', 'issuetype'] } }),
     items: (d) => arrAt(d, 'issues', 'data.issues').map(i => {
       // Composio returns flattened issues (summary, status{name}, browser_url…); raw Jira uses fields.*.
       const key = String(pick(i, 'key') || '');
@@ -75,33 +99,38 @@ const RECIPES = {
       const url = /^https:\/\/[a-z0-9-]+\.atlassian\.net\/browse\//i.test(browser) ? browser : site && key ? `${site}/browse/${encodeURIComponent(key)}` : undefined;
       const status = String(pick(i, 'status.name', 'fields.status.name') || (typeof i.status === 'string' ? i.status : ''));
       const reporter = String(pick(i, 'reporter.display_name', 'reporter.displayName', 'fields.reporter.displayName') || '');
-      const prio = String(pick(i, 'priority.name', 'fields.priority.name') || '').toLowerCase();
+      const prioName = String(pick(i, 'priority.name', 'fields.priority.name') || '');
+      const prio = prioName.toLowerCase();
+      const summary = String(pick(i, 'summary', 'fields.summary') || '');
+      const labels = (Array.isArray(pick(i, 'labels')) ? pick(i, 'labels') : Array.isArray(pick(i, 'fields.labels')) ? pick(i, 'fields.labels') : []).map(String);
+      const type = String(pick(i, 'issuetype.name', 'issue_type.name', 'fields.issuetype.name') || (typeof i.issuetype === 'string' ? i.issuetype : ''));
+      const statusCat = pick(i, 'status.statusCategory.key', 'status.status_category.key', 'fields.status.statusCategory.key');
       return {
-        id: `${key}@${status}`, title: `🧩 ${key} ${pick(i, 'summary', 'fields.summary') || ''}`.trim(),
-        message: [status && `Trạng thái: ${status}`, reporter && `Người tạo: ${reporter}`].filter(Boolean).join(' · '),
+        id: `${key}@${status}`, title: `${key} ${summary}`.trim(), message: '',
         url, at: toTime(pick(i, 'updated', 'fields.updated')),
         priority: /highest|critical|blocker/.test(prio) ? 'critical' : /high/.test(prio) ? 'important' : 'normal',
-        key, summary: String(pick(i, 'summary', 'fields.summary') || ''), status, reporter
+        key, summary, status, reporter,
+        meta: jiraMeta({ key, type, status, statusCat, priority: prioName, labels, people: reporter ? [{ label: 'Người tạo', value: reporter }] : [] })
       };
     }),
     async enrich(provider, it, { isChange }) {
       if (isChange) {
-        it.title = `🔄 ${it.key} → ${it.status || 'trạng thái mới'}`;
-        it.message = it.summary;
+        it.meta.event = `🔄 Chuyển sang ${it.status || 'trạng thái mới'}`;
         return;
       }
-      it.title = `🧩 Việc mới cho bạn: ${it.key} ${it.summary}`.trim();
+      it.meta.event = '🧩 Việc mới giao cho bạn';
       const by = await provider.jiraAssignedBy(it.key);
-      it.message = [it.status && `Trạng thái: ${it.status}`, by ? `Giao bởi: ${by}` : 'Người giao: không có thông tin', it.reporter && `Người tạo: ${it.reporter}`].filter(Boolean).join(' · ');
+      it.meta.people = [{ label: 'Giao bởi', value: by || 'không có thông tin' }, ...(it.reporter ? [{ label: 'Người tạo', value: it.reporter }] : [])];
     }
   }
 };
 // Bitbucket: Composio's list tool has no reviewer filter and its responses get truncated, so
 // this one uses COMPOSIO_PROXY_EXECUTE with Bitbucket's own query language instead.
-RECIPES.bitbucket = { name: 'Bitbucket', event: 'PR cần bạn review (có nút Approve)', app: 'bitbucket', custom: true };
+RECIPES.bitbucket = { name: 'Bitbucket', event: 'PR cần bạn review (có nút Approve) · approve / yêu cầu sửa / bình luận trên PR của bạn', app: 'bitbucket', custom: true };
 const BB_REPO_LIMIT = 25;
 const BB_REPO_REFRESH_MS = 30 * 60 * 1000;
-const BB_FIELDS = 'values.id,values.title,values.updated_on,values.links.html.href,values.author.display_name,values.participants.user.uuid,values.participants.approved,values.destination.repository.full_name';
+const BB_FIELDS = 'values.id,values.title,values.updated_on,values.links.html.href,values.author.display_name,values.participants.user.uuid,values.participants.approved,values.destination.repository.full_name,values.source.branch.name,values.destination.branch.name';
+const bbBranch = (pr) => { const a = pick(pr, 'source.branch.name'), b = pick(pr, 'destination.branch.name'); return a && b ? `${a} → ${b}` : null; };
 const bbSafe = (s) => /^[A-Za-z0-9_.-]{1,100}$/.test(String(s || ''));
 
 const POPULAR = ['gmail', 'outlook', 'googlecalendar', 'github', 'jira', 'notion', 'slack', 'microsoft_teams', 'trello', 'linear', 'asana', 'discord', 'hubspot', 'googledrive', 'bitbucket', 'clickup'];
@@ -113,6 +142,17 @@ class ComposioConnectProvider extends EventEmitter {
     this.ctx = ctx;
     this.fetch = ctx.fetch || globalThis.fetch;
     this.seen = new Map();   // toolkit → Set(item ids)
+    // What was already seen survives restarts (otherwise every restart re-baselines and anything that
+    // happened meanwhile is swallowed). Ids/timestamps/counters only — no content.
+    this.stateFile = ctx.dataDir ? require('path').join(ctx.dataDir, 'composio-seen.json') : null;
+    this.snap = { bbMine: {}, jiraAct: {} };
+    if (this.stateFile) {
+      try {
+        const st = JSON.parse(require('fs').readFileSync(this.stateFile, 'utf8')) || {};
+        for (const [k, v] of Object.entries(st.seen || {})) if (Array.isArray(v)) this.seen.set(k, new Set(v));
+        this.snap = { bbMine: st.bbMine || {}, jiraAct: st.jiraAct || {}, bbMineInit: !!st.bbMineInit, jiraActInit: !!st.jiraActInit };
+      } catch { /* first run */ }
+    }
     this.timer = null;
     this.polling = false;
     this.lastPollAt = null;
@@ -164,8 +204,16 @@ class ComposioConnectProvider extends EventEmitter {
   async proxy(toolkit, endpoint, { method = 'GET', query = {}, body } = {}) {
     const parameters = Object.entries(query).map(([name, value]) => ({ name, value: String(value), type: 'query' }));
     const j = await this.tool('COMPOSIO_PROXY_EXECUTE', { toolkit_slug: toolkit, endpoint, method, ...(parameters.length ? { parameters } : {}), ...(body !== undefined ? { body } : {}) });
-    const d = j && j.data && typeof j.data === 'object' ? j.data : {};
-    return { status: Number(d.status) || 0, data: d.data };
+    // Two reply shapes: { data: { status, data } } or, for large replies,
+    // { data: { results: [{ response: { data | data_preview: { status, data, headers } } }] } }.
+    const top = j && j.data && typeof j.data === 'object' ? j.data : {};
+    const res0 = Array.isArray(top.results) && top.results[0] && top.results[0].response;
+    const d = res0 ? (res0.data && typeof res0.data === 'object' && 'status' in res0.data ? res0.data : res0.data_preview || {}) : top;
+    const status = Number(d.status) || 0;
+    const error = !status ? String((j && j.error) || (res0 && res0.error) || (typeof j.data === 'string' ? j.data : '') || 'phản hồi Composio không có mã HTTP').slice(0, 160) : '';
+    // data_preview = Composio truncated a large reply (the full one stays in their sandbox): callers
+    // must not treat it as complete — ask for less (fewer fields / smaller page) instead.
+    return { status, data: d.data, ...(res0 && !res0.data && res0.data_preview ? { preview: true } : {}), ...(error ? { error } : {}) };
   }
 
   async bitbucketRepos() {
@@ -175,6 +223,7 @@ class ComposioConnectProvider extends EventEmitter {
     this.bb.me = String(me.data.uuid);
     const ws = await this.proxy('bitbucket', '/user/workspaces', { query: { pagelen: 50 } });
     const slugs = arrAt(ws.data, 'values').map(v => pick(v, 'workspace.slug', 'slug')).filter(bbSafe);
+    this.bb.workspaces = slugs;
     const repos = [];
     for (const w of slugs) {
       const r = await this.proxy('bitbucket', `/repositories/${w}`, { query: { sort: '-updated_on', pagelen: BB_REPO_LIMIT, fields: 'values.slug' } });
@@ -201,7 +250,7 @@ class ComposioConnectProvider extends EventEmitter {
           out.push({
             key: `${b.r.ws}/${b.r.slug}#${pr.id}`, ws: b.r.ws, repo: b.r.slug, id: pr.id,
             title: String(pr.title || `PR #${pr.id}`), author: String(pick(pr, 'author.display_name') || ''),
-            url: pick(pr, 'links.html.href'), at: toTime(pr.updated_on)
+            url: pick(pr, 'links.html.href'), at: toTime(pr.updated_on), branch: bbBranch(pr)
           });
         }
       }
@@ -211,6 +260,7 @@ class ComposioConnectProvider extends EventEmitter {
 
   async pollBitbucket() {
     const items = await this.bitbucketReviewItems();
+    (this.lastCounts = this.lastCounts || {}).bitbucket = { items: items.length, repos: this.bb.repos.length, baseline: !this.seen.has('bitbucket') };
     const first = !this.seen.has('bitbucket');
     const seen = this.seen.get('bitbucket') || new Set();
     const fresh = items.filter(it => !seen.has(it.key));
@@ -227,7 +277,7 @@ class ComposioConnectProvider extends EventEmitter {
       this.emit('notification', {
         title: `🔍 ${fresh.length} PR đang chờ bạn review`, message: '', app: 'bitbucket',
         url: 'https://bitbucket.org/dashboard/pullrequests', priority: 'important', duration: 60000,
-        items: rows.map(it => ({ key: sidOf(it), title: it.title, subtitle: `${it.repo} #${it.id}${it.author ? ` · ${it.author}` : ''}`, url: it.url && /^https:\/\/bitbucket\.org\//.test(it.url) ? it.url : undefined, actions: ['approve'] })),
+        items: rows.map(it => ({ key: sidOf(it), title: it.title, subtitle: `${it.repo} #${it.id}${it.author ? ` · ${it.author}` : ''}${it.branch ? ` · ${it.branch}` : ''}`, url: it.url && /^https:\/\/bitbucket\.org\//.test(it.url) ? it.url : undefined, actions: ['approve'] })),
         moreCount: fresh.length - rows.length,
         sourceEventId: `composio:bitbucket:batch:${Date.now()}`
       });
@@ -236,7 +286,8 @@ class ComposioConnectProvider extends EventEmitter {
     for (const it of fresh) {
       const sid = sidOf(it);
       this.emit('notification', {
-        title: `🔍 Cần bạn review: ${it.title}`.slice(0, 200), message: `${it.author ? `${it.author} · ` : ''}${it.repo} #${it.id}`, app: 'bitbucket',
+        title: it.title.slice(0, 200), message: '', app: 'bitbucket',
+        meta: { kind: 'bitbucket', event: '🔍 Cần bạn review', key: `#${it.id}`, status: 'Chờ review', statusTone: 'review', repo: it.repo, branch: it.branch, people: it.author ? [{ label: 'Tác giả', value: it.author }] : [] },
         url: it.url && /^https:\/\/bitbucket\.org\//.test(it.url) ? it.url : undefined, priority: 'important', duration: 30000,
         actions: ['approve'], sourceEventId: sid, sourceCreatedAt: it.at || undefined
       });
@@ -270,6 +321,154 @@ class ComposioConnectProvider extends EventEmitter {
     const hit = arrAt(cl.data, 'values').filter(v => arrAt(v, 'items').some(x => (x.fieldId === 'assignee' || x.field === 'assignee') && x.to === me)).pop();
     if (!hit || !hit.author) return null;
     return hit.author.accountId === me ? 'chính bạn' : String(hit.author.displayName || '').slice(0, 80) || null;
+  }
+
+  /**
+   * Activity on MY open PRs (one call: /pullrequests/{me}): someone approved, requested changes, or
+   * commented. Compared with the last snapshot (counters + participant states, persisted). Changes
+   * made by me are ignored.
+   */
+  async pollBitbucketMine() {
+    if (!this.bb.me) await this.bitbucketRepos();
+    const me = this.bb.me;
+    const fields = 'values.id,values.title,values.comment_count,values.links.html.href,values.destination.repository.full_name,values.source.branch.name,values.destination.branch.name,values.participants.user.uuid,values.participants.user.display_name,values.participants.approved,values.participants.state';
+    if (!this.bb.workspaces) { this.bb.reposAt = 0; await this.bitbucketRepos(); }
+    // /pullrequests/{user} was retired; the per-workspace "PRs by user" endpoint replaces it.
+    const values = [];
+    let ok = 0, lastStatus = 0;
+    for (const w of this.bb.workspaces || []) {
+      const r = await this.proxy('bitbucket', `/workspaces/${w}/pullrequests/${encodeURIComponent(me)}`, { query: { state: 'OPEN', pagelen: 30, fields } });
+      lastStatus = r.status;
+      if (r.status !== 200) continue;
+      ok++;
+      values.push(...arrAt(r.data, 'values'));
+    }
+    if (!ok && (this.bb.workspaces || []).length) throw new Error(`HTTP ${lastStatus || '?'}`);
+    const r = { data: { values } };
+    const prev = this.snap.bbMine;
+    const first = !this.snap.bbMineInit;
+    const next = {};
+    let emitted = 0;
+    for (const pr of arrAt(r.data, 'values')) {
+      const full = String(pick(pr, 'destination.repository.full_name') || '');
+      const [ws, repo] = full.split('/');
+      if (!bbSafe(ws) || !bbSafe(repo) || !Number.isInteger(pr.id)) continue;
+      const key = `${full}#${pr.id}`;
+      const others = arrAt(pr, 'participants').filter(p => pick(p, 'user.uuid') && pick(p, 'user.uuid') !== me);
+      const cur = {
+        c: Number(pr.comment_count) || 0,
+        ok: others.filter(p => p.approved).map(p => pick(p, 'user.uuid')),
+        cr: others.filter(p => p.state === 'changes_requested').map(p => pick(p, 'user.uuid'))
+      };
+      next[key] = cur;
+      const was = prev[key];
+      if (first || !was) continue; // baseline / a PR I just opened
+      const nameOf = (uuid) => String(pick(others.find(p => pick(p, 'user.uuid') === uuid) || {}, 'user.display_name') || 'Ai đó');
+      const url = pick(pr, 'links.html.href');
+      const base = { app: 'bitbucket', url: url && /^https:\/\/bitbucket\.org\//.test(url) ? url : undefined };
+      const title = String(pr.title || `PR #${pr.id}`);
+      const meta = (event, status, statusTone, who) => ({ kind: 'bitbucket', event, key: `#${pr.id}`, status, statusTone, repo, branch: bbBranch(pr), people: who ? [{ label: 'Bởi', value: who }] : [] });
+      for (const u of cur.ok.filter(x => !was.ok.includes(x))) {
+        this.emit('notification', { ...base, title, message: '', meta: meta(`✅ ${nameOf(u)} đã approve PR của bạn`, 'Đã approve', 'done', nameOf(u)), sourceEventId: `composio:bitbucket:ok:${key}:${u}:${Date.now()}` }); emitted++;
+      }
+      for (const u of cur.cr.filter(x => !was.cr.includes(x))) {
+        this.emit('notification', { ...base, title, message: '', meta: meta(`⛔ ${nameOf(u)} yêu cầu sửa PR của bạn`, 'Cần sửa', 'danger', nameOf(u)), priority: 'important', sourceEventId: `composio:bitbucket:cr:${key}:${u}:${Date.now()}` }); emitted++;
+      }
+      if (cur.c > was.c) {
+        const n = cur.c - was.c;
+        const last = await this.proxy('bitbucket', `/repositories/${ws}/${repo}/pullrequests/${pr.id}/comments`, { query: { sort: '-created_on', pagelen: 5, fields: 'values.user.uuid,values.user.display_name,values.content.raw,values.deleted' } }).catch(() => null);
+        const fromOthers = last && last.status === 200 ? arrAt(last.data, 'values').filter(c => !c.deleted && pick(c, 'user.uuid') !== me) : [];
+        if (last && last.status === 200 && !fromOthers.length) continue; // only my own comments
+        const c0 = fromOthers[0];
+        this.emit('notification', {
+          ...base,
+          title,
+          message: c0 ? String(pick(c0, 'content.raw') || '').replace(/\s+/g, ' ').slice(0, 200) : '',
+          meta: meta(c0 ? `💬 ${pick(c0, 'user.display_name') || 'Ai đó'} bình luận PR của bạn` : `💬 ${n} bình luận mới trên PR của bạn`, 'Bình luận mới', 'progress', c0 ? pick(c0, 'user.display_name') : null),
+          sourceEventId: `composio:bitbucket:c:${key}:${cur.c}`
+        });
+        emitted++;
+      }
+    }
+    this.snap.bbMine = next;
+    this.snap.bbMineInit = true;
+    (this.lastCounts = this.lastCounts || {})['bitbucket-mine'] = { items: Object.keys(next).length, baseline: first };
+    return emitted;
+  }
+
+  /**
+   * Jira comments / @mentions / others' updates on issues I'm assigned to, reported, or watch —
+   * roughly what the Jira bell shows (its own notifications API isn't public). One JQL search per
+   * poll; per changed issue one comment lookup (+ changelog when no new comment). My own changes,
+   * and status/assignee changes on my assigned issues (the main Jira recipe reports those), are skipped.
+   */
+  async pollJiraActivity() {
+    const { base, me } = await this.jiraBase();
+    const jql = '(assignee = currentUser() OR reporter = currentUser() OR watcher = currentUser()) AND updated >= -3d ORDER BY updated DESC';
+    const fl = 'summary,updated,assignee,status,labels,issuetype,priority';
+    let r = await this.proxy('jira', `${base}/rest/api/3/search/jql`, { query: { jql, maxResults: 30, fields: fl } });
+    if (r.status === 404 || r.status === 410) r = await this.proxy('jira', `${base}/rest/api/3/search`, { query: { jql, maxResults: 30, fields: fl } });
+    if (r.status !== 200) throw new Error(`HTTP ${r.status || '?'}`);
+    const site = (this.jiraSite = this.jiraSite || await this.jiraSiteUrl().catch(() => null));
+    const prev = this.snap.jiraAct;
+    const first = !this.snap.jiraActInit;
+    let emitted = 0;
+    for (const is of arrAt(r.data, 'issues')) {
+      const key = String(is.key || '');
+      if (!/^[A-Z][A-Z0-9_]+-\d+$/.test(key)) continue;
+      const updated = toTime(pick(is, 'fields.updated')) || 0;
+      const was = prev[key];
+      prev[key] = updated;
+      if (first || !was || updated <= was) continue;
+      const summary = String(pick(is, 'fields.summary') || '');
+      const mine = pick(is, 'fields.assignee.accountId') === me;
+      const url = site ? `${site}/browse/${key}` : undefined;
+      const f = is.fields || {};
+      const metaOf = (event, who) => jiraMeta({ key, type: pick(f, 'issuetype.name'), status: pick(f, 'status.name'), statusCat: pick(f, 'status.statusCategory.key'), priority: pick(f, 'priority.name'), labels: Array.isArray(f.labels) ? f.labels.map(String) : [], event, people: who ? [{ label: 'Bởi', value: who }] : [] });
+      // Newest comment after the last time we looked, by someone else?
+      const cm = await this.proxy('jira', `${base}/rest/api/3/issue/${key}/comment`, { query: { orderBy: '-created', maxResults: 3 } }).catch(() => null);
+      const fresh = cm && cm.status === 200 ? arrAt(cm.data, 'comments').filter(c => (toTime(c.created) || 0) > was && pick(c, 'author.accountId') !== me) : [];
+      if (fresh.length) {
+        const c = fresh[0];
+        const mention = JSON.stringify(c.body || {}).includes(`"id":"${me}"`);
+        this.emit('notification', {
+          app: 'jira', url,
+          title: `${key} ${summary}`.trim(),
+          message: adfText(c.body).slice(0, 220),
+          meta: metaOf(mention ? `📣 ${pick(c, 'author.displayName') || 'Ai đó'} nhắc bạn` : `💬 ${pick(c, 'author.displayName') || 'Ai đó'} bình luận`, null),
+          ...(mention ? { priority: 'important' } : {}),
+          sourceEventId: `composio:jira:c:${key}:${c.id}`
+        });
+        emitted++;
+        continue;
+      }
+      // No new comment: what else changed, and by whom (skip my own edits).
+      const cl = await this.proxy('jira', `${base}/rest/api/3/issue/${key}/changelog`, { query: { maxResults: 100 } }).catch(() => null);
+      const entries = cl && cl.status === 200 ? arrAt(cl.data, 'values').filter(v => (toTime(v.created) || 0) > was && pick(v, 'author.accountId') !== me) : [];
+      const h = entries[entries.length - 1];
+      if (!h) continue;
+      const items = arrAt(h, 'items').filter(x => !(mine && ['status', 'assignee'].includes(x.fieldId || x.field)));
+      if (!items.length) continue;
+      const what = items.slice(0, 2).map(x => `${x.field}${x.toString ? ` → ${String(x.toString).slice(0, 40)}` : ''}`).join(', ');
+      this.emit('notification', {
+        app: 'jira', url,
+        title: `${key} ${summary}`.trim(),
+        message: what,
+        meta: metaOf(`✏️ ${pick(h, 'author.displayName') || 'Ai đó'} cập nhật`, null),
+        sourceEventId: `composio:jira:u:${key}:${h.id}`
+      });
+      emitted++;
+    }
+    for (const k of Object.keys(prev)) if (Object.keys(prev).length > 300) delete prev[k]; else break;
+    this.snap.jiraActInit = true;
+    (this.lastCounts = this.lastCounts || {})['jira-activity'] = { items: arrAt(r.data, 'issues').length, baseline: first };
+    return emitted;
+  }
+
+  async jiraSiteUrl() {
+    const r = await this.proxy('jira', 'https://api.atlassian.com/oauth/token/accessible-resources');
+    const site = Array.isArray(r.data) ? r.data.find(x => /^https:\/\/[a-z0-9-]+\.atlassian\.net$/i.test(String(x.url || ''))) : null;
+    return site ? site.url : null;
   }
 
   /** Approve a PR shown in a card. Target comes from our own map, never from the renderer. */
@@ -307,7 +506,7 @@ class ComposioConnectProvider extends EventEmitter {
   status() {
     return {
       provider: 'composio', mode: 'connect', name: 'Composio Connect', keySet: this.hasKey(), apps: this.apps(),
-      polling: { intervalSeconds: this.interval(), lastPollAt: this.lastPollAt, lastError: this.lastError }
+      polling: { intervalSeconds: this.interval(), lastPollAt: this.lastPollAt, lastError: this.lastError, counts: this.lastCounts || {} }
     };
   }
 
@@ -405,6 +604,14 @@ class ComposioConnectProvider extends EventEmitter {
 
   stop() { clearTimeout(this.timer); this.timer = null; }
 
+  saveState() {
+    if (!this.stateFile) return;
+    try {
+      const seen = Object.fromEntries([...this.seen].map(([k, v]) => [k, [...v].slice(-500)]));
+      require('fs').writeFileSync(this.stateFile, JSON.stringify({ seen, ...this.snap }));
+    } catch { /* read-only disk: keep in memory */ }
+  }
+
   async pollOnce() {
     if (this.polling || !this.hasKey()) return 0;
     this.polling = true;
@@ -415,6 +622,10 @@ class ComposioConnectProvider extends EventEmitter {
       const errors = [];
       for (const a of enabled.filter(x => RECIPES[x.toolkit].custom)) {
         try { if (a.toolkit === 'bitbucket') emitted += await this.pollBitbucket(); } catch (err) { errors.push(err.message); }
+        try { if (a.toolkit === 'bitbucket') emitted += await this.pollBitbucketMine(); } catch (err) { errors.push(`Bitbucket (PR của bạn): ${err.message}`); }
+      }
+      if (enabled.some(a => a.toolkit === 'jira')) {
+        try { emitted += await this.pollJiraActivity(); } catch (err) { errors.push(`Jira (bình luận/nhắc tên): ${err.message}`); }
       }
       const targets = enabled.filter(a => !RECIPES[a.toolkit].custom);
       if (!targets.length) { this.lastError = errors.join(' · '); return emitted; }
@@ -431,6 +642,7 @@ class ComposioConnectProvider extends EventEmitter {
         const data = pick(resp, 'data') || pick(resp, 'data_preview') || resp;
         const recipe = RECIPES[a.toolkit];
         const items = recipe.items(data).filter(x => x.id);
+        (this.lastCounts = this.lastCounts || {})[a.toolkit] = { items: items.length, preview: !pick(resp, 'data') && !!pick(resp, 'data_preview'), baseline: !this.seen.has(a.toolkit) };
         const first = !this.seen.has(a.toolkit);
         const seen = this.seen.get(a.toolkit) || new Set();
         for (const it of items) {
@@ -446,6 +658,7 @@ class ComposioConnectProvider extends EventEmitter {
             title: String(it.title).slice(0, 200), message: String(it.message || '').slice(0, 400), app: recipe.app,
             url: it.url && /^https:\/\//.test(it.url) ? it.url : undefined,
             ...(it.priority ? { priority: it.priority } : {}),
+            ...(it.meta ? { meta: it.meta } : {}),
             sourceEventId: `composio:${a.toolkit}:${crypto.createHash('sha1').update(String(it.id)).digest('hex').slice(0, 16)}`,
             sourceCreatedAt: it.at || undefined
           });
@@ -458,6 +671,7 @@ class ComposioConnectProvider extends EventEmitter {
     } finally {
       this.lastPollAt = Date.now();
       this.polling = false;
+      this.saveState();
     }
     return emitted;
   }

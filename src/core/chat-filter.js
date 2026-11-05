@@ -97,12 +97,16 @@ function chatDecision(item, settings) {
  * name into a group in Control Center. Each group has a default reaction and attention effect.
  */
 const CONTACT_GROUPS = Object.freeze({
-  partner: { label: 'Người yêu / Vợ chồng', emoji: '💞', emotion: 'love' },
-  family: { label: 'Gia đình', emoji: '🏡', emotion: 'happy' },
+  partner: { label: 'Người yêu / Vợ chồng', emoji: '💕', emotion: 'love' },
+  family: { label: 'Gia đình', emoji: '👨‍👩‍👧', emotion: 'happy' },
+  relatives: { label: 'Người thân', emoji: '👨‍👩‍👦', emotion: 'happy' },
+  close_friends: { label: 'Bạn thân', emoji: '👫', emotion: 'excited' },
   friends: { label: 'Bạn bè', emoji: '🤝', emotion: 'happy' },
-  colleagues: { label: 'Đồng nghiệp', emoji: '💼', emotion: 'thinking' },
-  manager: { label: 'Quản lý / Sếp', emoji: '👔', emotion: 'thinking', priority: 'important' },
+  manager: { label: 'Sếp / Quản lý', emoji: '💼', emotion: 'thinking', priority: 'important' },
+  colleagues: { label: 'Đồng nghiệp', emoji: '👨‍💻', emotion: 'thinking' },
+  teacher: { label: 'Thầy cô', emoji: '🎓', emotion: 'thinking' },
   important: { label: 'Quan trọng', emoji: '⭐', emotion: null, priority: 'important', bypassCooldown: true },
+  other: { label: 'Khác', emoji: '✏️', emotion: null, custom: true },
   ignored: { label: 'Bỏ qua (vào Hộp thư)', emoji: '🔕', emotion: null, inbox: true }
 });
 
@@ -110,23 +114,63 @@ const CONTACT_GROUPS = Object.freeze({
 function senderCandidates(item) {
   const out = [];
   if (item.sender) out.push(item.sender);
+  const act = parseActionTitle(item);
+  if (act) return [...out, act.sender].map(fold).map(s => s.trim()).filter(Boolean);
   const prefix = senderPrefix(item.message);
   if (prefix) out.push(prefix);
   if (item.title && (isChat(item) || item.sender == null)) out.push(item.title);
   return out.map(fold).map(s => s.trim()).filter(Boolean);
 }
 
-/** The user's contact entry matching this notification's sender, or null. Exact name match (accent-insensitive). */
+/**
+ * Activity titles (Teams, Slack, Messenger…): the title is WHAT happened, not the chat —
+ *   "Nhuc Nguyen @mentioned you" / "Tuyen Bui forwarded a message" / "😆 X reacted to your message"
+ * and the chat, when it's a group, is the "Chat name: …" prefix of the body.
+ */
+const ACTION_TITLE_RE = /^(?:[\p{Extended_Pictographic}\uFE0F\u200D]+\s*)?(.{1,60}?)\s+(?:@?mentioned (?:you|everyone|the channel|your team)|forwarded (?:a|your) message|reacted to (?:your|a) message|replied to (?:your message|you|a message)|liked your message|sent (?:you )?(?:a message|an? (?:image|photo|file|attachment|sticker|gif|video|voice message))|đã nhắc đến (?:bạn|mọi người)|đã chuyển tiếp(?: một)? tin nhắn|đã bày tỏ cảm xúc.*|đã thả cảm xúc.*|đã trả lời.*|đã gửi (?:một )?(?:ảnh|tệp|file|sticker|tin nhắn).*)$/iu;
+const CHAT_PREFIX_RE = /^([^:\n]{1,100}):\s/;
+
+/** { sender, chat|null } for an activity title, else null. */
+function parseActionTitle(item) {
+  const m = ACTION_TITLE_RE.exec(String(item.title || '').trim());
+  if (!m) return null;
+  const p = CHAT_PREFIX_RE.exec(String(item.message || ''));
+  return { sender: m[1].trim(), chat: p ? p[1].trim() : null };
+}
+
+/** The chat a notification belongs to: the title, minus a " — Sender" suffix (macOS NC groups). */
+function chatTitleOf(item) {
+  const act = parseActionTitle(item);
+  if (act) return fold(act.chat || act.sender).trim();
+  const t = String(item.title || '');
+  const i = t.indexOf(' — ');
+  return fold(i > 0 ? t.slice(0, i) : t).trim();
+}
+
+/**
+ * The user's contact entry matching this notification, or null. Exact name match (accent-insensitive).
+ *   kind 'person' (default) — the sender: explicit sender, "Name: …" prefix, or the chat title.
+ *   kind 'chat'             — the conversation itself (a group chat): every message in it.
+ *   app (optional)          — only notifications from that app.
+ * A person beats a chat, so "Sếp Lan" in a muted group still gets the boss treatment.
+ */
 function contactOf(item, contacts = []) {
   if (!Array.isArray(contacts) || !contacts.length) return null;
+  const app = String(item.app || '').toLowerCase();
+  const ok = (c) => c && c.enabled !== false && CONTACT_GROUPS[c.group] && (!c.app || c.app === app);
   const who = senderCandidates(item);
-  if (!who.length) return null;
   for (const c of contacts) {
-    if (!c || !CONTACT_GROUPS[c.group]) continue;
+    if (!ok(c) || c.kind === 'chat') continue;
     const name = fold(c.name).trim();
     if (name && who.includes(name)) return c;
+  }
+  const chat = isChat(item) ? chatTitleOf(item) : '';
+  if (chat) {
+    for (const c of contacts) {
+      if (ok(c) && c.kind === 'chat' && fold(c.name).trim() === chat) return c;
+    }
   }
   return null;
 }
 
-module.exports = { chatDecision, mentionInfo, isDirect, isChat, fold, contactOf, senderCandidates, CHAT_APPS, CONTACT_GROUPS };
+module.exports = { chatDecision, mentionInfo, isDirect, isChat, fold, contactOf, senderCandidates, chatTitleOf, senderPrefix, parseActionTitle, CHAT_APPS, CONTACT_GROUPS };

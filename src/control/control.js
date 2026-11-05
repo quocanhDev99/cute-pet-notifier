@@ -181,7 +181,14 @@ document.addEventListener('click', (e) => {
   const c = e.target.closest('[data-choice]');
   if (c) {
     queueSave(patchOf(c.dataset.choice, c.dataset.value), true); syncInputs();
-    if (c.dataset.choice === 'chat.mode') { const m = document.querySelector('.chat-mentions'); if (m) m.hidden = c.dataset.value !== 'mentions'; }
+    if (c.dataset.choice === 'chat.mode') {
+      const m = document.querySelector('.chat-mentions'); if (m) m.hidden = c.dataset.value !== 'mentions';
+      // "Only when it's about me" needs your name to spot @mentions: fill it from this Mac's account name.
+      if (c.dataset.value === 'mentions' && !(S.settings.chat.names || []).length && S.chatNameSuggestion) {
+        actions['chat-suggest']();
+        toast(`Đã điền tên của bạn: ${S.chatNameSuggestion} — sửa lại nếu mọi người gọi bạn khác`, 'ok');
+      }
+    }
   }
 });
 document.addEventListener('change', (e) => {
@@ -206,29 +213,543 @@ function applyTheme(id) {
 
 /* ================================================================== 3D preview */
 
-/** 👥 Relationship groups (Blueprint §5.3): the user names people; the pet never guesses. */
-function contactsPanel() {
-  const groups = S.contactGroups || {};
-  const list = S.settings.contacts || [];
-  const groupOpts = Object.entries(groups).map(([id, g]) => `<option value="${id}">${g.emoji} ${esc(g.label)}</option>`).join('');
-  const effect = (g, c) => {
-    const e = c && c.emotion ? c.emotion : g.emotion;
-    return [e ? `${emo(e).emoji} ${emo(e).label}` : '', g.priority === 'important' ? '⭐ ưu tiên' : '', g.bypassCooldown ? 'không giới hạn tin' : '', g.inbox ? '📥 vào Hộp thư' : ''].filter(Boolean).join(' · ');
-  };
+/* ================================================================== 👥 Người quen (Familiar contacts)
+ * The user tells the pet who someone is; the pet never guesses.
+ *   ✨ Hay nhắn nhất (suggestions, metadata only) → ① app → ② chat / member(s) → ③ relationship +
+ *   emotion + behaviour → saved rules (search · sort · edit · on/off · delete) → ⏰ hours per
+ *   relationship → 🧠 memory (learn names · adaptive memory · forget).
+ * Chat lists come from an app's OFFICIAL API when connected (Teams via Microsoft Graph, Slack Web
+ * API), otherwise from names seen in notifications, otherwise manual entry. Rule priority lives in
+ * src/core/contact-rules.js (person > group chat > relationship > app > general > default). */
+const CT_APPS = {
+  zalo: ['Zalo', '🔵'], messenger: ['Messenger', '💭'], slack: ['Slack', '💬'], teams: ['Teams', '👥'], telegram: ['Telegram', '✈️'],
+  discord: ['Discord', '🎮'], whatsapp: ['WhatsApp', '🟢'], messages: ['Tin nhắn', '💬'], viber: ['Viber', '🟣'], line: ['LINE', '🟩'],
+  skype: ['Skype', '☁️'], signal: ['Signal', '🔷'], wechat: ['WeChat', '🟢'], googlechat: ['Google Chat', '🟢'], lark: ['Lark', '🪶'], larksuite: ['Lark', '🪶']
+};
+const ctApp = (id, name) => { const m = CT_APPS[id]; return { label: name || (m ? m[0] : id ? id[0].toUpperCase() + id.slice(1) : 'Mọi ứng dụng'), icon: m ? m[1] : '💬' }; };
+const ctFold = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase().trim();
+const ctKey = (c) => `${c.app || '*'}|${c.kind === 'chat' ? 'chat' : 'person'}|${ctFold(c.name)}`;
+const CT_ATTN_UI = { auto: 'Theo mối quan hệ', important: '⭐ Luôn báo ngay', normal: 'Bình thường', silent: '🤫 Báo nhẹ nhàng, không kêu', inbox: '📥 Chỉ cất vào Hộp thư' };
+const CT_NOTE = { important_sender: 'thường gửi tin quan trọng → bé ưu tiên tin của họ', busy_chat: 'rất sôi nổi hôm nay → bé báo nhẹ nhàng, không kêu' };
+
+const ct = {
+  app: null, manual: false, q: '', mq: '', open: null,
+  picks: [], // [{ kind, name, app, targetId }]
+  group: 'partner', label: '', emotion: '', attention: 'auto',
+  editId: null, savedQ: '', sort: 'recent', kind: 'chat', limit: 60, cursor: -1, visible: [],
+  api: {}, // sourceId → { state: 'loading'|'ready'|..., chats, detail }
+  apiMembers: {} // `${source}:${chatId}` → { state, members, detail }
+};
+
+const ctDir = () => S.contactDirectory || { enabled: true, memory: true, apps: [], suggestions: [], insights: [] };
+const ctSources = () => S.chatSources || [];
+const ctSaved = () => new Map((S.settings.contacts || []).map(c => [ctKey(c), c]));
+const ctGroups = () => S.contactGroups || {};
+const ctAttn = () => S.contactAttention || { auto: { label: 'Theo mối quan hệ' } };
+const ctGroupLabel = (c) => { const g = ctGroups()[c.group] || { emoji: '👤', label: c.group }; return { emoji: g.emoji, label: c.group === 'other' && c.label ? c.label : g.label }; };
+
+/** Apps for step ①: chat apps detected on this computer (installed / running) ∪ apps the pet learned
+ *  chats from ∪ connected official-API sources. Statuses are real, never faked. */
+function ctAppList() {
+  const map = new Map();
+  const get = (app) => { if (!map.has(app)) map.set(app, { app, label: ctApp(app).label, icon: null, running: false, installed: false, seen: 0, source: null }); return map.get(app); };
+  for (const d of S.msgApps || []) Object.assign(get(d.app), { label: d.label, icon: d.icon, running: d.running, installed: d.installed });
+  for (const a of ctDir().apps) { const x = get(a.app); x.seen = a.chats.length; if (!x.installed && a.appName) x.label = a.appName; }
+  for (const src of ctSources()) { if (map.has(src.app) || src.state === 'ready') get(src.app).source = src; }
+  return [...map.values()].sort((x, y) => Number(y.running) - Number(x.running) || y.seen - x.seen);
+}
+
+/** Initials avatar ("[SBM] Loyalty Integration" → "LI"), colour from the name. */
+function ctAvatar(name, group) {
+  const words = String(name || '').replace(/\[[^\]]*\]|[^\p{L}\p{N}\s]/gu, ' ').trim().split(/\s+/).filter(Boolean);
+  const ini = (words.length > 1 ? words[0][0] + words[words.length - 1][0] : (words[0] || '?').slice(0, 2)).toUpperCase();
+  let h = 0; for (const ch of String(name)) h = (h * 31 + ch.codePointAt(0)) % 360;
+  return `<span class="ct-ava" style="--h:${h}" aria-hidden="true">${esc(ini)}${group ? '<i class="ct-ava-badge">👥</i>' : ''}</span>`;
+}
+
+const ctAppIcon = (a) => a.icon ? `<img src="${esc(a.icon)}" alt="">` : `<span>${ctApp(a.app).icon}</span>`;
+
+/** Rows for step ②: official API list (merged with what the pet saw) or the learned list. */
+/** Merge members by name; a lone first name ("Nhuc") joins the ONE full name that starts with it ("Nhuc Nguyen"). */
+function ctMergeMembers(list) {
+  const by = new Map();
+  for (const m of list || []) {
+    const k = ctFold(m.name);
+    if (!k) continue;
+    const cur = by.get(k);
+    if (cur) cur.count = (cur.count || 0) + (m.count || 0); else by.set(k, { ...m });
+  }
+  for (const [k, m] of [...by]) {
+    if (/\s/.test(k)) continue;
+    const full = [...by.keys()].filter(x => x !== k && x.startsWith(`${k} `));
+    if (full.length === 1) { const f = by.get(full[0]); f.count = (f.count || 0) + (m.count || 0); by.delete(k); }
+  }
+  return [...by.values()].sort((x, y) => (y.count || 0) - (x.count || 0) || x.name.localeCompare(y.name, 'vi'));
+}
+
+/**
+ * Rows for step ② of ONE app — its official API list when connected (merged with what the pet saw),
+ * else the chats learned from that app's notifications. Duplicates (same kind + same name, accents
+ * ignored) are merged: contact rules match by name, so two rows with one name can't be told apart.
+ * Memoized per data version, with folded search keys precomputed.
+ */
+const ctMemo = { key: '', rows: [] };
+function ctRows(appId) {
+  const seenApp = ctDir().apps.find(a => a.app === appId);
+  const seen = seenApp ? seenApp.chats : [];
+  const src = ctSources().find(s => s.app === appId && s.state === 'ready');
+  const api = src && ct.api[src.id];
+  const useApi = !!(src && api && api.state === 'ready');
+  const memKeys = useApi ? Object.keys(ct.apiMembers).filter(k => k.startsWith(`${src.id}:`) && ct.apiMembers[k].state === 'ready').length : 0;
+  const key = [appId, useApi ? `api${api.cachedAt}:${api.chats.length}:${memKeys}` : 'seen', seen.length, seen.reduce((n, c) => n + c.count, 0)].join('|');
+  if (ctMemo.key === key) return ctMemo.rows;
+
+  let raw;
+  if (useApi) {
+    const byName = new Map(seen.map(c => [ctFold(c.title), c]));
+    raw = api.chats.map(c => {
+      const s = byName.get(ctFold(c.title));
+      const mem = ct.apiMembers[`${src.id}:${c.id}`];
+      const members = c.direct ? [] : (c.members || (mem && mem.state === 'ready' ? mem.members : null) || (s ? s.members : null));
+      return { source: src.id, chatId: c.id, title: c.title, direct: c.direct, meeting: !!c.meeting, memberCount: c.memberCount || null,
+        lastSeen: Math.max((s && s.lastSeen) || 0, c.lastActivity || 0) || null, count: s ? s.count : null, members };
+    });
+  } else {
+    raw = seen.map(c => ({ source: null, title: c.title, direct: c.direct, lastSeen: c.lastSeen, count: c.count, members: c.direct ? [] : c.members.map(m => ({ id: m.name, name: m.name, count: m.count })) }));
+  }
+  const merged = new Map();
+  for (const r of raw) {
+    const k = `${r.direct ? 'p' : 'c'}|${ctFold(r.title)}`;
+    const cur = merged.get(k);
+    if (!cur) { merged.set(k, { ...r, chatIds: r.chatId ? [r.chatId] : [] }); continue; }
+    if ((r.lastSeen || 0) > (cur.lastSeen || 0)) { cur.lastSeen = r.lastSeen; cur.title = r.title; }
+    if (r.chatId) cur.chatIds.push(r.chatId);
+    cur.count = (cur.count || 0) + (r.count || 0) || null;
+    cur.meeting = cur.meeting && r.meeting;
+    cur.memberCount = Math.max(cur.memberCount || 0, r.memberCount || 0) || null;
+    if (Array.isArray(r.members)) cur.members = [...(cur.members || []), ...r.members];
+  }
+  const rows = [...merged.values()].map(r => {
+    const members = Array.isArray(r.members) ? ctMergeMembers(r.members) : null;
+    return { ...r, chatId: r.chatIds[0] || null, key: `${r.direct ? 'p' : 'c'}:${ctFold(r.title)}`, members,
+      memberCount: r.memberCount || (members && members.length ? members.length + (r.source ? 1 : 0) : null),
+      _f: ctFold(r.title), _m: members ? members.map(m => ctFold(m.name)) : [] };
+  }).sort((x, y) => (y.lastSeen || 0) - (x.lastSeen || 0));
+  ctMemo.key = key;
+  ctMemo.rows = rows;
+  return rows;
+}
+
+/** "Nhóm <mark>Dự</mark> Án": highlight the (accent-insensitive) match. */
+function ctHi(text, q) {
+  if (!q) return esc(text);
+  const f = ctFold(text);
+  const i = f.indexOf(q);
+  if (i < 0 || f.length !== String(text).length) return esc(text); // folding changed length: no highlight
+  return `${esc(text.slice(0, i))}<mark>${esc(text.slice(i, i + q.length))}</mark>${esc(text.slice(i + q.length))}`;
+}
+
+/** Compact "when" like Teams: 10:52 today · Hôm qua · 4/11 · 23/4/25. */
+function ctWhen(ts) {
+  if (!ts) return '';
+  const d = new Date(ts), now = new Date();
+  if (Date.now() - ts < 60000) return 'vừa xong';
+  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  if (new Date(now.getTime() - 864e5).toDateString() === d.toDateString()) return 'Hôm qua';
+  return d.getFullYear() === now.getFullYear() ? `${d.getDate()}/${d.getMonth() + 1}` : `${d.getDate()}/${d.getMonth() + 1}/${String(d.getFullYear()).slice(2)}`;
+}
+
+function ctIsPicked(kind, name) { return ct.picks.some(p => p.kind === kind && ctFold(p.name) === ctFold(name)); }
+
+function ctTag(c) { if (!c) return ''; const g = ctGroupLabel(c); return `<span class="ct-tag${c.enabled === false ? ' off' : ''}">${g.emoji} ${esc(g.label)}</span>`; }
+
+/** Rows matching the current kind filter + search (with which members matched). */
+function ctFiltered(rows) {
+  const q = ctFold(ct.q);
+  const out = [];
+  for (let i = 0; i < rows.length; i++) {
+    const c = rows[i];
+    if (!(ct.kind === 'all' || (ct.kind === 'meeting' ? !!c.meeting : !c.meeting))) continue;
+    if (!q) { out.push({ c, i, hits: null }); continue; }
+    const titleHit = c._f.includes(q);
+    const hits = c._m.length ? c._m.filter(m => m.includes(q)) : [];
+    if (titleHit || hits.length) out.push({ c, i, hits: hits.length ? hits : null, titleHit });
+  }
+  // Searching: title matches first, then member matches.
+  if (q) out.sort((x, y) => Number(!!y.titleHit) - Number(!!x.titleHit));
+  return out;
+}
+
+function ctRowHtml({ c, i, hits }, q, saved, active) {
+  const appId = ct.app;
+  const kind = c.direct ? 'person' : 'chat';
+  const mine = saved.get(ctKey({ app: appId, kind, name: c.title }));
+  const open = !c.direct && (ct.open === c.key || !!hits);
+  const meta = [c.direct ? 'Chat riêng' : c.meeting ? 'Cuộc họp' : 'Nhóm', c.count ? `${c.count} tin bé đã gặp` : '', ctWhen(c.lastSeen)].filter(Boolean).join(' · ');
+  const picked = ctIsPicked(kind, c.title);
+  const mq = ctFold(ct.mq);
+  // While searching, a group opened only because members matched shows just those members.
+  const onlyHits = !!hits && ct.open !== c.key;
+  const members = Array.isArray(c.members) ? c.members.filter(m => (!mq || ctFold(m.name).includes(mq)) && (!onlyHits || ctFold(m.name).includes(q))) : null;
+  const memState = c.source ? ct.apiMembers[`${c.source}:${c.chatId}`] : null;
+  const count = c.memberCount || (c.members && c.members.length) || 0;
   return `
-      <section class="panel contacts-panel">
-        <h3>👥 Người quen <small class="muted">bé nhận ra người gửi theo đúng tên bạn nhập — không tự đoán</small></h3>
-        <div class="contact-add">
-          <input id="ct-name" type="text" maxlength="80" autocomplete="off" placeholder="Tên hiện trong thông báo, vd: Mai Phạm">
-          <select id="ct-group">${groupOpts}</select>
-          <select id="ct-emo"><option value="">Cảm xúc theo nhóm</option>${emotionOptions('')}</select>
-          <button class="btn btn-primary small" data-action="contact-add">＋ Thêm</button>
+      <li class="${picked ? 'sel' : ''} ${active ? 'kb' : ''}" data-ct-row="${i}" role="option" aria-selected="${picked}">
+        <button class="ct-row" data-action="ct-pick" data-arg="${i}" aria-pressed="${picked}" tabindex="-1">
+          ${ctAvatar(c.title, !c.direct)}
+          <span class="ct-main"><b>${ctHi(c.title, q)}</b><small>${esc(meta)}</small></span>
+          ${ctTag(mine)}
+          ${picked ? '<span class="ct-check" aria-hidden="true">✓</span>' : ''}
+        </button>
+        ${!c.direct && (count || c.source) ? `<button class="ct-more ${open ? 'on' : ''}" data-action="ct-open" data-arg="${i}" aria-expanded="${open}" title="Chọn người trong nhóm" tabindex="-1">${count ? `${count} người` : 'Thành viên'} <span class="ct-chev">${open ? '▴' : '▾'}</span></button>` : ''}
+        ${open ? `<div class="ct-members">
+          ${memState && memState.state === 'loading' ? '<span class="muted small"><span class="ct-spin sm"></span> Đang lấy thành viên…</span>'
+            : memState && memState.state !== 'ready' ? `<span class="ct-warn">⚠️ ${esc(memState.detail || 'Không lấy được thành viên')}</span>`
+            : members === null ? '<span class="muted small"><span class="ct-spin sm"></span> Đang lấy thành viên…</span>'
+            : `${!onlyHits && (c.members || []).length > 8 ? `<input class="ct-msearch" id="ct-mq" type="search" placeholder="Tìm trong nhóm…" value="${esc(ct.mq)}" autocomplete="off">` : ''}
+               ${members.length ? members.map(m => {
+                 const mm = saved.get(ctKey({ app: appId, kind: 'person', name: m.name }));
+                 const on = ctIsPicked('person', m.name);
+                 return `<button class="ct-member ${on ? 'sel' : ''}" data-action="ct-member" data-arg="${i}|${c.members.indexOf(m)}" aria-pressed="${on}">${on ? '<b class="ct-mcheck">✓</b>' : ''}${ctHi(m.name, q || mq)}${mm ? ` <span>${ctGroupLabel(mm).emoji}</span>` : ''}</button>`;
+               }).join('') : '<span class="muted small">Chưa thấy ai trong nhóm này.</span>'}${onlyHits && c.members.length > members.length ? `<button class="link-btn ct-allm" data-action="ct-open" data-arg="${i}">+ ${c.members.length - members.length} người khác</button>` : ''}`}
+        </div>` : ''}
+      </li>`;
+}
+
+function ctChatsHtml() {
+  const appId = ct.app;
+  const src = ctSources().find(s => s.app === appId);
+  const api = src && ct.api[src.id];
+  if (src && src.state === 'ready' && (!api || api.state === 'loading') && !ctDir().apps.some(a => a.app === appId)) {
+    return `<li class="ct-state ct-loading"><span class="ct-spin"></span><div><b>Đang lấy danh sách chat ${esc(src.api)}…</b><small>Lần đầu có thể mất 1–2 phút, những lần sau mở ra ngay.</small></div></li>`;
+  }
+  const rows = ctRows(appId);
+  if (!rows.length) {
+    const a = ctAppList().find(x => x.app === appId);
+    return `<li class="ct-empty-state"><div class="ct-empty-icon">${a ? ctAppIcon(a) : '💬'}</div><b>Chưa có tin nhắn nào từ ${esc(a ? a.label : 'ứng dụng này')}</b><small>Khi có tin mới, bé sẽ nhớ tên người gửi và tên nhóm để bạn chọn ở đây. Hoặc nhập tên ngay để đặt thái độ cho họ.</small><button class="btn btn-ghost small" data-action="ct-manual" data-arg="${esc(appId || '')}">✏️ Nhập tên</button></li>`;
+  }
+  const list = ctFiltered(rows);
+  ct.visible = list.map(x => x.i);
+  if (!list.length) return `<li class="ct-state muted">Không thấy “${esc(ct.q)}” — thử tên khác, hoặc <button class="link-btn" data-action="ct-manual" data-arg="${esc(appId || '')}">✏️ nhập tên thủ công</button>.</li>`;
+  const q = ctFold(ct.q);
+  const saved = ctSaved();
+  const html = list.slice(0, ct.limit).map((x, n) => ctRowHtml(x, q, saved, n === ct.cursor)).join('');
+  // Infinite scroll: a sentinel loads the next page when it scrolls into view.
+  return html + (list.length > ct.limit ? `<li class="ct-sentinel" aria-hidden="true"><span class="ct-spin sm"></span> ${list.length - ct.limit} cuộc chat nữa…</li>` : '');
+}
+
+/** Teams-style filter: Chat (1-1 + groups) · Cuộc họp · Tất cả — only when the list has meeting chats. */
+function ctKindChips() {
+  const rows = ctRows(ct.app);
+  const meetings = rows.filter(r => r.meeting).length;
+  if (!meetings) return '';
+  const chats = rows.length - meetings;
+  // (counts are for the whole list; the search result count is shown next to the search box)
+  const chip = (id, label, n) => `<button class="ct-chip ${ct.kind === id ? 'on' : ''}" data-action="ct-kind" data-arg="${id}" aria-pressed="${ct.kind === id}" title="${n}">${label}</button>`;
+  return `<span class="ct-chips" role="group" aria-label="Lọc loại chat">${chip('chat', 'Chat', chats)}${chip('meeting', 'Cuộc họp', meetings)}</span>`;
+}
+
+function ctSourceNotice(appId) {
+  const src = ctSources().find(s => s.app === appId);
+  const api = src && ct.api[src.id];
+  const label = ctApp(appId).label;
+  if (src && src.state === 'ready') {
+    if (api && api.state && !['ready', 'loading'].includes(api.state)) return `<div class="ct-banner warn"><span class="ct-banner-ico">⚠️</span><div><b>Chưa lấy được danh sách chat</b><small>${esc(api.detail || '')}</small></div><button class="btn btn-ghost small" data-action="ct-api-reload">Thử lại</button></div>`;
+    return '';
+  }
+  if (src && src.canConnect) return `<div class="ct-banner"><span class="ct-banner-ico">🔗</span><div><b>Xem đủ danh sách chat ${esc(label)}</b><small>Đăng nhập tài khoản công ty hoặc trường học — bé chỉ xem tên chat, không đọc tin nhắn.</small></div><button class="btn btn-ghost small" data-action="ct-connect" data-arg="${esc(src.toolkit)}" ${ct.connecting ? 'disabled' : ''}>${ct.connecting ? '⏳ Chờ đăng nhập…' : 'Kết nối'}</button></div>`;
+  return ctManualHint(appId);
+}
+
+/** One small line for apps whose chat list can't be fetched: type the name instead. */
+function ctManualHint(appId) {
+  return `<p class="ct-hint">💡 ${esc(ctApp(appId).label)} chưa cho bé xem danh sách chat — dưới đây là những chat bé đã gặp. Không thấy ai? <button class="link-btn" data-action="ct-manual" data-arg="${esc(appId || '')}">Nhập tên</button> để đặt thái độ cho họ.</p>`;
+}
+
+function ctSuggestHtml() {
+  const list = (ctDir().suggestions || []).slice(0, 5);
+  if (!list.length) return '';
+  return `
+        <div class="ct-suggest"><span class="ct-suggest-lbl">✨ Hay nhắn</span>${list.map((x, i) => `<button class="ct-sg" data-action="ct-suggest" data-arg="${i}" title="${esc(ctApp(x.app, x.appName).label)} · ${x.score} tin/tuần — bấm để xếp nhóm">${ctAvatar(x.name, x.kind === 'chat')}<span>${esc(x.name)}</span></button>`).join('')}</div>`;
+}
+
+function ctSavedHtml() {
+  const list = S.settings.contacts || [];
+  if (!list.length) return '';
+  const q = ctFold(ct.savedQ);
+  const attn = ctAttn();
+  const rows = list.map((c, i) => ({ c, i })).filter(({ c }) => !q || ctFold(c.name).includes(q) || ctFold(ctGroupLabel(c).label).includes(q));
+  rows.sort((a, b) => ct.sort === 'name' ? a.c.name.localeCompare(b.c.name, 'vi') : (b.c.updatedAt || 0) - (a.c.updatedAt || 0));
+  const appOf = (id) => (S.msgApps || []).find(x => x.app === id) || { app: id };
+  return `
+        ${list.length > 6 ? `<input id="ct-saved-q" class="ct-saved-q" type="search" placeholder="Tìm người quen…" value="${esc(ct.savedQ)}" autocomplete="off" aria-label="Tìm người quen">` : ''}
+        <ul class="ct-people" id="ct-saved">${rows.map(({ c, i }) => {
+          const g = ctGroupLabel(c);
+          const extra = [c.emotion ? `${emo(c.emotion).emoji} ${emo(c.emotion).label}` : '', c.attention && c.attention !== 'auto' && attn[c.attention] ? (CT_ATTN_UI[c.attention] || attn[c.attention].label) : ''].filter(Boolean).join(' · ');
+          return `
+          <li class="${c.enabled === false ? 'off' : ''} ${ct.editId === c.id ? 'editing' : ''}">
+            <span class="ct-prel-emo" title="${esc(g.label)}">${g.emoji}</span>
+            <div class="ct-pmain"><b title="${esc(c.name)}">${esc(c.name)}</b><small>${c.app ? `<span class="ct-papp">${ctAppIcon(appOf(c.app))}</span>` : ''}${esc(g.label)}${c.kind === 'chat' ? ' · cả nhóm' : ''}${extra ? ` · ${esc(extra)}` : ''}</small></div>
+            <label class="ct-switch" title="${c.enabled === false ? 'Đang tắt' : 'Đang bật'}"><input type="checkbox" data-ct-enable="${i}" ${c.enabled === false ? '' : 'checked'} aria-label="Bật quy tắc cho ${esc(c.name)}"><span class="switch"></span></label>
+            <button class="icon-btn" data-action="ct-edit" data-arg="${i}" title="Sửa" aria-label="Sửa ${esc(c.name)}">✎</button>
+            <button class="icon-btn" data-action="contact-remove" data-arg="${i}" title="Xóa" aria-label="Xóa ${esc(c.name)}">✕</button>
+          </li>`; }).join('') || '<li class="muted ct-state">Không thấy ai khớp.</li>'}</ul>`;
+}
+
+function ctHoursHtml() {
+  const groups = ctGroups();
+  const rel = S.settings.relationships || {};
+  const sw = (field, on, text) => `<label class="ct-sw"><input type="checkbox" data-rel-field="${field}" ${on ? 'checked' : ''}><span class="switch"></span><span>${text}</span></label>`;
+  return `
+          <div class="ct-extra-sec">
+            <b class="ct-extra-title">⏰ Giờ theo mối quan hệ</b>
+            ${Object.entries(groups).filter(([id]) => id !== 'ignored').map(([id, g]) => {
+              const r = { quietEnabled: false, quietStart: '18:00', quietEnd: '08:00', afterHours: false, digest: false, ...(rel[id] || {}) };
+              return `
+            <div class="ct-hour" data-rel="${id}">
+              <span class="ct-hour-name">${g.emoji} ${esc(g.label)}</span>
+              <div class="ct-hour-opts">
+                ${sw('quietEnabled', r.quietEnabled, 'Giờ riêng')}${r.quietEnabled ? `<span class="ct-time">ngoài <input type="time" data-rel-field="quietStart" value="${esc(r.quietStart)}" aria-label="Từ"> – <input type="time" data-rel-field="quietEnd" value="${esc(r.quietEnd)}" aria-label="Đến"> thì cất vào Hộp thư</span>` : ''}
+                ${sw('afterHours', r.afterHours, 'Báo cả giờ yên tĩnh')}
+                ${sw('digest', r.digest, 'Luôn vào Hộp thư')}
+              </div>
+            </div>`;
+            }).join('')}
+          </div>`;
+}
+
+function ctMemoryHtml() {
+  const d = ctDir();
+  const memOff = S.settings.privacy && S.settings.privacy.adaptiveMemory === false;
+  const ins = d.insights || [];
+  return `
+          <div class="ct-extra-sec">
+            <b class="ct-extra-title">🧠 Bé ghi nhớ</b>
+            ${H.toggle('privacy.learnContacts', 'Nhớ tên người gửi & tên nhóm', 'Chỉ lưu tên trên máy này, không lưu nội dung tin.')}
+            ${H.toggle('privacy.adaptiveMemory', 'Quen dần với thói quen nhắn tin', 'Ai hay gửi tin quan trọng thì báo nhanh hơn, nhóm quá ồn thì báo nhẹ nhàng.')}
+            ${ins.length ? `<ul class="ct-insights">${ins.map(x => `<li><b>${esc(x.name)}</b> — ${esc(CT_NOTE[x.note] || x.note)}${memOff ? ' <small class="muted">(đang tắt)</small>' : ''}</li>`).join('')}</ul>` : ''}
+            ${d.apps.length ? '<button class="link-btn ct-forget" data-action="ct-forget">🧹 Quên danh sách đã gặp</button>' : ''}
+          </div>`;
+}
+
+/** Everything that isn't needed day-to-day, folded away: hours per relationship + memory. */
+function ctMoreHtml() {
+  return `
+        <details class="ct-extra" id="ct-hours" ${ct.hoursOpen ? 'open' : ''}>
+          <summary>⚙️ Tuỳ chọn thêm <small class="muted">giờ theo mối quan hệ · bé ghi nhớ</small></summary>
+          ${ctHoursHtml()}
+          ${ctMemoryHtml()}
+        </details>`;
+}
+
+function contactsPanel() {
+  const groups = ctGroups();
+  const apps = ctAppList();
+  if (!ct.manual && !apps.find(a => a.app === ct.app)) { ct.app = apps[0] ? apps[0].app : null; ct.picks = []; }
+  const manual = ct.manual || !apps.length;
+  const src = ctSources().find(s => s.app === ct.app && s.state === 'ready');
+  if (!manual && src && !ct.api[src.id]) setTimeout(() => ctLoadApi(src.id), 0);
+  const saved = ctSaved();
+  const dup = ct.picks.length === 1 && !ct.editId ? saved.get(ctKey(ct.picks[0])) : null;
+  const editing = ct.editId ? (S.settings.contacts || []).find(c => c.id === ct.editId) : null;
+  // Who step ③ applies to — one compact line next to the step title (nothing when no one is picked).
+  const who = editing ? `${esc(editing.name)} · ${editing.kind === 'chat' ? 'cả nhóm' : 'một người'}`
+    : manual ? (ct.manualName ? `${esc(ct.manualName)} · ${ct.manualKind === 'chat' ? 'cả nhóm' : 'một người'}` : '')
+    : ct.picks.length === 1 ? `${esc(ct.picks[0].name)} · ${ct.picks[0].kind === 'chat' ? 'cả nhóm' : 'một người'}`
+    : ct.picks.length > 1 ? `${ct.picks.length} người` : '';
+  const canAdd = editing || (manual ? true : ct.picks.length > 0);
+  return `
+      <section class="panel contacts-panel" aria-labelledby="ct-title">
+        <header class="ct-head"><h3 id="ct-title">👥 Người quen</h3><small class="muted">Chỉ cho bé ai là ai để bé phản ứng đúng</small></header>
+        ${editing ? `<div class="ct-editing">✎ Đang sửa <b>${esc(editing.name)}</b><button class="link-btn" data-action="ct-cancel">Huỷ</button></div>` : `
+        ${ctSuggestHtml()}
+        <div class="ct-step"><span class="ct-num">1</span><b>Ứng dụng</b></div>
+        <div class="ct-apps" role="tablist" aria-label="Ứng dụng">
+          ${apps.map(a => { const on = !manual && a.app === ct.app; return `<button role="tab" aria-selected="${on}" class="ct-app ${on ? 'on' : ''}" data-action="ct-app" data-arg="${esc(a.app)}" title="${a.running ? 'Đang chạy' : a.installed ? 'Đã cài' : 'Từ thông báo'}"><span class="ct-app-ico">${ctAppIcon(a)}</span>${esc(ctApp(a.app, a.label).label)}${a.running ? '<i class="dot on"></i>' : ''}</button>`; }).join('')}
+          <button role="tab" aria-selected="${manual}" class="ct-app ${manual ? 'on' : ''}" data-action="ct-manual"><span class="ct-app-ico"><span>✏️</span></span>Nhập tên</button>
         </div>
-        ${list.length ? `<ul class="contact-list">${list.map((c, i) => { const g = groups[c.group] || { emoji: '👤', label: c.group }; return `
-          <li><span class="ct-emoji">${g.emoji}</span><div><b>${esc(c.name)}</b><small>${esc(g.label)} · ${esc(effect(g, c))}</small></div>
-          <button class="icon-btn" data-action="contact-remove" data-arg="${i}" title="Xóa">✕</button></li>`; }).join('')}</ul>`
-        : '<p class="muted">Chưa có ai. Ví dụ: thêm người yêu vào 💞 để bé luôn bắn tim khi họ nhắn, hay thêm sếp vào 👔 để tin của sếp luôn được ưu tiên.</p>'}
-        <p class="muted small">Tên người quen thắng cả thái độ đã chọn. Bé so khớp với người gửi, dòng "Tên: …" trong tin nhóm, hoặc tiêu đề cuộc chat.</p>
+        <div class="ct-step"><span class="ct-num">2</span><b>${manual ? 'Nhập tên' : 'Chọn cuộc chat'}</b>${manual ? '' : `${ctKindChips()}<span class="ct-count" id="ct-count" aria-live="polite"></span><input id="ct-q" class="ct-search" type="search" autocomplete="off" placeholder="Tìm…" title="↑ ↓ · Enter để chọn · Esc để xoá" value="${esc(ct.q)}" aria-label="Tìm người hoặc nhóm" aria-controls="ct-chats">${src ? '<button class="icon-btn ct-reload" data-action="ct-api-reload" title="Làm mới danh sách">↻</button>' : ''}`}</div>
+        ${manual ? `
+        <div class="ct-manual">
+          <input id="ct-name" type="text" maxlength="80" autocomplete="off" placeholder="Tên hiện trong thông báo, vd: Mai Phạm" value="${esc(ct.manualName || '')}" aria-label="Tên">
+          <select id="ct-kind" aria-label="Là"><option value="person" ${ct.manualKind === 'chat' ? '' : 'selected'}>👤 Một người</option><option value="chat" ${ct.manualKind === 'chat' ? 'selected' : ''}>👥 Cả nhóm</option></select>
+          <select id="ct-mapp" aria-label="Trong ứng dụng"><option value="">Mọi ứng dụng</option>${apps.map(a => `<option value="${esc(a.app)}" ${ct.manualApp === a.app ? 'selected' : ''}>${esc(ctApp(a.app, a.label).label)}</option>`).join('')}</select>
+        </div>` : `
+        ${ctSourceNotice(ct.app)}
+        <ul class="ct-chats" id="ct-chats" role="listbox" aria-label="Cuộc trò chuyện">${ctChatsHtml()}</ul>`}`}
+        <div class="ct-step"><span class="ct-num">3</span><b>Bé đối xử thế nào?</b>${who ? `<span class="ct-who">${who}</span>` : ''}</div>
+        <div class="ct-rels" role="radiogroup" aria-label="Quan hệ">${Object.entries(groups).map(([id, g]) => `<button role="radio" aria-checked="${id === ct.group}" class="ct-rel ${id === ct.group ? 'on' : ''}" data-action="ct-rel" data-arg="${id}"><i>${g.emoji}</i>${esc(g.label.replace(' (vào Hộp thư)', ''))}</button>`).join('')}</div>
+        ${ct.group === 'other' ? `<input id="ct-label" class="ct-other" type="text" maxlength="40" placeholder="Tên quan hệ, vd: Hàng xóm" value="${esc(ct.label)}">` : ''}
+        <div class="contact-add">
+          <select id="ct-emo" aria-label="Cảm xúc của bé"><option value="">✨ Cảm xúc theo quan hệ</option>${emotionOptions(ct.emotion).replace(/ \([a-z]+\)</g, '<')}</select>
+          <select id="ct-attn" aria-label="Cách báo">${Object.entries(ctAttn()).map(([id, x]) => `<option value="${id}" ${id === ct.attention ? 'selected' : ''}>${esc(CT_ATTN_UI[id] || x.label)}</option>`).join('')}</select>
+          <button class="btn btn-primary ct-add" data-action="contact-add" ${canAdd ? '' : 'disabled'}>${editing ? 'Lưu' : dup ? 'Cập nhật' : '＋ Thêm'}</button>
+        </div>
+        <p class="ct-valid" id="ct-valid" role="status">${dup ? `${esc(dup.name)} đang là ${esc(ctGroupLabel(dup).label)}.` : ''}</p>
+        ${(S.settings.contacts || []).length ? `<div class="ct-sub"><b>Người quen</b> <span class="ct-count-pill">${S.settings.contacts.length}</span></div>` : ''}
+        ${ctSavedHtml()}
+        ${ctMoreHtml()}
+      </section>`;
+}
+
+function paintContacts() {
+  const el = main.querySelector('.contacts-panel');
+  if (!el) return;
+  const active = document.activeElement && document.activeElement.id;
+  const pos = active && document.activeElement.selectionStart;
+  const ul = document.getElementById('ct-chats');
+  const scroll = ul ? ul.scrollTop : 0;
+  ct.hoursOpen = !!(document.getElementById('ct-hours') || {}).open;
+  el.outerHTML = contactsPanel();
+  const panel = main.querySelector('.contacts-panel');
+  if (panel) syncInputs(panel); // H.toggle switches get their state from settings
+  const ul2 = document.getElementById('ct-chats');
+  if (ul2) ul2.scrollTop = scroll; // picking a chat must not jump the list back to the top
+  ctAfterPaint();
+  if (active && /^ct-/.test(active)) { const n = document.getElementById(active); if (n) { n.focus(); try { if (pos != null) n.setSelectionRange(pos, pos); } catch { /* select */ } } }
+}
+
+function paintChats({ keepScroll = true } = {}) {
+  const ul = document.getElementById('ct-chats');
+  if (!ul) return;
+  const scroll = ul.scrollTop;
+  ul.innerHTML = ctChatsHtml();
+  ul.scrollTop = keepScroll ? scroll : 0;
+  ctAfterPaint();
+}
+
+let ctObserver = null;
+function ctAfterPaint() {
+  // Result count next to the search box.
+  const cnt = document.getElementById('ct-count');
+  if (cnt) cnt.textContent = ct.q ? `${(ct.visible || []).length} kết quả` : '';
+  // Infinite scroll.
+  if (ctObserver) ctObserver.disconnect();
+  const ul = document.getElementById('ct-chats');
+  const sentinel = ul && ul.querySelector('.ct-sentinel');
+  if (!sentinel) return;
+  ctObserver = new IntersectionObserver((entries) => {
+    if (!entries.some(e => e.isIntersecting)) return;
+    ctObserver.disconnect();
+    ct.limit += 60;
+    requestAnimationFrame(() => paintChats());
+  }, { root: ul, rootMargin: '200px' });
+  ctObserver.observe(sentinel);
+}
+
+async function ctLoadApi(id, refresh = false) {
+  ct.api[id] = { ...(ct.api[id] || {}), state: 'loading' };
+  paintContacts(); // also clears a previous error banner
+  try { ct.api[id] = await api(`/api/contacts/sources/${id}/chats${refresh ? '?refresh=1' : ''}`); }
+  catch (err) { ct.api[id] = { state: 'error', detail: err.message, chats: [] }; }
+  paintContacts();
+  // Served from the on-disk cache while a background refresh runs: pick up the fresh list later.
+  if (ct.api[id] && ct.api[id].refreshing) setTimeout(async () => { try { const r = await api(`/api/contacts/sources/${id}/chats`); if (r.state === 'ready') { ct.api[id] = r; paintChats(); } } catch { /* keep */ } }, 90000);
+}
+
+async function ctLoadMembers(row) {
+  const k = `${row.source}:${row.chatId}`;
+  if (ct.apiMembers[k] && ct.apiMembers[k].state !== 'error') return;
+  ct.apiMembers[k] = { state: 'loading' };
+  paintChats();
+  try { ct.apiMembers[k] = await api(`/api/contacts/sources/${row.source}/members?chat=${encodeURIComponent(row.chatId)}`); }
+  catch (err) { ct.apiMembers[k] = { state: 'error', detail: err.message, members: [] }; }
+  paintChats();
+}
+
+let ctSearchTimer = null;
+document.addEventListener('input', (e) => {
+  const id = e.target.id;
+  if (id === 'ct-q') {
+    ct.q = e.target.value; ct.limit = 60; ct.cursor = -1;
+    clearTimeout(ctSearchTimer);
+    ctSearchTimer = setTimeout(() => requestAnimationFrame(() => paintChats({ keepScroll: false })), 90);
+  }
+  if (id === 'ct-mq') { ct.mq = e.target.value; clearTimeout(ctSearchTimer); ctSearchTimer = setTimeout(() => { paintChats(); const n = document.getElementById('ct-mq'); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } }, 120); }
+  if (id === 'ct-saved-q') { ct.savedQ = e.target.value; clearTimeout(ctSearchTimer); ctSearchTimer = setTimeout(paintContacts, 150); }
+  if (id === 'ct-name') ct.manualName = e.target.value;
+  if (id === 'ct-label') ct.label = e.target.value;
+});
+document.addEventListener('change', (e) => {
+  const t = e.target;
+  if (t.id === 'ct-group') { ct.group = t.value; paintContacts(); }
+  if (t.id === 'ct-emo') ct.emotion = t.value;
+  if (t.id === 'ct-attn') ct.attention = t.value;
+  if (t.id === 'ct-kind') ct.manualKind = t.value;
+  if (t.id === 'ct-mapp') ct.manualApp = t.value;
+  if (t.id === 'ct-sort') { ct.sort = t.value; paintContacts(); }
+  if (t.dataset && t.dataset.ctEnable !== undefined) {
+    const list = [...(S.settings.contacts || [])];
+    const c = list[Number(t.dataset.ctEnable)];
+    if (!c) return;
+    list[Number(t.dataset.ctEnable)] = { ...c, enabled: t.checked, updatedAt: Date.now() };
+    queueSave({ contacts: list }, true);
+    toast(t.checked ? `Đã bật quy tắc cho ${c.name}` : `Đã tắt quy tắc cho ${c.name}`, 'ok');
+    setTimeout(paintContacts, 300);
+  }
+  if (t.dataset && t.dataset.relField) {
+    const rel = t.closest('[data-rel]').dataset.rel;
+    const v = t.type === 'checkbox' ? t.checked : t.value;
+    if (t.type === 'time' && !/^\d{2}:\d{2}$/.test(v)) return;
+    queueSave({ relationships: { [rel]: { [t.dataset.relField]: v } } }, true);
+    if (t.dataset.relField === 'quietEnabled') setTimeout(paintContacts, 50); // show / hide the hours
+  }
+  if (t.dataset && (t.dataset.setting === 'privacy.learnContacts' || t.dataset.setting === 'privacy.adaptiveMemory')) setTimeout(refreshContactDirectory, 400);
+});
+document.addEventListener('keydown', (e) => {
+  if (e.target.id === 'ct-q') {
+    const n = (ct.visible || []).length;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!n) return;
+      ct.cursor = Math.max(0, Math.min(Math.min(n, ct.limit) - 1, (ct.cursor ?? -1) + (e.key === 'ArrowDown' ? 1 : -1)));
+      paintChats();
+      const li = document.querySelector('#ct-chats li.kb');
+      if (li) li.scrollIntoView({ block: 'nearest' });
+      return;
+    }
+    if (e.key === 'Enter' && n) { e.preventDefault(); actions['ct-pick'](String(ct.visible[Math.max(0, ct.cursor ?? 0)])); return; }
+    if (e.key === 'Escape' && ct.q) { e.preventDefault(); e.target.value = ''; ct.q = ''; ct.cursor = -1; paintChats({ keepScroll: false }); return; }
+  }
+  if (e.key === 'Enter' && (e.target.id === 'ct-name' || e.target.id === 'ct-label')) { e.preventDefault(); actions['contact-add'](); }
+  if (e.key === 'Escape' && ct.editId && main.querySelector('.contacts-panel')) actions['ct-cancel']();
+});
+
+async function refreshContactDirectory() {
+  try {
+    const [dir, src, apps] = await Promise.all([api('/api/contacts/seen'), api('/api/contacts/sources'), api('/api/contacts/apps').catch(() => ({ apps: S.msgApps || [] }))]);
+    S.contactDirectory = dir;
+    S.chatSources = src.sources;
+    S.msgApps = apps.apps;
+    paintContacts();
+  } catch { /* ignore */ }
+}
+
+/** One pick that already has a rule → preload its settings so it's easy to change. */
+function ctPreload() {
+  if (ct.picks.length !== 1) return;
+  const prev = ctSaved().get(ctKey(ct.picks[0]));
+  if (prev) Object.assign(ct, { group: prev.group, label: prev.label || '', emotion: prev.emotion || '', attention: prev.attention || 'auto' });
+}
+
+function moodPanel() {
+  return `
+      <section class="panel mood-panel">
+        <h3>🎭 Bé đọc cảm xúc tin nhắn</h3>
+        <div class="grid-2 flat">
+          <div>
+            ${H.toggle('mood.enabled', 'Bé đoán cảm xúc từ nội dung', 'Dựa vào emoji và câu chữ (tiếng Việt có hoặc không dấu, tiếng Anh). Xử lý ngay trên máy, không gửi đi đâu.')}
+            <b class="sub-title">Bé phản ứng</b>
+            <div class="seg seg-3">${[['low', '🐢 Ít'], ['medium', '🐾 Vừa'], ['high', '⚡ Nhạy']].map(([v, l]) => `<button data-choice="mood.sensitivity" data-value="${v}">${l}</button>`).join('')}</div>
+            <p class="muted">Ít: chỉ khi tin nhắn thể hiện rõ cảm xúc. Nhạy: phản ứng cả với một từ hay một emoji.</p>
+          </div>
+          <div>
+            <b class="sub-title">Gõ thử một tin nhắn</b>
+            <input id="mood-try" type="text" autocomplete="off" placeholder="vd: Đồng nghiệp: app gãy rồi 😭">
+            <div class="mood-examples">${['Đồng nghiệp: 😁', 'Bạn: cảm ơn nhiều nha 🙏', 'Trưởng nhóm: task quá hạn rồi, gấp lên!!', 'Nhóm dev: server toang rồi', 'Đồng nghiệp: xem giúp PR này được không?'].map(x => `<button class="chip-btn" data-mood-example="${esc(x)}">${esc(x)}</button>`).join('')}</div>
+            <div class="mood-result" id="mood-result"><span class="muted">Bé sẽ phản ứng trong khung xem trước ở trên 👆</span></div>
+          </div>
+        </div>
       </section>`;
 }
 
@@ -342,7 +863,7 @@ const H = {
 
 const PRIORITY_LABEL = { critical: '🚨 Khẩn cấp', important: '⭐ Quan trọng', normal: '• Bình thường', low: '💤 Ít quan trọng' };
 const FRIENDLY_REASON = {
-  low_priority: 'Ít quan trọng', cooldown: 'Nhiều tin liên tiếp', app_muted: 'Ứng dụng đã tắt tiếng', contact_ignored: 'Người quen đang để Bỏ qua', presence_hidden: 'Lúc thú cưng đang ẩn',
+  low_priority: 'Ít quan trọng', cooldown: 'Nhiều tin liên tiếp', app_muted: 'Ứng dụng đã tắt tiếng', contact_ignored: 'Người quen đang để Bỏ qua', contact_inbox: 'Người quen: chỉ lưu vào Hộp thư', relationship_hours: 'Ngoài giờ của mối quan hệ', relationship_digest: 'Gom theo mối quan hệ', presence_hidden: 'Lúc thú cưng đang ẩn',
   presence_minimal: 'Chế độ tối giản', queue_overflow: 'Quá nhiều tin cùng lúc', manual_test: 'Thử nghiệm', not_mentioned: 'Tin nhóm không nhắc tên bạn'
 };
 const friendlyReason = (r) => FRIENDLY_REASON[r] || (/^mode_/.test(r || '') ? 'Đang ở chế độ tập trung' : '');
@@ -500,24 +1021,9 @@ const pages = {
         </section>
       </div>
       ${contactsPanel()}
-      <section class="panel mood-panel ${S.settings.mood.followAttitude !== false ? 'is-off' : ''}">
-        <h3>🎭 Bé đọc cảm xúc tin nhắn</h3>
-        ${S.settings.mood.followAttitude !== false ? '<p class="notice">Đang tắt vì bé phản ứng theo thái độ đã chọn. Tắt công tắc "Bé luôn phản ứng theo thái độ đã chọn" ở trên để dùng.</p>' : ''}
-        <div class="grid-2 flat">
-          <div>
-            ${H.toggle('mood.enabled', 'Bé đoán cảm xúc từ nội dung', 'Dựa vào emoji và câu chữ (tiếng Việt có hoặc không dấu, tiếng Anh). Xử lý ngay trên máy, không gửi đi đâu.')}
-            <b class="sub-title">Bé phản ứng</b>
-            <div class="seg seg-3">${[['low', '🐢 Ít'], ['medium', '🐾 Vừa'], ['high', '⚡ Nhạy']].map(([v, l]) => `<button data-choice="mood.sensitivity" data-value="${v}">${l}</button>`).join('')}</div>
-            <p class="muted">Ít: chỉ khi tin nhắn thể hiện rõ cảm xúc. Nhạy: phản ứng cả với một từ hay một emoji.</p>
-          </div>
-          <div>
-            <b class="sub-title">Gõ thử một tin nhắn</b>
-            <input id="mood-try" type="text" autocomplete="off" placeholder="vd: Đồng nghiệp: app gãy rồi 😭">
-            <div class="mood-examples">${['Đồng nghiệp: 😁', 'Bạn: cảm ơn nhiều nha 🙏', 'Trưởng nhóm: task quá hạn rồi, gấp lên!!', 'Nhóm dev: server toang rồi', 'Đồng nghiệp: xem giúp PR này được không?'].map(x => `<button class="chip-btn" data-mood-example="${esc(x)}">${esc(x)}</button>`).join('')}</div>
-            <div class="mood-result" id="mood-result"><span class="muted">Bé sẽ phản ứng trong khung xem trước ở trên 👆</span></div>
-          </div>
-        </div>
-      </section>
+      ${S.settings.mood.followAttitude !== false
+        ? `<section class="panel mood-off"><span>🎭</span><div><b>Bé đọc cảm xúc tin nhắn</b><small>Đang tắt — bé phản ứng theo thái độ đã chọn ở trên.</small></div><button class="btn btn-ghost small" data-action="mood-enable">Bật</button></section>`
+        : moodPanel()}
       <section class="panel">
         <h3>🎵 Âm thanh & chuyển động</h3>
         <div class="grid-2 flat">
@@ -780,6 +1286,7 @@ const notifySubs = {
             <small>Cách nhau bằng dấu phẩy. Tên 2 chữ trở lên (vd: Mai Pham) nhận cả khi không có @; tên 1 chữ phải có @ (vd: @Mai) để tránh nhầm với từ thường ngày ("mai" = ngày mai, "anh", "em"…).</small>
             <input id="chat-names" type="text" autocomplete="off" spellcheck="false" value="${esc((S.settings.chat.names || []).join(', '))}" placeholder="${esc(S.chatNameSuggestion ? `${S.chatNameSuggestion}, @${S.chatNameSuggestion.split(' ')[0]}` : 'Tên Của Bạn, @Ten')}">
           </label>
+          ${!(S.settings.chat.names || []).length ? `<p class="notice warn">⚠️ Chưa có tên của bạn — bé chỉ nhận ra khi chính ứng dụng ghi “nhắc đến bạn” (Teams, Slack). Với Zalo, Messenger… hãy nhập tên mọi người hay @ bạn.</p>` : ''}
           ${S.chatNameSuggestion && !(S.settings.chat.names || []).length ? `<div class="btn-row tight"><button class="btn btn-ghost small" data-action="chat-suggest">＋ Dùng "${esc(S.chatNameSuggestion)}"</button></div>` : ''}
           ${H.toggle('chat.includeDirect', '💬 Báo khi có người nhắn riêng (1-1)', 'Bé nhận ra tin 1-1 khi tiêu đề là tên người gửi và nội dung không có dạng "Người gửi: …" (dạng của tin nhóm). Slack thì biết chính xác. Tin 1-1 được ưu tiên như khi nhắc tên bạn.')}
         </div>
@@ -1054,7 +1561,7 @@ async function eventsModal(toolkit) {
 
 const DELIVERY_LABEL = { realtime_push: '⚡ Realtime push', near_realtime_poll: '⏱️ Near real-time (poll)', scheduled_sync: '🗓️ Scheduled sync', native_os: '🖥️ System event', manual: '✋ Manual' };
 const REASON_LABEL = {
-  allowed: 'Hiển thị', low_priority: 'Ít quan trọng → Inbox', cooldown: 'Quá nhiều tin cùng app (cooldown)', app_muted: 'App đã tắt tiếng', contact_ignored: 'Người quen: Bỏ qua',
+  allowed: 'Hiển thị', low_priority: 'Ít quan trọng → Inbox', cooldown: 'Quá nhiều tin cùng app (cooldown)', app_muted: 'App đã tắt tiếng', contact_ignored: 'Người quen: Bỏ qua', contact_inbox: 'Người quen: chỉ lưu Hộp thư', relationship_hours: 'Ngoài giờ của mối quan hệ', relationship_digest: 'Gom theo mối quan hệ',
   presence_hidden: 'Đang ẩn thú cưng', presence_minimal: 'Hiện tối giản', critical_bypass: 'Khẩn cấp — vượt rào', queue_overflow: 'Hàng đợi đầy', manual_test: 'Thử nghiệm', not_mentioned: 'Chat không nhắc tên → Inbox'
 };
 const reasonLabel = (r) => REASON_LABEL[r] || (r || '').replace(/^mode_(\w+)_min_(\w+)$/, 'Chế độ $1 chỉ cho mức ≥ $2').replace(/^mode_(\w+)_blocks_(\w+)$/, 'Chế độ $1 chặn nhóm $2').replace(/^mode_(\w+)$/, 'Chế độ $1');
@@ -1235,7 +1742,7 @@ function inboxRows(list) {
       <div class="h-main"><b>${esc(h.title)}</b><small>${esc(h.message || '')}</small></div>
       <div class="h-meta">
         <small>${esc(h.app)} · ${arrivedAt(h.receivedAt)}${friendlyReason(h.reason) ? ` · ${esc(friendlyReason(h.reason))}` : ''}</small>
-        <span class="row-actions">${h.url ? `<a class="link" href="${esc(h.url)}" target="_blank" rel="noopener">Mở ↗</a>` : ''}<button class="icon-btn" data-action="inbox-del" data-arg="${esc(h.id)}" title="Xóa">✕</button></span>
+        <span class="row-actions">${h.who ? `<button class="btn btn-ghost small" data-action="inbox-classify" data-arg="${esc(h.id)}" title="Xếp người gửi / nhóm này vào Người quen">👥 Xếp nhóm</button>` : ''}${h.url ? `<a class="link" href="${esc(h.url)}" target="_blank" rel="noopener">Mở ↗</a>` : ''}<button class="icon-btn" data-action="inbox-del" data-arg="${esc(h.id)}" title="Xóa">✕</button></span>
       </div>
     </div>`).join('');
 }
@@ -1343,7 +1850,7 @@ function render() {
   if (route === 'monitor' && sub === 'rules') bindRules();
   if (route === 'monitor' && sub === 'tools') bindUploads();
   if (route === 'connect') bindConnect();
-  if (route === 'pet') bindMoodTry();
+  if (route === 'pet') { bindMoodTry(); refreshContactDirectory(); }
   if (route === 'inbox') refreshInbox();
 }
 
@@ -1615,21 +2122,181 @@ const actions = {
     queueSave({ appearance: { petScale: v.petScale }, notifications: { size: v.size, cardScale: v.cardScale } }, true);
     setTimeout(render, 150);
   },
+  'ct-app'(app) {
+    Object.assign(ct, { app, manual: false, picks: [], q: '', mq: '', open: null, kind: 'chat', limit: 60, cursor: -1 });
+    paintContacts();
+    const ul = document.getElementById('ct-chats'); if (ul) ul.scrollTop = 0; // a different app's list starts at the top
+  },
+  'ct-manual'(appId) { ct.manual = true; ct.picks = []; ct.manualApp = appId || ''; paintContacts(); const n = document.getElementById('ct-name'); if (n) n.focus(); },
+  async 'ct-apps-refresh'() {
+    try { S.msgApps = (await api('/api/contacts/apps?refresh=1')).apps; paintContacts(); toast('Đã dò lại các app nhắn tin trên máy', 'ok'); }
+    catch (err) { toast(err.message, 'error'); }
+  },
+  async 'ct-connect'(toolkit) {
+    if (ct.connecting) return;
+    try {
+      const r = await api('/api/integrations/connect', { method: 'POST', body: { toolkit, name: 'Microsoft Teams' } });
+      if (!r.opened) { toast('Không mở được trang đăng nhập — thử lại ở tab 🔌 Kết nối', 'error'); return; }
+      toast('Đã mở trang đăng nhập Microsoft trong trình duyệt — đăng nhập xong bé sẽ tự lấy danh sách chat', 'ok');
+    } catch (err) { toast(err.message, 'error'); return; }
+    ct.connecting = true;
+    paintContacts();
+    // Wait for the OAuth to finish (up to ~3 min), then load the chat list.
+    for (let i = 0; i < 45 && ct.connecting; i++) {
+      await new Promise(r => setTimeout(r, 4000));
+      try {
+        const st = await api('/api/integrations/refresh', { method: 'POST', body: {} });
+        const app = (st.apps || []).find(a => a.toolkit === toolkit);
+        if (app && app.status === 'active') {
+          ct.connecting = false;
+          delete ct.api.teams;
+          await refreshContactDirectory();
+          toast('✅ Đã kết nối Microsoft Teams', 'ok');
+          return;
+        }
+      } catch { /* keep waiting */ }
+    }
+    ct.connecting = false;
+    paintContacts();
+  },
+  'mood-enable'() { queueSave({ mood: { followAttitude: false } }, true); },
+  'ct-rel'(g) { if (!ctGroups()[g]) return; ct.group = g; paintContacts(); if (g === 'other') { const n = document.getElementById('ct-label'); if (n) n.focus(); } },
+  'ct-kind'(k) { ct.kind = ['chat', 'meeting', 'all'].includes(k) ? k : 'chat'; ct.limit = 60; ct.cursor = -1; paintContacts(); const ul = document.getElementById('ct-chats'); if (ul) ul.scrollTop = 0; },
+  'ct-more-rows'() { ct.limit += 50; paintChats(); },
+  'ct-api-reload'() { const src = ctSources().find(s => s.app === ct.app); if (src) ctLoadApi(src.id, true); },
+  'ct-open'(i) {
+    const row = ctRows(ct.app)[Number(i)];
+    if (!row) return;
+    const viaSearch = ct.q && row._m.some(m => m.includes(ctFold(ct.q)));
+    ct.open = ct.open === row.key ? (viaSearch ? '' : null) : row.key;
+    ct.mq = '';
+    if (ct.open && row.source && !Array.isArray(row.members)) ctLoadMembers(row);
+    paintChats();
+  },
+  'ct-pick'(i) {
+    const row = ctRows(ct.app)[Number(i)];
+    if (!row) return;
+    const kind = row.direct ? 'person' : 'chat';
+    const already = ct.picks.length === 1 && ctIsPicked(kind, row.title);
+    ct.picks = already ? [] : [{ kind, name: row.title, app: ct.app, targetId: row.chatId || null }];
+    ctPreload();
+    paintContacts();
+  },
+  'ct-member'(arg) {
+    const [i, mi] = String(arg).split('|').map(Number);
+    const row = ctRows(ct.app)[i];
+    const m = row && Array.isArray(row.members) && row.members[mi];
+    if (!m) return;
+    ct.open = row.key;
+    // Several people from one group can be classified at once; a member pick replaces a whole-group pick.
+    ct.picks = ct.picks.filter(p => p.kind === 'person' && p.viaChat === row.title);
+    if (ctIsPicked('person', m.name)) ct.picks = ct.picks.filter(p => ctFold(p.name) !== ctFold(m.name));
+    else ct.picks.push({ kind: 'person', name: m.name, app: ct.app, targetId: row.source && m.id !== m.name ? m.id : null, viaChat: row.title });
+    ctPreload();
+    paintContacts();
+  },
+  'ct-suggest'(i) {
+    const s = (ctDir().suggestions || [])[Number(i)];
+    if (!s) return;
+    ct.manual = false; ct.app = s.app; ct.q = ''; ct.open = null; ct.editId = null;
+    ct.picks = [{ kind: s.kind, name: s.name, app: s.app, targetId: null }];
+    ctPreload();
+    paintContacts();
+    const g = document.querySelector('.ct-rels');
+    if (g) { g.scrollIntoView({ block: 'center', behavior: 'smooth' }); const on = g.querySelector('.ct-rel.on'); if (on) on.focus(); }
+  },
+  'ct-edit'(i) {
+    const c = (S.settings.contacts || [])[Number(i)];
+    if (!c) return;
+    Object.assign(ct, { editId: c.id, group: c.group, label: c.label || '', emotion: c.emotion || '', attention: c.attention || 'auto', picks: [] });
+    paintContacts();
+    const g = document.querySelector('.ct-rels');
+    if (g) { g.scrollIntoView({ block: 'center', behavior: 'smooth' }); const on = g.querySelector('.ct-rel.on'); if (on) on.focus(); }
+  },
+  'ct-cancel'() { ct.editId = null; ct.picks = []; paintContacts(); },
   'contact-add'() {
-    const name = (document.getElementById('ct-name').value || '').trim();
-    const group = document.getElementById('ct-group').value;
-    const emotion = document.getElementById('ct-emo').value || null;
-    if (!name) { toast('Nhập tên người gửi trước nhé', 'error'); return; }
-    const list = (S.settings.contacts || []).filter(c => c.name.toLowerCase() !== name.toLowerCase());
-    queueSave({ contacts: [...list, { name, group, emotion }] }, true);
-    toast(`Đã thêm ${name}`, 'ok');
-    setTimeout(render, 300);
+    const manual = !ct.editId && (ct.manual || !ctAppList().length);
+    const group = ct.group;
+    const label = group === 'other' ? String(ct.label || '').trim() : '';
+    const valid = document.getElementById('ct-valid');
+    const fail = (msg) => { if (valid) { valid.textContent = `⚠️ ${msg}`; valid.className = 'ct-valid err'; } toast(msg, 'error'); };
+    if (group === 'other' && !label) return fail('Đặt tên cho quan hệ "Khác" trước nhé (vd: Hàng xóm)');
+    const now = Date.now();
+    const base = { group, label: label || null, emotion: ct.emotion || null, attention: ct.attention || 'auto', enabled: true, updatedAt: now };
+    let list = [...(S.settings.contacts || [])];
+    let names = [];
+    if (ct.editId) {
+      const i = list.findIndex(c => c.id === ct.editId);
+      if (i < 0) return fail('Không tìm thấy quy tắc này nữa');
+      list[i] = { ...list[i], ...base };
+      names = [list[i].name];
+    } else {
+      const picks = manual
+        ? [{ name: String(ct.manualName || '').trim(), kind: ct.manualKind === 'chat' ? 'chat' : 'person', app: ct.manualApp || null, targetId: null }]
+        : ct.picks;
+      if (!picks.length || !picks[0].name) return fail(manual ? 'Nhập tên người gửi trước nhé' : 'Chọn một người hoặc nhóm ở bước 2 trước nhé');
+      for (const p of picks) {
+        const entry = { name: p.name, kind: p.kind, app: p.app || null, targetId: p.targetId || null, ...base };
+        const i = list.findIndex(c => ctKey(c) === ctKey(entry));
+        if (i >= 0) list[i] = { ...list[i], ...entry };
+        else list = [...list, { ...entry, createdAt: now }];
+        names.push(p.name);
+      }
+    }
+    queueSave({ contacts: list }, true);
+    const g = ctGroupLabel({ group, label });
+    toast(`${ct.editId ? 'Đã lưu' : 'Đã thêm'} ${names.length > 1 ? `${names.length} người` : names[0]} → ${g.emoji} ${g.label}`, 'ok');
+    Object.assign(ct, { editId: null, picks: [], manualName: '', emotion: '', attention: 'auto' });
+    setTimeout(async () => { await refreshContactDirectory(); }, 350);
   },
   'contact-remove'(i) {
     const list = [...(S.settings.contacts || [])];
-    list.splice(Number(i), 1);
+    const [gone] = list.splice(Number(i), 1);
+    if (!gone) return;
+    if (ct.editId === gone.id) ct.editId = null;
     queueSave({ contacts: list }, true);
-    setTimeout(render, 300);
+    toast(`Đã xoá ${gone.name} khỏi người quen`, 'ok');
+    setTimeout(paintContacts, 300);
+  },
+  'inbox-classify'(id) {
+    const it = ((S.pipeline.inbox && S.pipeline.inbox.items) || []).find(x => x.id === id);
+    if (!it || !it.who) return;
+    const saved = ctSaved();
+    const l = ctApp(it.app, it.appName);
+    const groups = ctGroups();
+    const first = saved.get(ctKey({ ...it.who[0], app: it.app }));
+    openModal(`<header class="modal-head"><div class="ct-mh"><h3>👥 Xếp nhóm nhanh</h3><small>${l.icon} ${esc(l.label)} · bé chỉ lưu tên, không lưu nội dung tin</small></div><button class="icon-btn" data-action="modal-close">✕</button></header>
+      <div class="ct-quick">
+        ${it.who.map((w, i) => { const cur = saved.get(ctKey({ ...w, app: it.app })); return `<label class="ct-chk"><input type="radio" name="ct-quick-who" value="${i}" ${i === 0 ? 'checked' : ''}> ${w.kind === 'chat' ? `👥 Cả nhóm <b>${esc(w.name)}</b>` : `👤 <b>${esc(w.name)}</b>`}${cur ? ` <small class="muted">(đang là ${esc(ctGroupLabel(cur).label)})</small>` : ''}</label>`; }).join('')}
+        <label class="ct-field"><span>Quan hệ</span><select id="ct-quick-group">${Object.entries(groups).filter(([g]) => g !== 'other').map(([g, x]) => `<option value="${g}" ${first && first.group === g ? 'selected' : ''}>${x.emoji} ${esc(x.label)}</option>`).join('')}</select></label>
+      </div>
+      <div class="modal-actions"><button class="btn btn-ghost" data-action="modal-close">Huỷ</button><button class="btn btn-primary" data-action="inbox-classify-yes" data-arg="${esc(id)}">Lưu</button></div>`);
+  },
+  'inbox-classify-yes'(id) {
+    const it = ((S.pipeline.inbox && S.pipeline.inbox.items) || []).find(x => x.id === id);
+    const r = document.querySelector('input[name="ct-quick-who"]:checked');
+    const w = it && it.who && it.who[Number(r ? r.value : 0)];
+    if (!w) return;
+    const group = document.getElementById('ct-quick-group').value;
+    const now = Date.now();
+    const entry = { name: w.name, kind: w.kind, app: it.app, group, updatedAt: now, enabled: true };
+    const list = [...(S.settings.contacts || [])];
+    const i = list.findIndex(c => ctKey(c) === ctKey(entry));
+    if (i >= 0) list[i] = { ...list[i], ...entry }; else list.push({ ...entry, emotion: null, attention: 'auto', createdAt: now });
+    queueSave({ contacts: list }, true);
+    closeModal();
+    const g = ctGroupLabel(entry);
+    toast(`${w.name} → ${g.emoji} ${g.label}`, 'ok');
+  },
+  'ct-forget'() {
+    const n = ctDir().apps.reduce((s, a) => s + a.chats.length, 0);
+    openModal(`<header class="modal-head"><div class="ct-mh"><h3>🧹 Quên danh sách đã gặp?</h3><small>Bé sẽ xoá ${n} cuộc chat và tên người gửi đã ghi nhớ trên máy này, cùng các gợi ý "Hay nhắn nhất" và những gì bé nhận thấy.</small></div><button class="icon-btn" data-action="modal-close">✕</button></header>
+      <ul class="ct-forget-list"><li>✅ Danh sách người quen bạn đã xếp nhóm vẫn giữ nguyên.</li><li>✅ Không ngắt kết nối ứng dụng nào, không xoá tin nhắn gốc.</li><li>✅ Hộp thư và cài đặt khác không bị ảnh hưởng.</li></ul>
+      <div class="modal-actions"><button class="btn btn-ghost" data-action="modal-close">Huỷ</button><button class="btn btn-primary" data-action="ct-forget-yes">Quên danh sách</button></div>`);
+  },
+  async 'ct-forget-yes'() {
+    try { S.contactDirectory = await api('/api/contacts/seen', { method: 'DELETE' }); ct.picks = []; closeModal(); paintContacts(); toast('Đã quên danh sách đã gặp', 'ok'); }
+    catch (err) { toast(err.message, 'error'); }
   },
   async 'win-probe-popups'() {
     try {
@@ -1770,6 +2437,7 @@ function connectEvents() {
     syncInputs();
     applyPreviewSettings();
     if (prevAdv !== advanced()) renderNav();
+    if (route === 'pet' && !(document.activeElement && /^ct-/.test(document.activeElement.id || ''))) refreshContactDirectory();
   });
   es.addEventListener('history', (e) => {
     const h = JSON.parse(e.data);

@@ -16,6 +16,9 @@ const { BreakReminder } = require('../core/break-reminder');
 let breaks = null;
 const { NotificationPipeline } = require('../core/notification-pipeline');
 const { InboxStore } = require('../core/inbox-store');
+const { ContactDirectory } = require('../core/contact-directory');
+const { ChatSources } = require('../integrations/chat-sources');
+const { MessagingApps } = require('./messaging-apps');
 const { FOCUS_MODES, PRIORITIES } = require('../core/attention-engine');
 const { PERSONALITY_PRESETS, DEFAULT_APP_RULES, DEFAULT_KEYWORD_RULES } = require('../core/emotion-engine');
 const { EMOTION_SCHEMA, POSITIONS } = require('../shared/emotion-constants');
@@ -50,6 +53,18 @@ let pipeline;
 let hub;
 let integrations;
 let inbox;
+let directory;
+let chatSources;
+const messagingApps = new MessagingApps({
+  // Real app icons for the "Người quen" picker (Electron reads them from the .app / .exe).
+  // macOS: QuickLook thumbnail of the .app = its real icon (getFileIcon returns the generic bundle icon).
+  getIcon: async (p) => {
+    let img = null;
+    if (process.platform === 'darwin') img = await nativeImage.createThumbnailFromPath(p, { width: 64, height: 64 }).catch(() => null);
+    if (!img || img.isEmpty()) img = await app.getFileIcon(p, { size: 'normal' }).catch(() => null);
+    return img && !img.isEmpty() ? img.toDataURL() : null;
+  }
+});
 let lastModeKey = '';
 const bus = new EventEmitter();
 const apiToken = crypto.randomBytes(24).toString('hex');
@@ -407,6 +422,9 @@ function getState() {
     settings: s,
     presets: PERSONALITY_PRESETS,
     contactGroups: require('../core/chat-filter').CONTACT_GROUPS,
+    contactDirectory: directory ? directory.list() : { enabled: true, apps: [], suggestions: [], insights: [] },
+    contactAttention: require('../core/contact-rules').CONTACT_ATTENTION,
+    chatSources: chatSources ? chatSources.list() : [],
     defaults: { appRules: DEFAULT_APP_RULES, keywordRules: DEFAULT_KEYWORD_RULES },
     emotions: EMOTION_SCHEMA,
     characters: characterList(),
@@ -503,8 +521,15 @@ function registerIpc() {
   });
   ipcMain.on('overlay:open-control', (e, section) => { if (overlay && e.sender === overlay.webContents) openControlCenter(section === 'inbox' ? 'inbox' : undefined); });
   // Right-click on the pet: always-reachable menu (the tray icon can be hidden behind the MacBook notch).
-  ipcMain.on('overlay:context-menu', (e) => {
+  // Right-click on a notification card: "Xếp nhóm nhanh" for its sender / group chat.
+  ipcMain.on('overlay:context-menu', (e, opts) => {
     if (!overlay || e.sender !== overlay.webContents) return;
+    const cardId = opts && typeof opts.cardId === 'string' ? opts.cardId : null;
+    if (cardId) {
+      const item = (pipeline.current && pipeline.current.id === cardId) ? pipeline.current : pipeline.history.find(h => h.id === cardId);
+      const menu = item && quickAssignMenu(item);
+      if (menu) { Menu.buildFromTemplate(menu).popup({ window: overlay }); return; }
+    }
     const s = settings.get();
     Menu.buildFromTemplate([
       { label: L('🐾 Mở Control Center', '🐾 Open Control Center'), click: () => openControlCenter() },
@@ -519,6 +544,58 @@ function registerIpc() {
   });
 }
 
+/* ------------------------------------------------------------------ Familiar contacts: quick assign */
+
+const contactKeyOf = (c) => `${c.app || '*'}|${c.kind === 'chat' ? 'chat' : 'person'}|${String(c.name || '').toLowerCase().trim()}`;
+
+/** Add / change / remove ONE familiar-contact rule (used from the card menu and the Control Center). */
+function assignContact({ name, kind, app: appId, group }) {
+  const list = [...(settings.get().contacts || [])];
+  const entry = { name, kind: kind === 'chat' ? 'chat' : 'person', app: appId || null };
+  const i = list.findIndex(c => contactKeyOf(c) === contactKeyOf(entry));
+  if (!group) { if (i >= 0) list.splice(i, 1); }
+  else if (i >= 0) list[i] = { ...list[i], group, enabled: true, updatedAt: Date.now() };
+  else list.push({ ...entry, group, emotion: null, attention: 'auto', enabled: true, createdAt: Date.now(), updatedAt: Date.now() });
+  settings.update({ contacts: list });
+  log(`[contacts] ${group ? 'set' : 'removed'} ${entry.kind} rule (${entry.app || 'any app'})`);
+}
+
+/** Who a card / Inbox item can be classified as: [{ kind: person|chat, name }] (names only). */
+function quickTargets(item) {
+  const { isChat } = require('../core/chat-filter');
+  const { conversationOf } = require('../core/contact-directory');
+  if (!item || item.group || !isChat(item) || (item.privacy && item.privacy !== 'full_content')) return [];
+  const conv = conversationOf(item);
+  if (!conv) return [];
+  const out = [];
+  if (conv.sender) out.push({ kind: 'person', name: conv.sender });
+  if (!conv.direct) out.push({ kind: 'chat', name: conv.chat });
+  return out;
+}
+
+/** Native menu for a card: "👤 <sender> là…" / "👥 Cả nhóm <chat> là…". Null when nothing can be named. */
+function quickAssignMenu(item) {
+  const { CONTACT_GROUPS } = require('../core/chat-filter');
+  const contacts = settings.get().contacts || [];
+  const targets = quickTargets(item).map(t => ({ ...t, label: t.kind === 'chat' ? `👥 ${L('Cả nhóm', 'Whole chat')} “${t.name}” ${L('là…', 'is…')}` : `👤 ${t.name} ${L('là…', 'is…')}` }));
+  if (!targets.length) return null;
+  const menu = [{ label: L('🐾 Xếp nhóm nhanh', '🐾 Quick classify'), enabled: false }];
+  for (const t of targets) {
+    const entry = { name: t.name, kind: t.kind, app: item.app };
+    const cur = contacts.find(c => contactKeyOf(c) === contactKeyOf(entry));
+    menu.push({
+      label: t.label.slice(0, 80),
+      submenu: [
+        ...Object.entries(CONTACT_GROUPS).map(([id, g]) => ({ label: `${g.emoji} ${g.label}`, type: 'radio', checked: !!cur && cur.group === id, click: () => assignContact({ ...entry, group: id }) })),
+        { type: 'separator' },
+        { label: L('✕ Không phải người quen', '✕ Not a familiar contact'), enabled: !!cur, click: () => assignContact({ ...entry, group: null }) }
+      ]
+    });
+  }
+  menu.push({ type: 'separator' }, { label: L('⚙️ Chỉnh chi tiết trong Người quen…', '⚙️ Edit in Familiar contacts…'), click: () => openControlCenter('pet') });
+  return menu;
+}
+
 async function boot() {
   const dir = app.getPath('userData');
   settings = new SettingsStore(dir);
@@ -526,8 +603,15 @@ async function boot() {
   if (settings.get().system.presence === 'minimal') settings.update({ system: { presence: 'full' } });
   secrets = new SecretStore(dir, safeStorage);
   inbox = new InboxStore(dir, { getSettings: () => settings.get() });
-  pipeline = new NotificationPipeline({ getSettings: () => settings.get(), inbox });
-  integrations = new IntegrationsManager({ settings, secrets, log, openExternal: (u) => shell.openExternal(u), pollSeconds: () => settings.get().integrations.pollSeconds });
+  directory = new ContactDirectory(dir, { getSettings: () => settings.get() });
+  // First run with the picker: seed it from chats already waiting in the Inbox (skip masked items).
+  if (!directory.chats.length) {
+    for (const it of [...inbox.list(200)].reverse()) {
+      if (!/•••/.test(it.title || '') && !/^🔒/.test(it.message || '')) directory.learn(it, it.receivedAt || Date.now());
+    }
+  }
+  pipeline = new NotificationPipeline({ getSettings: () => settings.get(), inbox, directory });
+  integrations = new IntegrationsManager({ settings, secrets, log, dataDir: dir, openExternal: (u) => shell.openExternal(u), pollSeconds: () => settings.get().integrations.pollSeconds });
   integrations.on('notification', (payload) => {
     const r = pipeline.ingest(payload, 'composio', { defaults: { deliveryMode: 'near_realtime_poll', provider: 'composio' } });
     log(`[composio] ${r.item.id} near_realtime_poll → ${r.item.emotion}/${r.item.priority || '-'} (${r.reason || r.item.matchedBy})`);
@@ -539,6 +623,8 @@ async function boot() {
     promptAccessibility: () => (process.platform === 'darwin' ? systemPreferences.isTrustedAccessibilityClient(true) : false),
     appAccessibilityTrusted: () => (process.platform === 'darwin' ? systemPreferences.isTrustedAccessibilityClient(false) : false)
   }, { port: PORT, powerMonitor, platform: process.platform });
+
+  chatSources = new ChatSources({ integrations, hub, secrets, settings, dir });
 
   hub.on('notification', (payload, source, meta) => {
     const r = pipeline.ingest(payload, source, { defaults: meta || {} });
@@ -588,12 +674,15 @@ async function boot() {
       getWebhookSecret: () => secrets.get('webhook.secret'),
       clearHistory: () => pipeline.clearHistory(),
       inbox: {
-        list: () => ({ unread: inbox.unreadCount(), items: inbox.list(200), digest: inbox.digest() }),
+        list: () => ({ unread: inbox.unreadCount(), items: inbox.list(200).map(it => { const who = quickTargets(it); return who.length ? { ...it, who } : it; }), digest: inbox.digest() }),
         markRead: (id) => { inbox.markRead(id); buildTrayMenu(); },
         remove: (id) => { inbox.remove(id); buildTrayMenu(); },
         clear: () => { inbox.clear(); buildTrayMenu(); }
       },
       clearQueue: () => pipeline.clearQueue(),
+      contactDirectory: { list: () => directory.list(), clear: () => { directory.clear(); chatSources.clearCache(); } },
+      chatSources,
+      messagingApps,
       quit: quitApp,
       onModelChanged: (id) => { sendOverlay('model:changed', { id }); bus.emit('event', 'characters', characterList()); },
       onEvent: (fn) => bus.on('event', fn)

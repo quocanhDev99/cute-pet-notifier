@@ -92,3 +92,16 @@ test('contact groups: the user names people, the group decides the reaction (bea
   assert.strictEqual(stranger.matchedBy, 'attitude', 'never guessed for people not in the list');
   assert.strictEqual(classify({ title: 'Mai', message: 'hi', app: 'zalo' }, cfg).contactGroup, null, 'partial names do not match');
 });
+
+test('contacts can be scoped to an app and to a whole group chat; a person beats the chat', () => {
+  const cfg = { contacts: [
+    { name: 'Nhóm Dự Án', group: 'colleagues', kind: 'chat', app: 'zalo' },
+    { name: 'Sếp Lan', group: 'manager', kind: 'person', app: 'zalo' },
+    { name: 'Mẹ', group: 'family', app: 'messenger' }
+  ] };
+  assert.strictEqual(classify({ title: 'Nhóm Dự Án', message: 'Bạn A: ok nhé', app: 'zalo' }, cfg).contactGroup, 'colleagues');
+  assert.strictEqual(classify({ title: 'Nhóm Dự Án', message: 'Sếp Lan: họp gấp', app: 'zalo' }, cfg).contactGroup, 'manager');
+  assert.strictEqual(classify({ title: 'Nhóm Dự Án', message: 'Bạn A: ok', app: 'slack' }, cfg).contactGroup, null, 'other app does not match');
+  assert.strictEqual(classify({ title: 'Mẹ', message: 'về chưa con', app: 'zalo' }, cfg).contactGroup, null, 'app-scoped person');
+  assert.strictEqual(classify({ title: 'Mẹ', message: 'về chưa con', app: 'messenger' }, cfg).contactGroup, 'family');
+});

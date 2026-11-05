@@ -175,6 +175,17 @@ function startNotificationServer(host) {
         if (p === '/api/history' && req.method === 'DELETE') { host.clearHistory(); sendJson(res, 200, { ok: true }); return; }
         if (p === '/api/queue/clear' && req.method === 'POST') { host.clearQueue(); sendJson(res, 200, { ok: true }); return; }
         if (p === '/api/app/quit' && req.method === 'POST') { sendJson(res, 200, host.quit ? host.quit() : { ok: false }); return; }
+        if (p === '/api/contacts/seen' && host.contactDirectory) {
+          if (req.method === 'GET') { sendJson(res, 200, host.contactDirectory.list()); return; }
+          if (req.method === 'DELETE') { host.contactDirectory.clear(); sendJson(res, 200, host.contactDirectory.list()); return; }
+        }
+        if (p === '/api/contacts/apps' && host.messagingApps && req.method === 'GET') { sendJson(res, 200, { apps: await host.messagingApps.detect({ refresh: url.searchParams.get('refresh') === '1' }) }); return; }
+        if (p.startsWith('/api/contacts/sources') && host.chatSources && req.method === 'GET') {
+          if (p === '/api/contacts/sources') { sendJson(res, 200, { sources: host.chatSources.list() }); return; }
+          const m = p.match(/^\/api\/contacts\/sources\/([a-z]+)\/(chats|members)$/);
+          if (m && m[2] === 'chats') { sendJson(res, 200, await host.chatSources.chats(m[1], { refresh: url.searchParams.get('refresh') === '1' })); return; }
+          if (m && m[2] === 'members') { sendJson(res, 200, await host.chatSources.members(m[1], String(url.searchParams.get('chat') || '').slice(0, 200))); return; }
+        }
         if (p === '/api/inbox' && req.method === 'GET') { sendJson(res, 200, host.inbox.list()); return; }
         if (p === '/api/inbox' && req.method === 'DELETE') { host.inbox.clear(); sendJson(res, 200, { ok: true }); return; }
         if (p === '/api/inbox/read' && req.method === 'POST') { const b = await readJson(req); host.inbox.markRead(typeof b.id === 'string' ? b.id : null); sendJson(res, 200, host.inbox.list()); return; }
