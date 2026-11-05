@@ -83,7 +83,9 @@ html, body {
 .pet-bubble {
   position: absolute;
   left: 50%; top: -6px;
-  transform: translate(-50%, -100%) scale(.6);
+  /* --bx: horizontal nudge (px) set by fitBubble() so the bubble stays inside the screen */
+  --bx: 0px;
+  transform: translate(calc(-50% + var(--bx)), -100%) scale(.6);
   opacity: 0;
   max-width: 230px;
   padding: 8px 14px;
@@ -98,10 +100,10 @@ html, body {
   z-index: 5;
 }
 .pet-bubble::after {
-  content: ''; position: absolute; left: 50%; bottom: -7px; transform: translateX(-50%) rotate(45deg);
+  content: ''; position: absolute; left: calc(50% - var(--bx)); bottom: -7px; transform: translateX(-50%) rotate(45deg);
   width: 14px; height: 14px; background: inherit; border-radius: 3px;
 }
-.pet-bubble.show { opacity: 1; transform: translate(-50%, -100%) scale(1); }
+.pet-bubble.show { opacity: 1; transform: translate(calc(-50% + var(--bx)), -100%) scale(1); }
 .pet-bubble.angry { background: #FFE4E4; color: #B42318; box-shadow: 0 3px 0 #F9C9C9, 0 10px 24px rgba(180,35,24,.25); }
 .pet-bubble.love { background: #FFE9F2; color: #C2185B; }
 

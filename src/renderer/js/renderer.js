@@ -230,8 +230,25 @@ function placeDock() {
   });
 }
 
+/** Nudge the bubble sideways so it never spills past the screen edge (e.g. pet parked next to the
+ *  Dock). The tail keeps pointing at the pet. Uses layout width, so the scale animation doesn't matter. */
+function fitBubble() {
+  const pad = 8;
+  const w = bubbleEl.offsetWidth;
+  const r = petSlot.getBoundingClientRect();
+  const center = r.left + r.width / 2;
+  let bx = 0;
+  if (center + w / 2 > window.innerWidth - pad) bx = window.innerWidth - pad - (center + w / 2);
+  if (center + bx - w / 2 < pad) bx = pad - (center - w / 2);
+  // Don't let the tail slide off the bubble's rounded corners.
+  const maxShift = Math.max(0, w / 2 - 18);
+  bx = Math.max(-maxShift, Math.min(maxShift, bx));
+  bubbleEl.style.setProperty('--bx', `${Math.round(bx)}px`);
+}
+
 function say(text, kind = '') {
   bubbleEl.textContent = text;
+  fitBubble();
   bubbleEl.className = `pet-bubble show ${kind}`;
   clearTimeout(say.t);
   say.t = setTimeout(() => { bubbleEl.className = 'pet-bubble'; }, 1800);
@@ -588,6 +605,7 @@ function startBreak(minutes) {
     const mm = Math.floor(left / 60000), ss = String(Math.floor(left / 1000) % 60).padStart(2, '0');
     const tips = t('breakTip');
     bubbleEl.textContent = `${t('breakTick').replace('{t}', `${mm}:${ss}`)}${n % 20 < 10 ? '' : `  ·  ${tips[Math.floor(n / 20) % tips.length]}`}`;
+    fitBubble();
     bubbleEl.className = 'pet-bubble show';
     clearTimeout(say.t);
     n++;
@@ -734,6 +752,7 @@ document.addEventListener('pointermove', (e) => {
     dock.style.left = `${newLeft}px`;
     dock.style.top = `${newTop}px`;
     refreshHitRects(200);
+    if (bubbleEl.classList.contains('show')) fitBubble();
     dock.style.right = 'auto';
     dock.style.bottom = 'auto';
   }
