@@ -69,7 +69,7 @@ const I18N = {
     kickQuip: 'Hứ! Biến đi! 🦶',
     reject: ['😤 Tránh xa ra, đừng có vuốt ve tui!'],
     kickTitle: 'Thú cưng sẽ đá văng thông báo này',
-    voiceBreak: ['Bạn ơi, mình nghỉ mắt một chút nha!', 'Nhìn màn hình lâu rồi đó, cho mắt nghỉ xíu nhé!', 'Ê, tới giờ nghỉ mắt rồi nè!'], voiceBreakStart: ['Nhắm mắt thư giãn nào, bé canh giờ cho bạn nhé.', 'Nhìn ra xa một chút, hít thở thật sâu nào.'], voiceBreakDone: ['Xong rồi! Mắt khỏe re, mình làm tiếp thôi!', 'Hết giờ nghỉ rồi, chiến tiếp nào!'], breakStart: '😌 Nghỉ ngay', breakSnooze: '⏰ 10 phút nữa', breakTick: '😌 Nghỉ mắt nào… {t}', breakTip: ['Nhìn ra xa khoảng 6 m nhé 🌳', 'Chớp mắt chậm vài lần 😌', 'Đứng dậy vươn vai một chút 🙆'], breakDone: '🌟 Mắt khỏe rồi! Làm tiếp thôi', snoozed: '⏰ OK, 10 phút nữa bé nhắc lại', moreRows: '+{n} PR khác — bấm Mở để xem tất cả', approve: '✅ Approve', approving: '⏳ Đang approve…', approved: '✓ Đã approve', approvedSay: '✅ Đã approve PR giúp bạn!', approveFail: '😿 Approve không được: ',
+    voiceBreak: ['Bạn ơi, mình nghỉ mắt một chút nha!', 'Nhìn màn hình lâu rồi đó, cho mắt nghỉ xíu nhé!', 'Ê, tới giờ nghỉ mắt rồi nè!'], voiceBreakStart: ['Nhắm mắt thư giãn nào, bé canh giờ cho bạn nhé.', 'Nhìn ra xa một chút, hít thở thật sâu nào.'], voiceBreakDone: ['Xong rồi! Mắt khỏe re, mình làm tiếp thôi!', 'Hết giờ nghỉ rồi, chiến tiếp nào!'], breakStart: '😌 Nghỉ ngay', breakSnooze: '⏰ 10 phút nữa', breakTick: '😌 Nghỉ mắt nào… {t}', breakTip: ['Nhìn ra xa khoảng 6 m nhé 🌳', 'Chớp mắt chậm vài lần 😌', 'Đứng dậy vươn vai một chút 🙆'], breakDone: '🌟 Mắt khỏe rồi! Làm tiếp thôi', snoozed: '⏰ OK, 10 phút nữa bé nhắc lại', moreRows: '+{n} PR khác — bấm Mở để xem tất cả', approve: '✅ Approve', approveConfirm: 'Bấm lần nữa để approve', approving: '⏳ Đang approve…', approved: '✓ Đã approve', approvedSay: '✅ Đã approve PR giúp bạn!', approveFail: '😿 Approve không được: ',
     priority: { critical: '🚨 Khẩn cấp', important: '⭐ Quan trọng', low: '💤 Ít quan trọng' },
     focusLine: { focus: '🎯 Đang tập trung…', meeting: '📅 Đang họp, suỵt…', work: '💼 Làm việc nghiêm túc nào!', relax: '🌿 Thư giãn thôi~', sleep: '💤 Ngủ ngon…' },
     emo: null,
@@ -97,7 +97,7 @@ const I18N = {
     kickQuip: 'Hmph! Begone! 🦶',
     reject: ["😤 Stay back, don't touch me!", '😾 Not now, human!', '🙄 Hands off!'],
     kickTitle: 'Your pet will kick this notification away',
-    voiceBreak: ['Hey, let’s rest your eyes for a bit!', 'You’ve been staring at the screen for a while. Eye break time!'], voiceBreakStart: ['Close your eyes and relax, I’ll keep time for you.', 'Look far away and take a deep breath.'], voiceBreakDone: ['All done! Fresh eyes, let’s get back to it!'], breakStart: '😌 Break now', breakSnooze: '⏰ In 10 min', breakTick: '😌 Eye break… {t}', breakTip: ['Look about 6 m away 🌳', 'Blink slowly a few times 😌', 'Stand up and stretch 🙆'], breakDone: '🌟 Eyes refreshed! Back to it', snoozed: '⏰ OK, I’ll remind you in 10 min', moreRows: '+{n} more — press Open to see all', approve: '✅ Approve', approving: '⏳ Approving…', approved: '✓ Approved', approvedSay: '✅ PR approved for you!', approveFail: '😿 Couldn’t approve: ',
+    voiceBreak: ['Hey, let’s rest your eyes for a bit!', 'You’ve been staring at the screen for a while. Eye break time!'], voiceBreakStart: ['Close your eyes and relax, I’ll keep time for you.', 'Look far away and take a deep breath.'], voiceBreakDone: ['All done! Fresh eyes, let’s get back to it!'], breakStart: '😌 Break now', breakSnooze: '⏰ In 10 min', breakTick: '😌 Eye break… {t}', breakTip: ['Look about 6 m away 🌳', 'Blink slowly a few times 😌', 'Stand up and stretch 🙆'], breakDone: '🌟 Eyes refreshed! Back to it', snoozed: '⏰ OK, I’ll remind you in 10 min', moreRows: '+{n} more — press Open to see all', approve: '✅ Approve', approveConfirm: 'Click again to approve', approving: '⏳ Approving…', approved: '✓ Approved', approvedSay: '✅ PR approved for you!', approveFail: '😿 Couldn’t approve: ',
     priority: { critical: '🚨 Critical', important: '⭐ Important', low: '💤 Low' },
     focusLine: { focus: '🎯 Deep focus…', meeting: '📅 In a meeting, shh…', work: '💼 Work mode on!', relax: '🌿 Relax time~', sleep: '💤 Sleeping…' },
     emo: { happy: 'Happy', excited: 'Excited', love: 'Love', surprised: 'Surprised', angry: 'Grumpy', sad: 'Sad', thinking: 'Thinking', sleeping: 'Sleeping' },
@@ -503,15 +503,18 @@ function showNotification(item) {
   // Interactions
   el.addEventListener('mouseenter', pauseTimer);
   el.addEventListener('mouseleave', () => { resumeTimer(); el.style.removeProperty('--rx'); el.style.removeProperty('--ry'); });
+  // Only a soft light spot follows the cursor (the card itself never tilts: a click made while it
+  // moved used to land on a shifted button). One transform per animation frame, no repaint.
+  const shine = el.querySelector('.card-shine');
+  let shineXY = null, shineRaf = 0;
   el.addEventListener('mousemove', (e) => {
     const r = el.getBoundingClientRect();
-    const px = (e.clientX - r.left) / r.width - 0.5;
-    const py = (e.clientY - r.top) / r.height - 0.5;
-    // Only the light sheen follows the cursor. The card used to TILT toward it (rotate up to 10°,
-    // animated over 0.25 s): a click made right after moving landed while the buttons were still
-    // shifting, so mouse-down and mouse-up hit different elements and the click was lost.
-    el.style.setProperty('--mx', `${(px + 0.5) * 100}%`);
-    el.style.setProperty('--my', `${(py + 0.5) * 100}%`);
+    shineXY = [e.clientX - r.left, e.clientY - r.top];
+    if (shineRaf || !shine) return;
+    shineRaf = requestAnimationFrame(() => {
+      shineRaf = 0;
+      if (shineXY) shine.style.transform = `translate3d(${shineXY[0].toFixed(1)}px, ${shineXY[1].toFixed(1)}px, 0)`;
+    });
   });
   el.querySelector('.open').addEventListener('click', (e) => { e.stopPropagation(); finishCard('click'); });
   // Approve buttons — the card's own (single PR) and one per row (several PRs). One click approves.
@@ -519,6 +522,17 @@ function showNotification(item) {
     e.stopPropagation();
     if (approve.disabled) return;
     pauseTimer();
+    // Approving is a real action on someone's PR: the first click asks, the second one approves.
+    if (!approve.classList.contains('confirm')) {
+      approve.classList.add('confirm');
+      approve.dataset.label = approve.textContent;
+      approve.textContent = t('approveConfirm');
+      clearTimeout(approve._t);
+      approve._t = setTimeout(() => { approve.classList.remove('confirm'); approve.textContent = approve.dataset.label; }, 4000);
+      return;
+    }
+    clearTimeout(approve._t);
+    approve.classList.remove('confirm');
     approve.disabled = true;
     approve.textContent = t('approving');
     const row = approve.closest('.row');

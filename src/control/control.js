@@ -914,6 +914,25 @@ function renderNav() {
 
 /* ================================================================== pages */
 
+const MODE_NAMES = { none: 'Bình thường', work: 'Làm việc', focus: 'Tập trung sâu', meeting: 'Đang họp', gaming: 'Chơi game', relax: 'Thư giãn', sleep: 'Đi ngủ' };
+const WORK_APPS = new Set(['jira', 'bitbucket', 'github', 'gitlab']);
+
+/** Four things worth a glance on the home screen — each opens where you act on it. */
+function statusCardsHtml(ib, apps) {
+  const items = ib.items || [];
+  const work = items.filter(i => !i.read && WORK_APPS.has(i.app)).length;
+  const connected = apps.filter(a => a.cls === 'ok').length;
+  const mode = S.effective ? S.effective.mode.id : 'none';
+  const m = (S.focusModes && S.focusModes[mode]) || {};
+  const card = (href, icon, value, label, txt) => `<a class="status-card" href="${href}"><span>${icon}</span><div><b class="${txt ? 'txt' : ''}" ${href === '#inbox' && !txt ? 'id="dash-inbox"' : ''}>${value}</b><small>${label}</small></div></a>`;
+  return `<div class="status-row">
+        ${card('#inbox', '📥', ib.unread, 'tin đang chờ')}
+        ${card('#inbox/work', '🧩', work, 'việc Jira / PR cần xem')}
+        ${card('#connect', '🔌', `${connected}/${apps.length}`, 'ứng dụng đang hoạt động')}
+        ${card('#notify/focus', m.emoji || '☀️', esc(MODE_NAMES[mode] || mode), mode === 'none' ? 'sẵn sàng nhận tin' : 'tin ít gấp vào Hộp thư', true)}
+      </div>`;
+}
+
 function replacementState() {
   if (S.platform === 'darwin') {
     const a = adapter('macos_nc');
@@ -957,7 +976,7 @@ const pages = {
     const ib = S.pipeline.inbox || { unread: 0, items: [] };
     const apps = myApps();
     return `
-      ${H.head('Xin chào! 👋', 'Thú cưng đang trông thông báo giúp bạn.')}
+      ${H.head(`Chào bạn! ${esc((pet.name || 'Mochi').split(' ').pop())} đang ở đây 🐾`, 'Bạn tập trung làm việc nhé, để bé trông thông báo giúp.')}
       ${S.install && S.install.rosetta ? `<div class="warn-box" style="margin:0 0 16px"><b>🐢 Bạn đang dùng bản cho Mac Intel trên máy chip Apple</b><span>Hoạt họa sẽ chậm và giật vì macOS phải dịch app qua Rosetta. Hãy cài file có đuôi <b style="display:inline">-arm64.dmg</b> rồi xoá bản này.</span></div>` : ''}
       <section class="hero panel">
         <div class="hero-stage">${previewControls({ emotions: false })}</div>
@@ -978,19 +997,11 @@ const pages = {
           </div>
         </div>
       </section>
-      <div class="grid-2">
-        <section class="panel">
-          <div class="panel-head"><h3>🕘 Thông báo gần đây</h3></div>
-          <div class="history" id="history">${historyRows(S.pipeline.history, { simple: true })}</div>
-        </section>
-        <section class="panel">
-          <div class="panel-head"><h3>📥 Hộp thư</h3><a class="link" href="#inbox">Xem tất cả</a></div>
-          <p class="muted">Những tin được giữ lại khi bạn đang tập trung — không có gì bị mất.</p>
-          <div class="digest-total big"><b id="dash-inbox">${ib.unread}</b><span>tin chưa đọc</span></div>
-          <div class="panel-head" style="margin-top:18px"><h3>🔌 Ứng dụng đã kết nối</h3><a class="link" href="#connect">Quản lý</a></div>
-          <div class="app-chips">${apps.length ? apps.map(x => `<span class="app-chip">${appIcon(x)}${esc(x.name)}<i class="dot ${x.cls}"></i></span>`).join('') : '<span class="muted">Chưa kết nối ứng dụng nào — thông báo của máy vẫn được thú cưng mang tới.</span>'}</div>
-        </section>
-      </div>`;
+      ${statusCardsHtml(ib, apps)}
+      <section class="panel">
+        <div class="panel-head"><h3>🕘 Thông báo gần đây</h3><a class="link" href="#inbox">Mở Hộp thư</a></div>
+        <div class="history" id="history">${historyRows(S.pipeline.history, { simple: true })}</div>
+      </section>`;
   },
 
   pet() {
@@ -1065,7 +1076,8 @@ const pages = {
           <div class="digest-total"><b id="inbox-count">${ib.unread}</b><span>chưa đọc</span></div>
           <div class="pill-row">${(ib.digest.byApp || []).slice(0, 10).map(([app, n]) => `<span class="pill small">${esc(app)} · ${n}</span>`).join('') || '<span class="muted">Không có tin nào đang chờ 🎉</span>'}</div>
         </div>
-        <div class="history inbox-list" id="inbox-list">${inboxRows(ib.items)}</div>
+        <div class="inbox-filters" id="inbox-filters">${inboxFiltersHtml(ib.items)}</div>
+        <div class="history inbox-list" id="inbox-list">${inboxRows(inboxFiltered(ib.items))}</div>
       </section>`;
   },
 
@@ -1729,9 +1741,22 @@ function historyRows(list, { simple = false } = {}) {
   return list.slice(0, simple ? 8 : 30).map(h => `
     <div class="h-row">
       <span class="h-emo emo-bg-${h.emotion}">${emo(h.emotion).emoji}</span>
-      <div class="h-main"><b>${esc(h.title)}</b><small>${esc(h.message || '')}</small></div>
+      <div class="h-main">${h.meta ? `<div class="h-tk">${h.meta.key ? `<button class="h-key" data-action="copy-key" data-arg="${esc(h.meta.key)}" title="Bấm để chép mã">${esc(h.meta.key)}</button>` : ''}${h.meta.status ? `<span class="h-status tone-${esc(h.meta.statusTone || 'todo')}">${esc(h.meta.status)}</span>` : ''}${h.meta.event ? `<span class="h-event">${esc(h.meta.event)}</span>` : ''}</div>` : ''}<b>${esc(h.meta && h.meta.key && String(h.title).startsWith(h.meta.key + ' ') ? String(h.title).slice(h.meta.key.length + 1) : h.title)}</b><small>${esc(h.message || '')}</small></div>
       <div class="h-meta"><span class="pill small">${esc(h.app)}</span><small>${simple ? '' : `${esc(h.matchedBy)} · `}<time title="${esc(new Date(h.receivedAt).toLocaleString())}">${arrivedAt(h.receivedAt)}</time></small></div>
     </div>`).join('');
+}
+
+const INBOX_FILTERS = [
+  ['all', 'Tất cả', () => true],
+  ['chat', '💬 Tin nhắn', (i) => !WORK_APPS.has(i.app) && (i.category === 'chat' || i.category === 'social' || !!i.who)],
+  ['work', '🧩 Công việc', (i) => WORK_APPS.has(i.app)],
+  ['important', '⭐ Quan trọng', (i) => i.priority === 'important' || i.priority === 'critical'],
+  ['unread', 'Chưa đọc', (i) => !i.read]
+];
+let inboxFilter = 'all';
+function inboxFiltered(items) { const f = INBOX_FILTERS.find(x => x[0] === inboxFilter) || INBOX_FILTERS[0]; return (items || []).filter(f[2]); }
+function inboxFiltersHtml(items) {
+  return INBOX_FILTERS.map(([id, label, fn]) => `<button class="${inboxFilter === id ? 'on' : ''}" data-action="inbox-filter" data-arg="${id}" aria-pressed="${inboxFilter === id}">${label}<small>${(items || []).filter(fn).length}</small></button>`).join('');
 }
 
 function inboxRows(list) {
@@ -1750,7 +1775,9 @@ function inboxRows(list) {
 function applyInbox(ib) {
   S.pipeline.inbox = ib;
   const el = document.getElementById('inbox-list');
-  if (el) el.innerHTML = inboxRows(ib.items);
+  if (el) el.innerHTML = inboxRows(inboxFiltered(ib.items));
+  const f = document.getElementById('inbox-filters');
+  if (f) f.innerHTML = inboxFiltersHtml(ib.items);
   updateBadges();
 }
 
@@ -1769,6 +1796,17 @@ function updateBadges() {
     pill.innerHTML = `${m.emoji || '🐾'} <b>${esc(names[S.effective.mode.id] || S.effective.mode.id)}</b>`;
     pill.onclick = () => { location.hash = '#notify/focus'; };
   }
+  // Active pet in the sidebar foot.
+  const pp = document.getElementById('pet-pill');
+  if (pp && S.characters) {
+    const pet = S.characters.find(c => c.id === S.settings.activePet) || {};
+    pp.innerHTML = `${thumbs[pet.id] ? `<img src="${thumbs[pet.id]}" alt="">` : '🐾'}<span>Bé <b>${esc(pet.name || '')}</b></span>`;
+    pp.onclick = () => { location.hash = '#pet'; };
+  }
+  // Reduced motion follows the app setting (system / on / off) in the Control Center too.
+  const rm = S.settings.sounds && S.settings.sounds.reducedMotion;
+  document.documentElement.classList.toggle('reduce-motion', rm === 'on');
+  document.documentElement.classList.toggle('allow-motion', rm === 'off');
 }
 
 function rulesTable() {
@@ -1851,7 +1889,7 @@ function render() {
   if (route === 'monitor' && sub === 'tools') bindUploads();
   if (route === 'connect') bindConnect();
   if (route === 'pet') { bindMoodTry(); refreshContactDirectory(); }
-  if (route === 'inbox') refreshInbox();
+  if (route === 'inbox') { if (sub && INBOX_FILTERS.some(x => x[0] === sub)) inboxFilter = sub; refreshInbox(); }
 }
 
 window.addEventListener('hashchange', render);
@@ -2159,6 +2197,8 @@ const actions = {
     ct.connecting = false;
     paintContacts();
   },
+  'inbox-filter'(id) { inboxFilter = INBOX_FILTERS.some(x => x[0] === id) ? id : 'all'; applyInbox(S.pipeline.inbox); },
+  async 'copy-key'(key) { try { await navigator.clipboard.writeText(key); toast(`Đã chép ${key}`, 'ok'); } catch { toast('Không chép được', 'error'); } },
   'mood-enable'() { queueSave({ mood: { followAttitude: false } }, true); },
   'ct-rel'(g) { if (!ctGroups()[g]) return; ct.group = g; paintContacts(); if (g === 'other') { const n = document.getElementById('ct-label'); if (n) n.focus(); } },
   'ct-kind'(k) { ct.kind = ['chat', 'meeting', 'all'].includes(k) ? k : 'chat'; ct.limit = 60; ct.cursor = -1; paintContacts(); const ul = document.getElementById('ct-chats'); if (ul) ul.scrollTop = 0; },

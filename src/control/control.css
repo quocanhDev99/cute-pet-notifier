@@ -911,3 +911,118 @@ html[lang="en"] .preset b i.muted { display: none; }
   .ct-who { margin-left: 0; max-width: 100%; }
   .ct-extra .ct-hour { grid-template-columns: 1fr; }
 }
+
+/* ==========================================================================
+   V4 polish pass — motion system, calmer depth, lighter type, smoother rendering
+   (overrides earlier rules; tokens only, so all six themes follow)
+   ========================================================================== */
+:root {
+  --ease-out: cubic-bezier(.2, .8, .2, 1);      /* default UI easing: quick start, soft landing */
+  --ease-spring: cubic-bezier(.3, 1.35, .5, 1); /* small, controlled overshoot (switch knob, selection) */
+  --dur-1: 120ms;  /* hover / press */
+  --dur-2: 200ms;  /* small state changes, dropdowns, modal */
+  --dur-3: 260ms;  /* page / panel transitions, toast */
+  /* Panels: lighter clay. Strong clay stays for the hero, pet cards and primary buttons. */
+  --shadow-panel: 0 1px 0 rgba(255,255,255,.85) inset, 0 2px 0 var(--edge), 0 14px 30px -20px rgba(140,70,90,.28);
+}
+[data-theme="midnight"] { --shadow-panel: 0 1px 0 rgba(255,255,255,.05) inset, 0 2px 0 #110F17, 0 14px 30px -18px rgba(0,0,0,.6); }
+
+/* --- rendering: keep heavy static layers on their own compositor layer */
+.bg-blobs { transform: translateZ(0); contain: strict; }
+main { overscroll-behavior: contain; }
+
+/* --- page & panels */
+.page { animation: page-in var(--dur-3) var(--ease-out) both; }
+@keyframes page-in { from { opacity: 0; transform: translateY(6px); } }
+.panel { box-shadow: var(--shadow-panel); }
+.hero.panel, .pet-card { box-shadow: var(--clay); }
+
+/* --- typography: one step lighter so hierarchy reads (900 only for big numbers) */
+.page-head h1 { font-size: 28px; font-weight: 800; letter-spacing: -.4px; }
+.page-head p { font-weight: 500; }
+.panel h3 { font-size: 16.5px; font-weight: 800; }
+.hero-info h2 { font-weight: 800; }
+.brand-name { font-weight: 800; }
+#nav a { font-weight: 700; }
+.btn, .chip-btn, .subtabs a, .seg button { font-weight: 800; }
+.toggle-row b, .choice b, .mode-card b, .theme-card b, .ui-theme b, .field b { font-weight: 800; }
+.prose p, .prose li, .toggle-row small, .choice small, .field small { font-weight: 500; }
+
+/* --- sidebar: narrower, calmer icons */
+.app { grid-template-columns: 236px 1fr; }
+.sidebar { padding: 34px 14px 16px; gap: 16px; }
+#nav a { padding: 10px 12px; transition: background-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out); }
+#nav a span { width: 28px; height: 28px; font-size: 16px; background: transparent; box-shadow: none; transition: background-color var(--dur-1) var(--ease-out); }
+#nav a.active span { background: color-mix(in srgb, var(--brand) 12%, var(--panel)); }
+.pet-pill { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 14px; font-size: 12.5px; font-weight: 700; color: var(--ink-2); cursor: pointer; transition: background-color var(--dur-1) var(--ease-out); }
+.pet-pill:hover { background: rgba(255,255,255,.6); }
+.pet-pill img { width: 26px; height: 26px; border-radius: 8px; object-fit: cover; background: var(--t3); }
+.pet-pill b { color: var(--ink); font-weight: 800; }
+
+/* --- transitions: only cheap properties, never `all` */
+.btn, .chip-btn, .icon-btn, .seg button, .subtabs a, .choice, .ui-theme, .mode-card, .theme-card, .preset,
+.pos-picker button, .pos-picker button i, .emo-btn, .ct-app, .ct-rel, .ct-chip, .ct-member, .ct-sg, .ct-more {
+  transition-property: transform, opacity, background-color, box-shadow, color, filter;
+  transition-duration: var(--dur-1);
+  transition-timing-function: var(--ease-out);
+}
+.saved-badge, .toast { transition-property: transform, opacity; transition-duration: var(--dur-3); transition-timing-function: var(--ease-spring); }
+.preview-bubble { transition-property: transform, opacity; transition-duration: var(--dur-3); transition-timing-function: var(--ease-spring); will-change: transform, opacity; }
+.switch::after { transition: transform var(--dur-3) var(--ease-spring); }
+.switch { transition: background-color var(--dur-2) var(--ease-out); }
+.btn:active:not(.btn-done), .chip-btn:active { transition-duration: 60ms; }
+.pet-card { transition: transform var(--dur-3) var(--ease-spring), box-shadow var(--dur-2) var(--ease-out); }
+
+/* --- live dot: ping with transform + opacity instead of animating box-shadow forever */
+.live-dot i { position: relative; }
+.live-dot.on i { animation: none; box-shadow: none; }
+.live-dot.on i::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; background: rgba(34,160,107,.28); animation: dot-ping 2.2s var(--ease-out) infinite; }
+@keyframes dot-ping { from { transform: scale(.55); opacity: .9; } to { transform: scale(1.9); opacity: 0; } }
+
+/* --- presentation-mode illustrations: move with transform (they animated bottom/right = layout every frame) */
+.mode-peeker .mi-pet { animation: peek-t 2.4s ease-in-out infinite; bottom: 40%; }
+@keyframes peek-t { 50% { transform: translate(-50%, -8px); } }
+.mode-courier .mi-pet { right: 6%; animation: courier-t 2.4s var(--ease-out) infinite; }
+@keyframes courier-t { 0% { transform: translateX(140%); opacity: 0; } 40%, 100% { transform: none; opacity: 1; } }
+
+/* --- modal: scale-in card, short */
+.modal { animation: modal-fade var(--dur-2) var(--ease-out) both; }
+.modal .modal-card { animation: modal-in var(--dur-2) var(--ease-out) both; }
+@keyframes modal-fade { from { opacity: 0; } }
+@keyframes modal-in { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+
+/* --- keyboard focus everywhere (not only in Người quen) */
+:where(button, a, input, select, textarea, summary, [tabindex]):focus-visible { outline: 2.5px solid var(--brand); outline-offset: 2px; }
+
+/* --- dashboard status cards */
+.status-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.status-card { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 18px; background: var(--panel); box-shadow: var(--shadow-panel); color: inherit; transition: transform var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out); }
+.status-card:hover { transform: translateY(-2px); }
+.status-card > span { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 20px; background: color-mix(in srgb, var(--brand) 10%, var(--panel)); flex: 0 0 auto; }
+.status-card div { display: flex; flex-direction: column; min-width: 0; }
+.status-card b { font-size: 22px; font-weight: 900; line-height: 1.1; }
+.status-card b.txt { font-size: 15px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status-card small { font-size: 12px; font-weight: 600; color: var(--muted); }
+
+/* --- inbox: filters + ticket info */
+.inbox-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.inbox-filters button { border: 0; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 800; padding: 6px 12px; border-radius: 999px; background: var(--soft-2); color: var(--ink-2); }
+.inbox-filters button small { font-weight: 700; color: var(--muted); margin-left: 3px; }
+.inbox-filters button.on { background: color-mix(in srgb, var(--brand) 14%, var(--panel)); color: var(--brand-ink); box-shadow: 0 0 0 1.5px var(--brand) inset; }
+.h-tk { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin: 2px 0; }
+.h-key { font: 800 11px/1 ui-monospace, "SF Mono", Menlo, monospace; padding: 3px 6px; border-radius: 6px; background: #EEF3FF; color: #2453B8; cursor: copy; border: 0; }
+.h-status { font-size: 10.5px; font-weight: 800; padding: 2px 8px; border-radius: 999px; }
+.h-status.tone-todo { background: #EEF0F4; color: #4D5B70; } .h-status.tone-progress { background: #E3EEFF; color: #1F5BC7; }
+.h-status.tone-review { background: #F1E8FF; color: #6B3FC4; } .h-status.tone-done { background: #DFF5E8; color: #187A47; }
+.h-status.tone-danger { background: #FFE4E4; color: #B42318; }
+.h-event { font-size: 11.5px; font-weight: 700; color: var(--ink-2); }
+[data-theme="midnight"] .h-key { background: rgba(120,160,255,.18); color: #B9CCFF; }
+
+/* --- reduced motion: OS setting (unless the user forces motion on) or the app setting */
+@media (prefers-reduced-motion: reduce) {
+  html:not(.allow-motion) *, html:not(.allow-motion) *::before, html:not(.allow-motion) *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+
+@media (max-width: 1100px) { .status-row { grid-template-columns: repeat(2, 1fr); } }
+.dnd-toggle { white-space: nowrap; font-size: 12.5px; padding: 10px 12px; }

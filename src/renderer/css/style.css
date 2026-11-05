@@ -95,7 +95,8 @@ html, body {
   font-size: 13px; font-weight: 800;
   white-space: nowrap;
   box-shadow: 0 3px 0 #F0D9E0, 0 10px 24px rgba(120,60,90,.25);
-  transition: transform .3s cubic-bezier(.2,1.4,.4,1), opacity .2s;
+  transition: transform .28s cubic-bezier(.22,1.25,.36,1), opacity .18s ease-out;
+  will-change: transform, opacity;
   pointer-events: none;
   z-index: 5;
 }
@@ -115,10 +116,15 @@ html, body {
   --text: #3A2E39; --muted: #7A6873; --edge1: #F6E1D8; --edge2: #EBCDC1;
   width: var(--card-w);
   transform-style: preserve-3d;
-  transform: rotateX(var(--rx)) rotateY(calc(var(--ry) + var(--tilt, 0deg))) translateY(calc(var(--breath) * 1px));
+  transform: rotateX(var(--rx)) rotateY(calc(var(--ry) + var(--tilt, 0deg)));
+  /* Breathing rides on the separate `translate` property: it changes every few frames and must
+     never restart the transform transition below (that made the card chase itself = jitter). */
+  translate: 0 calc(var(--breath) * 1px);
   transform-origin: center bottom;
   opacity: 0;
-  transition: transform .25s ease-out, opacity .3s;
+  transition: transform .28s cubic-bezier(.2,.8,.2,1), opacity .24s ease-out;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
   pointer-events: auto;
 }
 .side-left .card { --tilt: 9deg; transform-origin: right center; }
@@ -126,13 +132,13 @@ html, body {
 .mode-peeker .card { --tilt: 0deg; transform-origin: center top; }
 
 .card:not(.in) { opacity: 0; transform: rotateX(-25deg) rotateY(var(--tilt, 0deg)) translateY(30px) scale(.85); }
-.card.in { opacity: 1; animation: card-pop .55s cubic-bezier(.2,1.3,.35,1) backwards; }
-.mode-courier .card.in { animation: card-unfold .4s cubic-bezier(.2,1.2,.35,1) backwards; }
-@keyframes card-pop { from { transform: rotateX(-30deg) rotateY(var(--tilt, 0deg)) translateY(40px) scale(.8); opacity: 0; } }
+.card.in { opacity: 1; animation: card-pop .5s cubic-bezier(.22,1.18,.36,1) backwards; }
+.mode-courier .card.in { animation: card-unfold .42s cubic-bezier(.22,1.12,.36,1) backwards; }
+@keyframes card-pop { from { transform: rotateX(-24deg) rotateY(var(--tilt, 0deg)) translateY(28px) scale(.86); opacity: 0; } 60% { opacity: 1; } }
 @keyframes card-unfold { from { transform: rotateY(calc(var(--tilt, 0deg) * -8)) scale(.15); opacity: 0; } }
 
-.card.out { transition: transform .4s ease-in, opacity .35s; transform: rotateX(70deg) translateY(30px) scale(.9) !important; opacity: 0 !important; animation: none; }
-.card.out-zoom { transition: transform .35s ease-in, opacity .3s; transform: scale(1.08) !important; opacity: 0 !important; animation: none; }
+.card.out { transition: transform .3s cubic-bezier(.4,0,.9,.5), opacity .26s ease-in; transform: rotateX(55deg) translateY(24px) scale(.92) !important; opacity: 0 !important; animation: none; }
+.card.out-zoom { transition: transform .26s cubic-bezier(.4,0,.9,.5), opacity .22s ease-in; transform: scale(1.06) !important; opacity: 0 !important; animation: none; }
 .card.kicked { animation: kick-fly-left .8s cubic-bezier(.3,.1,.6,1) forwards !important; }
 .side-right .card.kicked { animation-name: kick-fly-right !important; }
 @keyframes kick-fly-left { to { transform: translate(-160%, -120%) rotate(-560deg) scale(.35); opacity: 0; } }
@@ -165,11 +171,16 @@ html, body {
   pointer-events: none;
 }
 .card-shine {
-  position: absolute; inset: 0;
-  background: radial-gradient(circle at var(--mx) var(--my), rgba(255,255,255,.75), transparent 45%);
-  mix-blend-mode: soft-light;
-  pointer-events: none;
+  /* A soft light spot that follows the cursor. Moved with transform only (composited, no repaint);
+     the old version re-painted a blended gradient on every mouse event. */
+  position: absolute; left: 0; top: 0; width: 240px; height: 240px; margin: -120px 0 0 -120px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,255,255,.42), rgba(255,255,255,0) 65%);
+  transform: translate3d(30%, 0, 0);
+  opacity: 0; transition: opacity .25s ease-out;
+  will-change: transform; pointer-events: none;
 }
+.card:hover .card-shine { opacity: 1; }
 
 .card header { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; position: relative; z-index: 1; padding-right: 32px; }
 .card header .icon-btn.close { position: absolute; right: 0; top: 0; }
@@ -356,7 +367,8 @@ body.is-dragging, body.is-dragging * {
 body.reduced-motion .card,
 body.reduced-motion .card.in,
 body.reduced-motion .dock { animation-duration: .01s !important; transition-duration: .15s !important; }
-body.reduced-motion .card { --rx: 0deg !important; --ry: 0deg !important; }
+body.reduced-motion .card { --rx: 0deg !important; --ry: 0deg !important; translate: none; }
+body.reduced-motion .card-shine { display: none; }
 body.reduced-motion .card.annoying .card-inner,
 body.reduced-motion .chip.prio-critical { animation: none !important; }
 body.reduced-motion .card.kicked { animation: none !important; opacity: 0; transition: opacity .2s; }
@@ -367,6 +379,7 @@ body.reduced-motion .card.kicked { animation: none !important; opacity: 0; trans
 
 
 .card .btn.approve { background: linear-gradient(180deg, #34C98A, #1FA571); color: #fff; box-shadow: 0 3px 0 #13804F; }
+.card .btn.approve.confirm { background: linear-gradient(180deg, #FFB547, #F08A24); box-shadow: 0 3px 0 #B45C0C; }
 .card .btn.approve.done { background: #E6F6EE; color: #1E8A5C; box-shadow: none; }
 body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 
