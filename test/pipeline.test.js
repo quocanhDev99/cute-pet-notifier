@@ -191,3 +191,21 @@ test('contact groups drive attention: manager = important, ignored = Inbox', () 
   assert.strictEqual(bot.inboxed, true);
   assert.strictEqual(bot.reason, 'contact_ignored');
 });
+
+test('opening a notification marks that conversation read in the Inbox (unread badge counts down)', () => {
+  const { InboxStore } = require('../src/core/inbox-store');
+  const s = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+  const inbox = new InboxStore(null, { getSettings: () => s });
+  inbox.add({ id: 'a', app: 'zalo', title: 'Anh 2', message: '1' });
+  inbox.add({ id: 'b', app: 'zalo', title: 'Anh 2', message: '2' });
+  inbox.add({ id: 'c', app: 'zalo', title: 'Cẩm Ý', message: '3' });
+  inbox.add({ id: 'd', app: 'teams', title: 'Anh 2', message: '4' });
+  let changes = 0;
+  inbox.on('change', () => changes++);
+  assert.strictEqual(inbox.unreadCount(), 4);
+  assert.strictEqual(inbox.markConversationRead('zalo', 'Anh 2'), 2);
+  assert.strictEqual(inbox.unreadCount(), 2, 'only that chat in that app');
+  assert.ok(changes > 0, 'the badge is told to update');
+  assert.strictEqual(inbox.markConversationRead('zalo', null), 1, 'no title (privacy masked) → whole app');
+  assert.strictEqual(inbox.unreadCount(), 1);
+});

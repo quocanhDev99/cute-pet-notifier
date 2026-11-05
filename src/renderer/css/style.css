@@ -401,3 +401,25 @@ body.reduced-motion .pet-badge.bump { animation: none; }
 /* Arrival date & time on the card */
 .card .card-time { display: block; margin: 6px 0 -2px; font-size: 11.5px; font-weight: 600; color: var(--muted); letter-spacing: .1px; font-variant-numeric: tabular-nums; }
 
+
+/* ---------------- Spacing pass (roomier, calmer card) ---------------- */
+.card-inner { padding: 18px 20px 16px; }
+.card header { gap: 8px; margin-bottom: 12px; padding-right: 0; }
+.chip { padding: 5px 11px; gap: 5px; }
+.card .card-time { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; font-size: 11.5px; font-weight: 700; opacity: .85; }
+.card .title { margin: 0 0 8px; line-height: 1.3; letter-spacing: -.1px; }
+.card .message { line-height: 1.6; margin: 0; }
+.card footer { gap: 10px; margin-top: 16px; padding-top: 14px; border-top: 1px solid color-mix(in srgb, var(--edge2, #EBCDC1) 55%, transparent); }
+.card .btn { padding: 9px 16px; border-radius: 13px; font-size: 13px; }
+.card .hint { margin: 12px 0 2px; font-size: 11.5px; line-height: 1.45; }
+.card .progress { left: 20px; right: 20px; bottom: 7px; }
+
+/* The pet never takes the mouse itself: it is drawn over the card edge and would steal its clicks.
+   The stage listens on the page and ray-casts the 3D pet instead (see PetStage pointerTarget). */
+.pet-slot, .pet-stage, .pet-stage canvas { pointer-events: none; }
+.pet-badge { pointer-events: auto; }
+
+/* Card buttons must not move under the cursor between press and release (a 1-2 px jump at the
+   button edge turned into a lost click). Pressed feel = shadow + brightness instead. */
+.card .btn:hover { transform: none; filter: brightness(1.06); }
+.card .btn:active { transform: none; filter: brightness(.94); box-shadow: 0 1px 0 rgba(0,0,0,.18) inset, 0 1px 0 rgba(0,0,0,.08); }

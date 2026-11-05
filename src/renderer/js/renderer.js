@@ -295,7 +295,11 @@ function applyConfig(payload) {
       assetBase: payload.assetBase,
       onEvent: onStageEvent,
       onFrame: onStageFrame,
-      measure: true // real frame-time stats for docs/reports (bounded buffer, negligible cost)
+      measure: true, // real frame-time stats for docs/reports (bounded buffer, negligible cost)
+      // The pet canvas never takes the mouse (CSS pointer-events: none) so it can't steal clicks
+      // from the card it overlaps; the stage listens on the page and ray-casts the pet instead.
+      pointerTarget: document,
+      ignorePointer: (e) => !!(e.target && e.target.closest && e.target.closest('.pet-badge'))
     });
     window.__cpcDiagnostics = { frameStats: () => stage.frameStats(), transitions: () => stage.anim.lastProfile };
   } else if (prevPet !== s.activePet) {
@@ -370,7 +374,6 @@ function buildCard(item) {
         <span class="chip app">${esc(app.icon)} ${esc(app.label)}</span>
         <span class="chip emo">${emo.emoji} ${esc(emoLabel)}</span>
         ${prio ? `<span class="chip prio prio-${esc(item.priority)}">${esc(prio)}</span>` : ''}
-        <button class="icon-btn close" title="${esc(t('close'))}">✕</button>
       </header>
       <time class="card-time" datetime="${arrival.iso}">🕒 ${esc(arrival.text)}</time>
       <h3 class="title">${esc(item.title)}</h3>
@@ -387,7 +390,7 @@ function buildCard(item) {
         <button class="btn primary open">${esc(item.openLabel === 'chat' ? t('openChat') : item.openLabel === 'app' ? t('openApp') : item.url || item.openLabel === 'link' ? t('openUrl') : t('openDone'))}</button>
         ${(item.actions || []).includes('break-start') ? `<button class="btn primary brk" data-brk="break-start">${esc(t('breakStart'))}</button><button class="btn brk ghost" data-brk="break-snooze">${esc(t('breakSnooze'))}</button>` : ''}
         ${(item.actions || []).includes('approve') && item.source === 'composio' && !(item.items || []).length ? `<button class="btn approve">${esc(t('approve'))}</button>` : ''}
-        ${item.annoying ? `<button class="btn kick" title="${esc(t('kickTitle'))}">${esc(t('kick'))}</button>` : ''}
+        <button class="btn kick" title="${esc(t('kickTitle'))}">${esc(t('kick'))}</button>
       </footer>
       <p class="hint">${item.annoying ? esc(t('hintAnnoying')) : esc(t('hintPet'))}</p>
       <div class="progress"><i></i></div>
@@ -457,12 +460,12 @@ function showNotification(item) {
     const r = el.getBoundingClientRect();
     const px = (e.clientX - r.left) / r.width - 0.5;
     const py = (e.clientY - r.top) / r.height - 0.5;
-    el.style.setProperty('--ry', `${px * 10}deg`);
-    el.style.setProperty('--rx', `${-py * 8}deg`);
+    // Only the light sheen follows the cursor. The card used to TILT toward it (rotate up to 10°,
+    // animated over 0.25 s): a click made right after moving landed while the buttons were still
+    // shifting, so mouse-down and mouse-up hit different elements and the click was lost.
     el.style.setProperty('--mx', `${(px + 0.5) * 100}%`);
     el.style.setProperty('--my', `${(py + 0.5) * 100}%`);
   });
-  el.querySelector('.close').addEventListener('click', (e) => { e.stopPropagation(); finishCard('close'); });
   el.querySelector('.open').addEventListener('click', (e) => { e.stopPropagation(); finishCard('click'); });
   // Approve buttons — the card's own (single PR) and one per row (several PRs). One click approves.
   el.querySelectorAll('.approve').forEach((approve) => approve.addEventListener('click', (e) => {
@@ -552,6 +555,7 @@ function finishCard(how) {
   if (how === 'replace') { el.remove(); if (api) api.onAction('finished', { id: item.id }); return; }
 
   if (how === 'kick') {
+    if (api) api.onAction('close', { id: item.id }); // kicking the card away = closing it
     stage.play('kick');
     say(t('kickQuip'), 'angry');
     setTimeout(() => el.classList.add('kicked'), 380); // fallback if no impact event (GLB)
@@ -607,12 +611,14 @@ document.addEventListener('mousemove', (e) => {
   if (!near) {
     if (mouseCaptured) setCapture(false);
   } else {
-    const under = document.elementFromPoint(e.clientX, e.clientY);
-    const overCard = (current && current.el.contains(under)) || (!badgeEl.hidden && badgeEl.contains(under));
     let overPet = false;
     const r = stageEl.getBoundingClientRect();
     const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
     if (inside && stage && stage.hitTest) overPet = stage.hitTest(e).over;
+    // The pet slot has pointer-events: none (CSS), so the element under the cursor is the card when
+    // there is one — even where the pet is drawn over the card's edge.
+    const under = document.elementFromPoint(e.clientX, e.clientY);
+    const overCard = !!(under && ((current && current.el.contains(under)) || (!badgeEl.hidden && badgeEl.contains(under))));
     setCapture(!!(overCard || overPet));
   }
   // Proximity: the pet notices a nearby cursor (wakes from hibernation only when close).
@@ -622,8 +628,11 @@ document.addEventListener('mousemove', (e) => {
   }
 });
 
-petSlot.addEventListener('contextmenu', (e) => { e.preventDefault(); if (api && api.showContextMenu) api.showContextMenu(); });
-petSlot.addEventListener('dblclick', () => { if (api && !current) api.openControlCenter(); });
+document.addEventListener('contextmenu', (e) => {
+  e.preventDefault(); // the overlay never shows Chromium's own menu
+  if (onPetBody(e) && api && api.showContextMenu) api.showContextMenu();
+});
+document.addEventListener('dblclick', (e) => { if (onPetBody(e) && api && !current) api.openControlCenter(); });
 
 /* ------------------------------------------------------------------ Drag & Drop Desktop Positioning */
 
@@ -653,16 +662,18 @@ function renderBadge() {
 badgeEl.addEventListener('pointerdown', (e) => e.stopPropagation()); // not a drag of the pet
 badgeEl.addEventListener('click', (e) => { e.stopPropagation(); if (api) api.openControlCenter('inbox'); });
 
-petSlot.addEventListener('pointerdown', (e) => {
-  if (e.button !== 0) return; // Left mouse button only
-  const hit = stage && stage.hitTest ? stage.hitTest(e) : { over: true };
-  if (!hit.over) return;
+// Pet presses are detected on the page by ray-casting the pet (the slot itself ignores the mouse).
+const onPetBody = (e) => !!(stage && stage.hitTest && !(e.target && e.target.closest && e.target.closest('.pet-badge')) && stage.hitTest(e).over);
+document.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0 || !onPetBody(e)) return; // left button, on the pet's body only
   beginPetPress(e);
-});
+}, true);
 
 /** Start a press that becomes a drag of the whole dock (pet + held card/video) after 6 px. */
 function beginPetPress(e) {
-  try { if (e.target && e.target.setPointerCapture) e.target.setPointerCapture(e.pointerId); } catch { /* ignore */ } // release can't get lost in the iframe
+  // Capture on the page root (not on whatever element is under the pet, e.g. the card) so the
+  // release can't get lost and can't turn into a click on the card.
+  try { document.documentElement.setPointerCapture(e.pointerId); } catch { /* ignore */ }
   isPointerDownOnPet = true;
   isDraggingPet = false;
   dragStartX = e.clientX;

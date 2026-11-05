@@ -90,3 +90,36 @@ test('Windows "Mở app": remembers the sender AUMID per notification; only safe
   assert.equal(adapter.appIds.get('win_1'), 'com.vng.zalo');
   assert.equal(adapter.appIds.has('win_2'), false, 'unsafe AUMID is never stored');
 });
+
+test('Windows listener status is honest: "Connected" only after Action Center was really read', () => {
+  const a = new WindowsNotificationAdapter(mockCtx(), 'win32');
+  a.handleEvent({ type: 'status', status: 'Denied' });
+  assert.equal(a.status, STATUS.LIMITED);
+  assert.match(a.detail, /Truy cập thông báo/, 'tells the user exactly what to switch on');
+  a.handleEvent({ type: 'status', status: 'Allowed' });
+  assert.equal(a.status, STATUS.LIMITED, 'permission alone is not enough');
+  a.handleEvent({ type: 'ready', initialCount: 0 });
+  assert.equal(a.status, STATUS.CONNECTED);
+  a.handleEvent({ type: 'error', message: 'read_failed: Access is denied.' });
+  assert.equal(a.status, STATUS.ERROR, 'persistent read errors are shown, not swallowed');
+  assert.match(a.detail, /Access is denied/);
+  a.handleEvent({ type: 'ready', recovered: true });
+  assert.equal(a.status, STATUS.CONNECTED, 'recovers by itself');
+});
+
+test('Windows self-diagnostics: OS name, access, Action Center count, captured count', () => {
+  const { windowsName } = require('../src/adapters/windows-nc-adapter');
+  assert.equal(windowsName('10.0.19045').name, 'Windows 10');
+  assert.equal(windowsName('10.0.22631').name, 'Windows 11');
+  const a = new WindowsNotificationAdapter(mockCtx(), 'win32');
+  a.handleEvent({ type: 'status', status: 'Allowed' });
+  a.handleEvent({ type: 'ready', initialCount: 2 });
+  a.handleEvent({ type: 'heartbeat', inCenter: 3 });
+  a.handleEvent({ type: 'notification', id: 'win_9', appName: 'Zalo', title: 'x', body: 'y' });
+  const x = a.describe().extra;
+  assert.equal(x.access, 'Allowed');
+  assert.equal(x.inCenter, 3);
+  assert.equal(x.captured, 1);
+  assert.equal(x.lastApp, 'Zalo');
+  assert.ok(!('title' in x) && !JSON.stringify(x).includes('"y"'), 'diagnostics never carry notification content');
+});

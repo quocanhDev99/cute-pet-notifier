@@ -124,9 +124,10 @@ $asTaskGeneric = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Ob
     $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1'
 } | Select-Object -First 1
 
-function Await($op, [Type]$resultType) {
+function Await($op, [Type]$resultType, [int]$timeoutMs = 10000) {
     $task = $asTaskGeneric.MakeGenericMethod($resultType).Invoke($null, @($op))
-    $null = $task.Wait(-1)
+    # Never wait forever: from a hidden process a WinRT consent prompt can't show and would block.
+    if (-not $task.Wait($timeoutMs)) { throw "timed out after $timeoutMs ms" }
     return $task.Result
 }
 
@@ -138,13 +139,22 @@ if (-not $listener) {
 
 $accessStatus = $listener.GetAccessStatus()
 if ($accessStatus -ne [Windows.UI.Notifications.Management.UserNotificationListenerAccessStatus]::Allowed) {
+    Emit-JSON @{ type = "log"; message = "Notification access is '$accessStatus' - requesting it" }
     try {
-        $accessStatus = Await ($listener.RequestAccessAsync()) ([Windows.UI.Notifications.Management.UserNotificationListenerAccessStatus])
+        $accessStatus = Await ($listener.RequestAccessAsync()) ([Windows.UI.Notifications.Management.UserNotificationListenerAccessStatus]) 8000
     } catch {
         Emit-JSON @{ type = "log"; message = "RequestAccessAsync failed: $($_.Exception.Message)" }
     }
 }
 Emit-JSON @{ type = "status"; status = $accessStatus.ToString(); os = "win32" }
+if ($accessStatus -ne [Windows.UI.Notifications.Management.UserNotificationListenerAccessStatus]::Allowed) {
+    # Keep running: the user may switch notification access on in Settings, then we pick it up.
+    while ($listener.GetAccessStatus() -ne [Windows.UI.Notifications.Management.UserNotificationListenerAccessStatus]::Allowed) {
+        if ($ParentPid -gt 0 -and -not (Get-Process -Id $ParentPid -ErrorAction SilentlyContinue)) { exit 0 }
+        Start-Sleep -Seconds 3
+    }
+    Emit-JSON @{ type = "status"; status = "Allowed"; os = "win32" }
+}
 
 $listType = [System.Collections.Generic.IReadOnlyList[Windows.UI.Notifications.UserNotification]]
 $toastKind = [Windows.UI.Notifications.NotificationKinds]::Toast
@@ -156,8 +166,9 @@ try {
     foreach ($n in $existing) { $null = $processedIds.Add($n.Id) }
     Emit-JSON @{ type = "ready"; initialCount = $existing.Count }
 } catch {
-    Emit-JSON @{ type = "log"; message = "Could not fetch existing notifications: $($_.Exception.Message)" }
+    Emit-JSON @{ type = "error"; message = "read_failed: $($_.Exception.Message)" }
 }
+$failures = 0
 
 $tick = 0
 while ($true) {
@@ -213,8 +224,14 @@ while ($true) {
 
         # Forget ids no longer in Action Center (keeps the set bounded without replaying anything)
         $processedIds.IntersectWith($currentIds)
+        if ($failures -ge 20) { Emit-JSON @{ type = "ready"; recovered = $true } }
+        # Diagnostics (~every 10 s): how many toasts Windows keeps in Action Center right now.
+        if (($tick % 40) -eq 1) { Emit-JSON @{ type = "heartbeat"; inCenter = @($active).Count } }
+        $failures = 0
     } catch {
-        # Transient COM / WinRT errors can happen during desktop unlock
+        # Transient COM / WinRT errors happen (e.g. during desktop unlock); only report if it persists (~5 s).
+        $failures++
+        if ($failures -eq 20) { Emit-JSON @{ type = "error"; message = "read_failed: $($_.Exception.Message)" } }
     }
 
     Start-Sleep -Milliseconds 250

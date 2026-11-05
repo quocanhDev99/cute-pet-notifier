@@ -27,7 +27,11 @@ const PORT = 3721;
 const ROOT = path.join(__dirname, '../..');
 
 let activateReady = false;
-if (!app.requestSingleInstanceLock()) {
+// A second launch only asks the running copy to show its Control Center, then quits. app.quit() is
+// asynchronous, so boot() must be skipped explicitly — otherwise the second copy starts its own
+// server, hits "port 3721 in use" and shows an error box (seen on Windows).
+const isPrimaryInstance = app.requestSingleInstanceLock();
+if (!isPrimaryInstance) {
   app.quit();
 } else {
   app.on('second-instance', () => openControlCenter());
@@ -49,7 +53,20 @@ let inbox;
 let lastModeKey = '';
 const bus = new EventEmitter();
 const apiToken = crypto.randomBytes(24).toString('hex');
-const log = (...a) => console.log('[Main]', ...a);
+/**
+ * Technical log (never notification content). Also written to userData/logs/main.log, because the
+ * installed app has no console — without the file, problems on another machine are invisible.
+ */
+const LOG_FILE = path.join(app.getPath('userData'), 'logs', 'main.log');
+const log = (...a) => {
+  console.log('[Main]', ...a);
+  try {
+    fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
+    if (fs.existsSync(LOG_FILE) && fs.statSync(LOG_FILE).size > 1024 * 1024) fs.renameSync(LOG_FILE, LOG_FILE + '.1');
+    const line = a.map(x => (typeof x === 'string' ? x : JSON.stringify(x))).join(' ');
+    fs.appendFileSync(LOG_FILE, `${new Date().toISOString()} ${line}\n`);
+  } catch { /* logging must never break the app */ }
+};
 
 function userPetsDir() { return path.join(app.getPath('userData'), 'pets'); }
 
@@ -333,9 +350,15 @@ function buildTrayMenu() {
     },
     { type: 'separator' },
     {
-      label: `${L('👁️ Hiện diện', '👁️ Presence')}: ${(L('vi', 'en') === 'en' ? { full: 'Full', minimal: 'Minimal', hidden: 'Hidden' } : { full: 'Đầy đủ', minimal: 'Tối giản', hidden: 'Ẩn' })[s.system.presence]}`,
-      submenu: [['full', L('🐱 Đầy đủ (Full)', '🐱 Full')], ['minimal', L('🐾 Tối giản (Minimal)', '🐾 Minimal')], ['hidden', L('🙈 Ẩn hoàn toàn (Hidden)', '🙈 Hidden')]].map(([id, label]) => ({
-        label, type: 'radio', checked: s.system.presence === id, click: () => updateSettings({ system: { presence: id } })
+      label: L('👁️ Bé xuất hiện', '👁️ Pet appears'),
+      submenu: [
+        ['always', L('🐱 Luôn ở bên', '🐱 Always'), { system: { presence: 'full' }, appearance: { residentPet: true } }],
+        ['notify', L('🔔 Chỉ khi có thông báo', '🔔 Only with notifications'), { system: { presence: 'full' }, appearance: { residentPet: false } }],
+        ['hidden', L('🙈 Ẩn đi', '🙈 Hidden'), { system: { presence: 'hidden' } }]
+      ].map(([id, label, patch]) => ({
+        label, type: 'radio',
+        checked: (s.system.presence === 'hidden' ? 'hidden' : s.appearance.residentPet === false ? 'notify' : 'always') === id,
+        click: () => updateSettings(patch)
       }))
     },
     {
@@ -347,7 +370,6 @@ function buildTrayMenu() {
     { label: `📥 Inbox (${inbox ? inbox.unreadCount() : 0} ${L('chưa đọc', 'unread')})`, click: () => openControlCenter('inbox') },
     { label: L('🌙 Không làm phiền', '🌙 Do Not Disturb'), type: 'checkbox', checked: s.dnd.enabled, click: (i) => updateSettings({ dnd: { enabled: i.checked } }) },
     { label: L('🙈 Ẩn nội dung thông báo (khi chia sẻ màn hình)', '🙈 Hide notification content (screen sharing)'), type: 'checkbox', checked: s.privacy.displayMode !== 'full_content', click: (i) => updateSettings({ privacy: { displayMode: i.checked ? 'source_only' : 'full_content' } }) },
-    { label: L('🐱 Thú cưng thường trú trên màn hình', '🐱 Keep the pet on screen'), type: 'checkbox', checked: s.appearance.residentPet, click: (i) => updateSettings({ appearance: { residentPet: i.checked } }) },
     { type: 'separator' },
     { label: L('⏻ Thoát Cute Pet Companion', '⏻ Quit Cute Pet Companion'), click: () => app.quit() }
   ]));
@@ -448,6 +470,9 @@ function registerIpc() {
     if (action === 'click') {
       if (typeof url === 'string' && /^https?:\/\//.test(url)) shell.openExternal(url);
       if (source) hub.handleAction(source, 'open', externalId);
+      // The unread badge counts down: what the user just opened (same app/chat) is read now.
+      const opened = (pipeline.current && pipeline.current.id === id) ? pipeline.current : pipeline.history.find(h => h.id === id);
+      if (opened && inbox) inbox.markConversationRead(opened.app, opened.privacy && opened.privacy !== 'full_content' ? null : opened.title);
     }
     if (action === 'approve' && source === 'composio' && typeof externalId === 'string') {
       integrations.approvePullRequest(externalId)
@@ -497,6 +522,8 @@ function registerIpc() {
 async function boot() {
   const dir = app.getPath('userData');
   settings = new SettingsStore(dir);
+  // "Nhỏ gọn" (presence=minimal) is no longer offered — it read as a size option. Move it to "Luôn ở bên".
+  if (settings.get().system.presence === 'minimal') settings.update({ system: { presence: 'full' } });
   secrets = new SecretStore(dir, safeStorage);
   inbox = new InboxStore(dir, { getSettings: () => settings.get() });
   pipeline = new NotificationPipeline({ getSettings: () => settings.get(), inbox });
@@ -680,6 +707,7 @@ async function checkMacInstall() {
 if (process.platform === 'darwin' && app.dock) app.dock.hide();
 
 app.whenReady().then(() => {
+  if (!isPrimaryInstance) return;
   try { app.setAboutPanelOptions({ applicationName: 'Cute Pet Companion', applicationVersion: app.getVersion(), iconPath: APP_ICON, credits: 'Mèo Mochi · Chó Boba · Thỏ Cloud · Penguin Pip' }); } catch { /* optional */ }
   if (process.platform === 'darwin') {
     Menu.setApplicationMenu(Menu.buildFromTemplate([

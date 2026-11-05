@@ -306,8 +306,21 @@ export class PetStage {
     this.raycaster = new THREE.Raycaster();
     const el = this.renderer.domElement;
     const ndc = new THREE.Vector2();
+    // Overlay mode (opts.pointerTarget = document): the canvas never takes the mouse itself
+    // (pointer-events: none), so it can't steal clicks from the card it overlaps. Instead we listen on
+    // the page and decide by ray-casting the 3D pet — the ONE source of truth for "is the cursor on
+    // the pet". Elsewhere (Control Center preview) the canvas listens directly, as before.
+    const target = this.opts.pointerTarget || el;
+    const routed = target !== el;
+    const cursorEl = routed ? document.documentElement : el;
+    const ignore = (e) => routed && this.opts.ignorePointer && this.opts.ignorePointer(e);
+    const insideCanvas = (e) => {
+      const r = el.getBoundingClientRect();
+      return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+    };
 
     const hitTest = this.hitTest = (e) => {
+      if (routed && !insideCanvas(e)) return { over: false, head: false };
       const r = el.getBoundingClientRect();
       ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
       this.raycaster.setFromCamera(ndc, this.camera);
@@ -321,12 +334,23 @@ export class PetStage {
       return { over: true, head };
     };
 
-    el.addEventListener('pointermove', (e) => {
+    const leave = () => {
+      this.pointerInside = false;
+      this.lookTarget.set(0, 0);
+      this.evadeTarget.set(0, 0, 0);
+      this.pettingScore = 0;
+      this.lastPointer = null;
+      cursorEl.style.cursor = '';
+      this.wake(800);
+    };
+
+    target.addEventListener('pointermove', (e) => {
+      if (routed && (!insideCanvas(e) || ignore(e))) { if (this.pointerInside) leave(); return; }
       const r = el.getBoundingClientRect();
       const nx = ((e.clientX - r.left) / r.width) * 2 - 1;
       const ny = -((e.clientY - r.top) / r.height) * 2 + 1;
       const hit = hitTest(e);
-      el.style.cursor = hit.over ? (this.annoying ? 'not-allowed' : 'grab') : 'default';
+      cursorEl.style.cursor = hit.over ? (this.annoying ? 'not-allowed' : 'grab') : (routed ? '' : 'default');
       this.pointerInside = true;
 
       if (this.annoying) {
@@ -349,20 +373,16 @@ export class PetStage {
       this.wake(1500);
     });
 
-    el.addEventListener('pointerleave', () => {
-      this.pointerInside = false;
-      this.lookTarget.set(0, 0);
-      this.evadeTarget.set(0, 0, 0);
-      this.pettingScore = 0;
-      this.lastPointer = null;
-      el.style.cursor = 'default';
-      this.wake(800);
-    });
+    // Leaving the canvas (direct mode) or the whole window (routed mode).
+    (routed ? document.documentElement : el).addEventListener('pointerleave', leave);
 
-    el.addEventListener('click', (e) => {
-      if (this.suppressClick) { this.suppressClick = false; return; }
-      if (hitTest(e).over) { e.stopPropagation(); this.touch(); }
-    });
+    // Capture phase in routed mode: a click that lands on the pet's body is the pet's, even where the
+    // body overlaps a card button; anywhere else the click goes on to the card untouched.
+    target.addEventListener('click', (e) => {
+      if (ignore(e)) return;
+      if (this.suppressClick) { this.suppressClick = false; if (routed && hitTest(e).over) { e.stopPropagation(); e.preventDefault(); } return; }
+      if (hitTest(e).over) { e.stopPropagation(); if (routed) e.preventDefault(); this.touch(); }
+    }, routed ? { capture: true } : false);
   }
 
   lookAtScreenPoint(clientX, clientY) {

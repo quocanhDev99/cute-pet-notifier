@@ -450,9 +450,7 @@ const pages = {
           </div>
           ${rep.label ? `<div class="setup-banner ${rep.ok ? 'ok' : 'todo'}"><span>${rep.ok ? '✅' : '✨'}</span><b>${rep.label}</b>${rep.ok ? '' : `<a class="btn btn-primary small" href="#connect">${rep.cta}</a>`}</div>` : ''}
           <b class="sub-title">Thú cưng xuất hiện thế nào?</b>
-          <div class="seg seg-3">
-            ${[['full', '🐱 Luôn ở bên'], ['minimal', '🐾 Nhỏ gọn'], ['hidden', '🙈 Ẩn đi']].map(([v, l]) => `<button data-choice="system.presence" data-value="${v}">${l}</button>`).join('')}
-          </div>
+          ${appearSizeHtml()}
           <div class="cta-row">
             <button class="btn btn-primary" data-action="test" data-arg="happy">🚀 Gửi thử 1 thông báo</button>
             <a class="btn btn-ghost" href="#pet">🐱 Đổi thú cưng</a>
@@ -720,18 +718,12 @@ const notifySubs = {
           ${H.slider('appearance.petScale', '🔍 Kích thước bé', 0.6, 1.6, 0.05, 'x')}
           ${H.toggle('appearance.dragEnabled', 'Cho phép kéo bé đi chỗ khác', 'Nhấn giữ vào bé rồi thả ở bất kỳ đâu.')}
           ${H.toggle('appearance.showBadge', 'Hiện số thông báo chưa xem trên bé', 'Chấm đỏ có số như icon ứng dụng — bấm vào để mở Hộp thư.')}
-          ${H.toggle('appearance.residentPet', 'Bé luôn ngồi trên màn hình', 'Tắt để bé chỉ xuất hiện khi có thông báo.')}
           ${hasCustomPos ? '<div class="btn-row"><button class="btn btn-ghost small" data-action="reset-position">↺ Đưa bé về góc đã chọn</button></div>' : ''}
         </section>
       </div>`;
   },
 
   focus() {
-    const presences = [
-      ['full', '🐱', 'Luôn ở bên', 'Bé ngồi ở góc màn hình, dõi theo chuột, thích được vuốt ve.'],
-      ['minimal', '🐾', 'Nhỏ gọn', 'Bé thu nhỏ, cuộn tròn ngủ; thẻ vẫn hiện nhẹ nhàng.'],
-      ['hidden', '🙈', 'Ẩn đi', 'Bé ẩn hoàn toàn. Tin vào Hộp thư, trừ tin khẩn cấp.']
-    ];
     const modes = [
       ['none', 'Bình thường', 'Mọi tin đều được báo.'],
       ['work', 'Làm việc', 'Bớt tin mạng xã hội, giải trí, khuyến mãi.'],
@@ -750,9 +742,9 @@ const notifySubs = {
       </section>
       <section class="panel">
         <h3>👁️ Bé xuất hiện thế nào?</h3>
-        <div class="mode-grid">
-          ${presences.map(([id, icon, name, desc]) => `<button class="mode-card" data-choice="system.presence" data-value="${id}"><span class="big-emoji">${icon}</span><b>${name}</b><small>${desc}</small></button>`).join('')}
+        <div>
         </div>
+        ${appearSizeHtml({ cards: true })}
       </section>
       <section class="panel">
         <h3>💆 Nhắc nghỉ mắt</h3>
@@ -872,13 +864,83 @@ function replacementWizard() {
           <label class="toggle-row inline"><span>${isOn(a) ? 'Đang bật' : 'Đang tắt'}</span><input type="checkbox" data-action-toggle="system-replace" ${isOn(a) ? 'checked' : ''}><span class="switch"></span></label></div>
         <ol class="steps">
           <li class="${ok ? 'done' : 'current'}"><i>${ok ? '✓' : '1'}</i>
-            <div><b>Cho phép đọc thông báo</b><small>${ok ? 'Đã xong.' : 'Windows sẽ hỏi quyền "Truy cập thông báo" — hãy bấm Cho phép.'}</small></div>
-            ${ok ? '' : (a.actions || []).slice(0, 1).map(x => `<button class="btn btn-primary small" data-action="adapter-run" data-arg="windows_nc|${x.id}">Mở Cài đặt</button>`).join('')}
+            <div><b>Cho phép đọc thông báo</b><small>${ok ? 'Đã xong — bé đang đọc thông báo.' : esc(a.detail || 'Bật "Truy cập thông báo" trong Cài đặt → Quyền riêng tư & bảo mật → Thông báo.')}</small></div>
+            ${ok ? '' : `<div class="btn-col"><button class="btn btn-primary small" data-action="adapter-run" data-arg="windows_nc|open-privacy-settings">Mở Cài đặt quyền</button><button class="btn btn-ghost small" data-action="adapter-run" data-arg="windows_nc|open-logs">📄 Mở thư mục log</button></div>`}
           </li>
         </ol>
+        ${winDiagHtml(a)}
       </section>`;
   }
   return '';
+}
+
+/* ---------------------------------------------------------------- appearance & size */
+// 3 clear choices instead of presence (full/minimal/hidden) + a separate "resident pet" toggle.
+const APPEAR = [
+  ['always', '🐱', 'Luôn ở bên', 'Bé ngồi ở góc màn hình, dõi theo chuột, đón mọi thông báo.'],
+  ['notify', '🔔', 'Chỉ khi có thông báo', 'Bé ẩn đi, chỉ chạy ra mang thông báo tới rồi đi.'],
+  ['hidden', '🙈', 'Ẩn đi', 'Không hiện gì. Tin vào Hộp thư, trừ tin khẩn cấp.']
+];
+const APPEAR_PATCH = {
+  always: { system: { presence: 'full' }, appearance: { residentPet: true } },
+  notify: { system: { presence: 'full' }, appearance: { residentPet: false } },
+  hidden: { system: { presence: 'hidden' } }
+};
+function appearMode() {
+  if (S.settings.system.presence === 'hidden') return 'hidden';
+  return S.settings.appearance.residentPet === false ? 'notify' : 'always';
+}
+// Pet + card sizes that look right together (fine-tune in Thông báo → Hiển thị).
+const SIZE_PRESETS = [
+  ['sm', 'Nhỏ', 'Màn hình laptop', { petScale: 0.8, size: 'sm', cardScale: 0.95 }],
+  ['md', 'Vừa', 'Khuyên dùng', { petScale: 1, size: 'md', cardScale: 1 }],
+  ['lg', 'Lớn', 'Màn hình to, 2K/4K', { petScale: 1.25, size: 'lg', cardScale: 1.1 }]
+];
+function sizePreset() {
+  const a = S.settings.appearance, n = S.settings.notifications;
+  const hit = SIZE_PRESETS.find(([, , , v]) => Math.abs(a.petScale - v.petScale) < 0.01 && n.size === v.size && Math.abs((n.cardScale || 1) - v.cardScale) < 0.01);
+  return hit ? hit[0] : 'custom';
+}
+function appearSizeHtml({ cards = false } = {}) {
+  const mode = appearMode(), size = sizePreset();
+  const appear = cards
+    ? `<div class="mode-grid">${APPEAR.map(([id, icon, name, desc]) => `<button class="mode-card ${mode === id ? 'selected' : ''}" data-action="appear" data-arg="${id}"><span class="big-emoji">${icon}</span><b>${name}</b><small>${desc}</small></button>`).join('')}</div>`
+    : `<div class="seg seg-3">${APPEAR.map(([id, icon, name, desc]) => `<button class="${mode === id ? 'selected' : ''}" data-action="appear" data-arg="${id}" title="${esc(desc)}">${icon} ${name}</button>`).join('')}</div>`;
+  return `${appear}
+          <b class="sub-title">Kích thước bé & khung thông báo</b>
+          <div class="seg seg-3 size-presets">${SIZE_PRESETS.map(([id, name, hint]) => `<button class="${size === id ? 'selected' : ''}" data-action="size-preset" data-arg="${id}"><b>${name}</b><small>${hint}</small></button>`).join('')}</div>
+          <small class="muted">${size === 'custom' ? '✏️ Đang dùng kích thước tùy chỉnh. ' : ''}<a href="#notify/style">Chỉnh chi tiết →</a></small>`;
+}
+
+/** 🩺 Windows self-diagnostics: tells "the pet can't read" apart from "the app never used Windows notifications". */
+function winDiagHtml(a) {
+  const x = a.extra || {};
+  const access = x.access === 'Allowed' ? '✅ Đã cho phép' : x.access ? `⚠️ ${esc(x.access)} — ${esc(x.accessHint || '')}` : '⏳ Đang kiểm tra…';
+  const center = x.inCenter == null ? '—' : `${x.inCenter} thông báo`;
+  const last = x.lastAt ? ` · gần nhất: ${esc(x.lastApp || '')} lúc ${new Date(x.lastAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}` : '';
+  return `
+        <details class="win-diag" ${a.status === 'Connected' && (x.captured || 0) > 0 ? '' : 'open'}>
+          <summary><b>🩺 Kiểm tra nhanh</b><span class="muted small">${a.status === 'Connected' ? `bé đã bắt ${x.captured || 0} thông báo` : 'cần xem'}</span></summary>
+          <ul>
+            <li><span>Hệ điều hành</span><b>${esc(x.os || '—')}</b></li>
+            <li><span>Quyền đọc thông báo</span><b>${access}</b></li>
+            <li><span>Trung tâm thông báo đang giữ</span><b>${center}</b></li>
+            <li><span>Bé đã bắt được</span><b>${x.captured || 0} thông báo${last}</b></li>
+          </ul>
+          <div class="diag-actions">
+            <button class="btn btn-primary small" data-action="win-test-toast">🧪 Gửi thông báo thử</button>
+            <button class="btn btn-ghost small" data-action="win-probe-popups" title="Ghi lại trong 60 giây các cửa sổ popup riêng của ứng dụng (nội dung được che bớt)">🔍 Dò popup (60 giây)</button>
+            <button class="btn btn-ghost small" data-action="adapter-run" data-arg="windows_nc|open-logs">📄 Log</button>
+          </div>
+          <details class="diag-help">
+            <summary>Thông báo thử hiện được mà Zalo (hoặc app khác) vẫn không hiện?</summary>
+            <ol>
+              <li>App đó đang dùng <b>cửa sổ thông báo riêng</b>, không qua Windows nên bé không thấy.</li>
+              <li>Kiểm tra: khi có tin, mở Trung tâm thông báo (<b>Win + A</b> trên Windows 10, <b>Win + N</b> trên Windows 11). Không thấy tin ở đó → bé cũng không thấy.</li>
+              <li>Sửa: bật thông báo của Windows trong cài đặt của app, và trong <b>Cài đặt Windows → Hệ thống → Thông báo → (tên app)</b>, bật cả <i>Hiện trong trung tâm thông báo</i>.</li>
+            </ol>
+          </details>
+        </details>`;
 }
 
 function catalogHtml() {
@@ -1541,6 +1603,18 @@ const actions = {
     queueSave({ privacy: { hiddenApps: [...cur] } }, true);
     setTimeout(render, 300);
   },
+  appear(id) {
+    if (!APPEAR_PATCH[id]) return;
+    queueSave(APPEAR_PATCH[id], true);
+    setTimeout(render, 150);
+  },
+  'size-preset'(id) {
+    const p = SIZE_PRESETS.find(x => x[0] === id);
+    if (!p) return;
+    const v = p[3];
+    queueSave({ appearance: { petScale: v.petScale }, notifications: { size: v.size, cardScale: v.cardScale } }, true);
+    setTimeout(render, 150);
+  },
   'contact-add'() {
     const name = (document.getElementById('ct-name').value || '').trim();
     const group = document.getElementById('ct-group').value;
@@ -1556,6 +1630,26 @@ const actions = {
     list.splice(Number(i), 1);
     queueSave({ contacts: list }, true);
     setTimeout(render, 300);
+  },
+  async 'win-probe-popups'() {
+    try {
+      const r = await api('/api/adapters/windows_nc/action', { method: 'POST', body: { action: 'probe-popups' } });
+      if (!r.ok) { toast(r.error || 'Không dò được', 'error'); return; }
+      toast('🔍 Đang dò 60 giây — hãy nhờ ai nhắn Zalo (hoặc app khác) cho bạn ngay bây giờ. Xong sẽ tự mở file kết quả.', 'ok');
+    } catch (err) { toast(err.message, 'error'); }
+  },
+  async 'win-test-toast'() {
+    try {
+      const r = await api('/api/adapters/windows_nc/action', { method: 'POST', body: { action: 'test-toast' } });
+      toast('Đã gửi thông báo thử — chờ vài giây…');
+      setTimeout(async () => {
+        await refreshState();
+        const a = adapter('windows_nc');
+        const got = a && a.extra && a.extra.captured > (r.before || 0);
+        toast(got ? '✅ Bé đã đọc được thông báo của Windows' : '❌ Bé chưa thấy thông báo thử. Xem dòng "Quyền đọc thông báo" và mở thư mục log.', got ? 'ok' : 'error');
+        render();
+      }, 5000);
+    } catch (err) { toast(err.message, 'error'); }
   },
   'toggle-mute'(app) {
     const cur = new Set(S.settings.attention.mutedApps || []);

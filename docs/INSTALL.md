@@ -7,7 +7,7 @@
 | Tính năng | macOS (Apple Silicon / Intel) | Windows 10/11 (64-bit) |
 |---|---|---|
 | **Bắt thông báo của MỌI ứng dụng** (Zalo, Teams, Messenger, Outlook, Mail, Slack…) | ✅ **Hoàn toàn tự động** qua Native Accessibility Interceptor & Notification Center store | ✅ **Hoàn toàn tự động** qua WinRT `UserNotificationListener` |
-| **Tự động đóng banner / toast gốc** (tránh hiện 2 lần) | ✅ **Tự động đóng ngay lập tức** khi cấp quyền Trợ năng (Accessibility) | ✅ **Tự động xóa toast gốc** bằng `RemoveNotification(id)` |
+| **Tự động đóng banner / toast gốc** (tránh hiện 2 lần) | ✅ **Tự động đóng ngay lập tức** khi cấp quyền Trợ năng (Accessibility) | ✅ **Tắt banner + âm thanh gốc** của mọi app (sao lưu & tự bật lại khi tắt tính năng / thoát app), rồi xóa toast khỏi Trung tâm thông báo |
 | **Thời gian phản hồi** | ⚡ **Tức thì (< 50ms)** qua AXObserver | ⚡ **Tức thì (< 250ms)** qua WinRT Listener |
 | **Quyền hệ thống cần cấp** | Cấp quyền **Trợ năng (Accessibility)** (có sẵn nút 1-click trong Control Center) | Cấp quyền **Truy cập Thông báo** (Notifications access) trong Windows Settings |
 | **Dự phòng (Fallback)** | 🗄️ Tự động chuyển sang SQLite Database Watcher nếu chưa có quyền Accessibility | 🔄 Tự động tái kích hoạt và cảnh báo rõ ràng trong Control Center |
@@ -22,12 +22,12 @@ Tạo bằng `npm run dist:mac` (macOS, đã ký) và `npx electron-builder --wi
 |---|---|
 | macOS chip Apple (M1/M2/M3/M4) | `Cute Pet Companion-3.4.2-arm64.dmg` |
 | macOS chip Intel | `Cute Pet Companion-3.4.2-x64.dmg` |
-| Windows 10/11 (64-bit) | `Cute Pet Companion Setup 3.4.2.exe` |
+| Windows 10/11 (64-bit) | `Cute Pet Companion Setup 3.5.5.exe` |
 
 > **Không biết máy mình chip gì?** Bấm menu  → *Giới thiệu về máy Mac này*. Dòng *Chip* ghi "Apple M…" thì dùng file `-arm64`. Dòng *Bộ xử lý* ghi "Intel" thì dùng file `-x64`.
 > Nếu cài **nhầm bản Intel trên máy chip Apple**, macOS phải dịch app qua Rosetta nên hoạt họa rất chậm, giật (đo được có lúc khựng 2–5 giây). App sẽ hiện cảnh báo khi mở; hãy cài lại đúng file `-arm64`.
 
-Bản macOS được ký bằng **chứng chỉ tự ký cố định**, nên quyền Trợ năng giữ nguyên qua các bản cập nhật. Tuy vậy app **chưa được Apple notarize**, và bản Windows chưa có chứng chỉ ký code, nên lần mở đầu tiên hệ điều hành sẽ cảnh báo. Xem cách mở bên dưới. Bản Windows **chưa được chạy thử trên máy Windows thật**.
+Bản macOS được ký bằng **chứng chỉ tự ký cố định**, nên quyền Trợ năng giữ nguyên qua các bản cập nhật. Tuy vậy app **chưa được Apple notarize**, và bản Windows chưa có chứng chỉ ký code, nên lần mở đầu tiên hệ điều hành sẽ cảnh báo. Xem cách mở bên dưới. Bản Windows đã chạy thử trên Windows 11 (04/11/2026).
 
 ---
 
@@ -65,17 +65,39 @@ macOS 15 bổ sung khóa kho thông báo SQLite. Nếu bạn muốn kích hoạt
 ## 3. Windows 10/11
 
 ### 3.1 Cài đặt
-1. Chạy `Cute Pet Companion Setup 3.4.2.exe`. Đây là bản cài 1-click cho tài khoản hiện tại, không yêu cầu quyền Administrator.
-2. Nếu Windows SmartScreen hiện cảnh báo màu xanh: bấm **More info** (Thông tin thêm) → **Run anyway** (Vẫn chạy).
-3. Thú cưng xuất hiện ở góc màn hình. Icon 🐾 nằm ở khay hệ thống (System Tray, góc dưới bên phải màn hình).
+1. Chạy `Cute Pet Companion Setup 3.5.5.exe`. Bản cài 1-click cho tài khoản hiện tại, **không cần quyền Administrator**.
+2. Windows SmartScreen hiện cảnh báo màu xanh (app chưa có chứng chỉ ký code): bấm **More info / Thông tin thêm** → **Run anyway / Vẫn chạy**. Chỉ một lần.
+3. Thú cưng xuất hiện ở góc màn hình, icon 🐾 nằm ở khay hệ thống (góc dưới bên phải). Control Center tự mở lần đầu.
 
-### 3.2 Kích hoạt cơ chế thay thế Toast Windows
-1. Vào Control Center → **🔌 Kết nối** → thẻ **🪟 Thay thế thông báo của Windows**.
-2. Gạt công tắc sang **Đang bật**.
-3. Nếu Windows yêu cầu quyền:
-   - App sẽ tự động nhắc bạn cấp quyền truy cập thông báo.
-   - Hoặc bấm **Mở Cài đặt** ngay trên thẻ.
-4. Khi đã kết nối, thú cưng sẽ nhận diện toàn bộ Toast từ Windows, tự động đóng thông báo gốc bằng lệnh `RemoveNotification` và hiển thị thẻ 3D tương tác của thú cưng.
+### 3.2 Thay thế thông báo của Windows và các ứng dụng
+Tính năng **bật sẵn**. Mở Control Center → **🔌 Kết nối** → thẻ **🪟 Thay thế thông báo của Windows** và xem dòng trạng thái:
+
+| Thẻ hiện | Nghĩa là | Cần làm |
+|---|---|---|
+| ✓ *Đã xong — bé đang đọc thông báo* | Đang hoạt động | Không cần làm gì |
+| *Windows chưa cho phép đọc thông báo…* | Chưa có quyền | Bấm **Mở Cài đặt quyền** → bật **Truy cập thông báo** (*Notification access*). Bé tự nhận ra sau vài giây, không cần mở lại app |
+| *Trình đọc thông báo đã dừng / không phản hồi* | PowerShell bị chặn (chính sách công ty, phần mềm diệt virus) | Cho phép `powershell.exe` chạy, hoặc gửi file log (nút **📄 Mở thư mục log**) cho người hỗ trợ |
+
+Kiểm tra thêm trong **Cài đặt → Hệ thống → Thông báo**:
+- **Thông báo** đang bật, và mỗi ứng dụng muốn bé báo (Zalo, Teams, Outlook…) đang **bật thông báo**.
+- Ứng dụng đó **được hiện trong trung tâm thông báo** (*Show notifications in notification center*). Bé đọc thông báo từ đây; tắt mục này thì bé không thấy.
+
+Khi đang hoạt động, app tự tắt **banner** và **âm thanh** thông báo gốc của Windows cho mọi ứng dụng, chỉ còn thẻ và tiếng của thú cưng. Thông báo vẫn vào Trung tâm thông báo để bé đọc, rồi được gỡ khỏi đó để không trùng.
+- Giá trị gốc được sao lưu (`%APPDATA%\Cute Pet Companion\windows-banners.json`) và **tự bật lại** khi bạn tắt công tắc của thẻ hoặc thoát app.
+- **Trước khi gỡ cài đặt app**, hãy tắt công tắc của thẻ (hoặc thoát app) để banner và âm thanh của Windows được trả lại.
+- Ứng dụng gửi thông báo **lần đầu tiên** có thể hiện banner gốc một lần; từ lần sau thì không.
+- Bấm **Mở app** trên thẻ đưa đúng ứng dụng lên trên cùng, nhưng không mở được đúng cuộc chat (Windows không cho phép).
+
+### 3.3 Bé không hiện thông báo nào? (nhất là Windows 10)
+Thẻ 🪟 có mục **🩺 Kiểm tra nhanh**. Bấm **🧪 Gửi thông báo thử của Windows** rồi xem:
+
+| Kết quả | Nguyên nhân | Cách sửa |
+|---|---|---|
+| Bé hiện thẻ "Cute Pet - test" | Bé đọc được thông báo Windows | Nếu riêng **Zalo** không hiện: xem dòng dưới |
+| Thông báo thử hiện, nhưng Zalo không | Zalo đang dùng **cửa sổ thông báo riêng**, không qua Windows | Sau khi có tin Zalo, mở Trung tâm thông báo (**Win + A** trên Windows 10, **Win + N** trên Windows 11). Không thấy tin Zalo ở đó → bật thông báo của Windows trong Zalo và trong **Cài đặt → Hệ thống → Thông báo → Zalo** (bật cả *Hiện trong trung tâm thông báo*) |
+| "Quyền đọc thông báo" ≠ ✅ | Windows chưa cho phép | **Windows 10:** Cài đặt → **Quyền riêng tư** → **Thông báo** → bật *Cho phép truy cập thông báo trên thiết bị này* và *Cho phép ứng dụng truy cập thông báo*. **Windows 11:** Cài đặt → Quyền riêng tư & bảo mật → Thông báo → *Truy cập thông báo* |
+| Quyền ✅ nhưng "Trung tâm thông báo đang giữ" luôn là 0 và thông báo thử không hiện | Windows trả về danh sách rỗng (quyền bị thu hồi, hoặc Trung tâm thông báo bị tắt bằng chính sách) | Tắt rồi bật lại quyền ở trên; kiểm tra **Cài đặt → Hệ thống → Thông báo** đang bật |
+| "Trình đọc thông báo đã dừng / không phản hồi" | PowerShell bị chính sách công ty hoặc phần mềm diệt virus chặn | Cho phép `powershell.exe`, hoặc gửi file `main.log` (nút **📄 Mở thư mục log**) cho người hỗ trợ |
 
 ---
 

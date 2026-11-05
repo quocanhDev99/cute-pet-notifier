@@ -46,6 +46,23 @@ class InboxStore extends EventEmitter {
     this.persist();
   }
 
+  /**
+   * Opening a notification = the user is looking at that conversation now: earlier unread items of
+   * the same app (and same title/chat, when known) count as read. Returns how many changed.
+   */
+  markConversationRead(app, title) {
+    if (!app) return 0;
+    let n = 0;
+    for (const it of this.items) {
+      if (it.read || it.app !== app) continue;
+      if (title && it.title && it.title !== title) continue;
+      it.read = true;
+      n++;
+    }
+    if (n) this.persist();
+    return n;
+  }
+
   remove(id) { this.items = this.items.filter(i => i.id !== id); this.persist(); }
   clear() { this.items = []; this.persist(); }
   unreadCount() { return this.items.filter(i => !i.read).length; }
