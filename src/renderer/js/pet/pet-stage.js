@@ -376,10 +376,10 @@ export class PetStage {
     // Leaving the canvas (direct mode) or the whole window (routed mode).
     (routed ? document.documentElement : el).addEventListener('pointerleave', leave);
 
-    // Capture phase in routed mode: a click that lands on the pet's body is the pet's, even where the
-    // body overlaps a card button; anywhere else the click goes on to the card untouched.
+    // Capture phase in routed mode: clicks on card buttons or inside notification cards must always
+    // pass through to the card elements directly, never intercepted by the pet's body/double-tap.
     target.addEventListener('click', (e) => {
-      if (ignore(e)) return;
+      if (ignore(e) || (e.target && e.target.closest && (e.target.closest('.card') || e.target.closest('.card-slot')))) return;
       if (this.suppressClick) { this.suppressClick = false; if (routed && hitTest(e).over) { e.stopPropagation(); e.preventDefault(); } return; }
       const hit = hitTest(e);
       if (!hit.over) return;

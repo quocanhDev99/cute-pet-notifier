@@ -171,18 +171,26 @@ function esc(str) {
 let lastRectsKey = '';
 let rectsUntil = 0;
 let rectsRaf = 0;
+let rectsFallbackTimer = null;
 function measureRects() {
   rectsRaf = 0;
+  if (rectsFallbackTimer) { clearTimeout(rectsFallbackTimer); rectsFallbackTimer = null; }
   const els = [current && current.el].filter(Boolean);
   const hidden = dock.classList.contains('hidden');
   const rects = hidden ? [] : els.map((el) => { const r = el.getBoundingClientRect(); return { x: Math.round(r.left - 8), y: Math.round(r.top - 8), w: Math.round(r.width + 16), h: Math.round(r.height + 16) }; }).filter(r => r.w > 16 && r.h > 16);
   const key = JSON.stringify(rects);
   if (key !== lastRectsKey) { lastRectsKey = key; if (api && api.setHitRects) api.setHitRects(rects); }
-  if (performance.now() < rectsUntil) rectsRaf = requestAnimationFrame(measureRects);
+  if (performance.now() < rectsUntil) {
+    rectsRaf = requestAnimationFrame(measureRects);
+    rectsFallbackTimer = setTimeout(measureRects, 40);
+  }
 }
 function refreshHitRects(ms = 600) {
   rectsUntil = Math.max(rectsUntil, performance.now() + ms);
-  if (!rectsRaf) rectsRaf = requestAnimationFrame(measureRects);
+  if (!rectsRaf) {
+    rectsRaf = requestAnimationFrame(measureRects);
+    if (!rectsFallbackTimer) rectsFallbackTimer = setTimeout(measureRects, 40);
+  }
 }
 setInterval(() => { if (current || lastRectsKey !== '[]') refreshHitRects(50); }, 500); // safety net
 
@@ -316,7 +324,7 @@ function applyConfig(payload) {
       // The pet canvas never takes the mouse (CSS pointer-events: none) so it can't steal clicks
       // from the card it overlaps; the stage listens on the page and ray-casts the pet instead.
       pointerTarget: document,
-      ignorePointer: (e) => !!(e.target && e.target.closest && e.target.closest('.pet-badge'))
+      ignorePointer: (e) => !!(e.target && e.target.closest && (e.target.closest('.pet-badge') || e.target.closest('.card') || e.target.closest('.card-slot')))
     });
     window.__cpcDiagnostics = { frameStats: () => stage.frameStats(), transitions: () => stage.anim.lastProfile };
   } else if (prevPet !== s.activePet) {
@@ -459,6 +467,7 @@ function showNotification(item) {
   const mode = item.presentationMode || 'billboard';
   const el = buildCard(item);
   current = { item, el, remaining: item.duration, startedAt: 0, timer: null };
+  measureRects();
   refreshHitRects(1600);
 
   dock.classList.remove('hidden', 'leaving');
@@ -731,7 +740,7 @@ badgeEl.addEventListener('pointerdown', (e) => e.stopPropagation()); // not a dr
 badgeEl.addEventListener('click', (e) => { e.stopPropagation(); if (api) api.openControlCenter('inbox'); });
 
 // Pet presses are detected on the page by ray-casting the pet (the slot itself ignores the mouse).
-const onPetBody = (e) => !!(stage && stage.hitTest && !(e.target && e.target.closest && e.target.closest('.pet-badge')) && stage.hitTest(e).over);
+const onPetBody = (e) => !!(stage && stage.hitTest && !(e.target && e.target.closest && (e.target.closest('.pet-badge') || e.target.closest('.card') || e.target.closest('.card-slot'))) && stage.hitTest(e).over);
 document.addEventListener('pointerdown', (e) => {
   if (e.button !== 0 || !onPetBody(e)) return; // left button, on the pet's body only
   beginPetPress(e);
@@ -848,7 +857,12 @@ if (api) {
     if (!current && stage) { stage.setEmotion(emotion); dndSleeping = emotion === 'sleeping'; if (dndSleeping) say(t('dndSleeping')); }
   });
   api.onDismiss(() => { if (current) finishCard('close'); });
-  api.onResumed(() => { if (stage) { stage.lastFrame = performance.now(); stage.wake(800); } });
+  api.onResumed(() => {
+    lastRectsKey = '';
+    if (stage) { stage.lastFrame = performance.now(); stage.wake(800); }
+    measureRects();
+    refreshHitRects(1200);
+  });
   api.onActionResult && api.onActionResult((r) => {
     if (!current || current.item.id !== r.id) { if (r.ok) say(t('approvedSay'), 'love'); else say(t('approveFail') + (r.error || ''), 'angry'); return; }
     const row = r.key ? [...current.el.querySelectorAll('.row')].find(x => x.dataset.key === r.key) : null;

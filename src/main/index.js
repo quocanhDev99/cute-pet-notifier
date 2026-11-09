@@ -229,7 +229,11 @@ function applyMouseCapture() {
   const ignore = !(rendererWantsMouse || cursorInRect);
   if (ignore === overlayIgnoring) return;
   overlayIgnoring = ignore;
-  overlay.setIgnoreMouseEvents(ignore, { forward: true });
+  if (ignore) {
+    overlay.setIgnoreMouseEvents(true, { forward: true });
+  } else {
+    overlay.setIgnoreMouseEvents(false);
+  }
 }
 function pollCursor() {
   if (!overlay || overlay.isDestroyed() || !overlay.isVisible()) return;
@@ -735,12 +739,34 @@ async function boot() {
 
   // Quiet hours can begin without any user action → re-evaluate periodically.
   setInterval(() => refreshEffectiveState(), 30 * 1000).unref();
-  powerMonitor.on('resume', () => sendOverlay('app:resumed', {}));
+
+  const recoverOverlay = () => {
+    if (!overlay || overlay.isDestroyed()) return;
+    fitOverlayToDisplay();
+    if (process.platform === 'darwin') {
+      overlay.setAlwaysOnTop(true, 'screen-saver');
+    } else {
+      overlay.setAlwaysOnTop(true);
+    }
+    overlayIgnoring = true;
+    rendererWantsMouse = false;
+    cursorInRect = false;
+    overlay.setIgnoreMouseEvents(true, { forward: true });
+    sendOverlay('app:resumed', {});
+  };
+
+  powerMonitor.on('resume', () => {
+    if (breaks) breaks.rested();
+    recoverOverlay();
+  });
+  powerMonitor.on('unlock-screen', () => {
+    recoverOverlay();
+  });
   refreshEffectiveState(true);
 
-  screen.on('display-metrics-changed', fitOverlayToDisplay);
-  screen.on('display-added', fitOverlayToDisplay);
-  screen.on('display-removed', fitOverlayToDisplay);
+  screen.on('display-metrics-changed', recoverOverlay);
+  screen.on('display-added', recoverOverlay);
+  screen.on('display-removed', recoverOverlay);
 
   checkMacInstall();
   setTimeout(() => { activateReady = true; }, 3000);
