@@ -11,6 +11,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const crypto = require('crypto');
 const { execFile } = require('child_process');
 const { parseBplist } = require('./bplist');
 
@@ -39,7 +40,8 @@ class NcPrefs {
   }
 
   async exportXml() {
-    const xml = path.join(os.tmpdir(), `cpc-ncprefs-${process.pid}-${Date.now()}.plist`);
+    // Random suffix: two exports in the same millisecond must not share (and delete) one file.
+    const xml = path.join(os.tmpdir(), `cpc-ncprefs-${process.pid}-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.plist`);
     await run('/usr/bin/defaults', ['export', this.domain, xml]);
     return xml;
   }
@@ -108,20 +110,28 @@ class NcPrefs {
       if (!ch.apps[a.bundleId]) ch.apps[a.bundleId] = { style: st };
       return withStyle(a.flags, STYLE.none);
     };
-    const changed = await this.apply(pick);
-    // Verify after the daemons restarted; retry apps that were written back (running apps).
+    const save = () => {
+      ch.at = Date.now();
+      fs.mkdirSync(this.dir, { recursive: true });
+      fs.writeFileSync(this.changesFile, JSON.stringify(ch, null, 2), { mode: 0o600 });
+    };
+    let changed = [];
     let stubborn = [];
-    for (let attempt = 0; attempt < 3; attempt++) {
-      await new Promise(r => setTimeout(r, 1500));
-      const xml = await this.exportXml();
-      try { stubborn = (await this.readApps(xml)).filter(a => pick(a) !== null).map(a => a.bundleId); } finally { fs.rmSync(xml, { force: true }); }
-      if (!stubborn.length) break;
-      await this.apply(pick);
+    try {
+      changed = await this.apply(pick);
+      ch.active = true;
+      save(); // record what we changed right away: Restore must work even if a retry below fails
+      // Verify after the daemons restarted; retry apps that were written back (running apps).
+      for (let attempt = 0; attempt < 3; attempt++) {
+        await new Promise(r => setTimeout(r, 1500));
+        const xml = await this.exportXml();
+        try { stubborn = (await this.readApps(xml)).filter(a => pick(a) !== null).map(a => a.bundleId); } finally { fs.rmSync(xml, { force: true }); }
+        if (!stubborn.length) break;
+        await this.apply(pick);
+      }
+    } finally {
+      if (Object.keys(ch.apps).length) { ch.active = true; ch.stubborn = stubborn; save(); }
     }
-    ch.active = true;
-    ch.stubborn = stubborn;
-    ch.at = Date.now();
-    fs.writeFileSync(this.changesFile, JSON.stringify(ch, null, 2), { mode: 0o600 });
     return { changed: changed.length, stubborn };
   }
 

@@ -52,6 +52,7 @@ class GitHubAdapter extends ApplicationAdapter {
     this.lastModified = null;
     this.seen = new Map(); // threadId -> updated_at
     this.intervalSec = 60;
+    this.gen = 0; // bumped by connect/disconnect: an in-flight request from before must not reschedule
   }
 
   token() { return this.ctx.secrets.get('github.token'); }
@@ -74,13 +75,18 @@ class GitHubAdapter extends ApplicationAdapter {
 
   async connect() {
     if (!this.token()) { this.setStatus(STATUS.AUTH, 'Chưa có token'); return false; }
+    const gen = ++this.gen;
     try {
       const res = await this.request('/user');
+      if (gen !== this.gen) return false; // disconnected while waiting
       if (res.status === 401) { this.setStatus(STATUS.AUTH, 'Token không hợp lệ hoặc đã hết hạn'); return false; }
       if (!res.ok) { this.setStatus(STATUS.ERROR, `GitHub trả về ${res.status}`); return false; }
       const user = await res.json();
+      if (gen !== this.gen) return false;
       const scopes = res.headers.get('x-oauth-scopes');
-      if (scopes !== null && !scopes.split(',').map(s => s.trim()).includes('notifications') && !scopes.includes('repo')) {
+      // Exact scope names: "public_repo" contains "repo" but does NOT grant notifications.
+      const list = scopes === null ? null : scopes.split(',').map(s => s.trim());
+      if (list !== null && !list.includes('notifications') && !list.includes('repo')) {
         this.setStatus(STATUS.LIMITED, `@${user.login} — token thiếu scope "notifications"`);
         return false;
       }
@@ -92,41 +98,50 @@ class GitHubAdapter extends ApplicationAdapter {
       this.schedule(1000);
       return true;
     } catch (err) {
-      this.setStatus(STATUS.ERROR, `Không kết nối được: ${err.message}`);
+      if (gen === this.gen) this.setStatus(STATUS.ERROR, `Không kết nối được: ${err.message}`);
       return false;
     }
   }
 
   async disconnect() {
+    this.gen++;
     clearTimeout(this.timer);
     this.timer = null;
     this.setStatus(STATUS.DISCONNECTED, '');
     return true;
   }
 
-  schedule(ms) {
+  schedule(ms, gen = this.gen) {
+    if (gen !== this.gen || this.status !== STATUS.CONNECTED) return; // disconnected meanwhile
     clearTimeout(this.timer);
     this.timer = setTimeout(() => this.poll(), ms);
+    if (this.timer.unref) this.timer.unref();
   }
 
   async poll() {
     if (this.status !== STATUS.CONNECTED) return;
+    const gen = this.gen;
     const cfg = this.config;
     try {
       const params = new URLSearchParams({ all: 'false', participating: String(cfg.participatingOnly !== false), per_page: '50' });
       const headers = this.lastModified ? { 'If-Modified-Since': this.lastModified } : {};
       const res = await this.request(`/notifications?${params}`, { headers });
+      if (gen !== this.gen) return;
       const pollHeader = Number(res.headers.get('x-poll-interval'));
       this.intervalSec = Math.max(cfg.pollSeconds || 60, Number.isFinite(pollHeader) ? pollHeader : 60);
 
       if (res.status === 401) { this.setStatus(STATUS.AUTH, 'Token bị thu hồi'); return; }
-      if (res.status === 304) { this.schedule(this.intervalSec * 1000); return; }
-      if (!res.ok) { this.detail = `Lỗi poll ${res.status}`; this.schedule(this.intervalSec * 1000); return; }
+      if (res.status === 304) { this.schedule(this.intervalSec * 1000, gen); return; }
+      if (!res.ok) { this.detail = `Lỗi poll ${res.status}`; this.schedule(this.intervalSec * 1000, gen); return; }
       this.lastModified = res.headers.get('last-modified') || this.lastModified;
       const threads = await res.json();
+      if (gen !== this.gen) return;
 
-      for (const t of threads.reverse()) {
+      for (const t of (Array.isArray(threads) ? threads : []).reverse()) {
         const prev = this.seen.get(t.id);
+        // Re-insert so the Map's order is "least recently seen first": eviction then drops threads
+        // that went quiet, not a busy old thread that would be re-announced as new.
+        this.seen.delete(t.id);
         this.seen.set(t.id, t.updated_at);
         // Only notify for activity after we connected and not already shown.
         if (prev === t.updated_at) continue;
@@ -136,9 +151,10 @@ class GitHubAdapter extends ApplicationAdapter {
       if (this.seen.size > 500) this.seen = new Map([...this.seen].slice(-300));
       this.detail = `@${this.login} · kiểm tra mỗi ${this.intervalSec}s`;
     } catch (err) {
+      if (gen !== this.gen) return;
       this.detail = `Lỗi mạng: ${err.message}`;
     }
-    this.schedule(this.intervalSec * 1000);
+    this.schedule(this.intervalSec * 1000, gen);
   }
 
   normalizeNotification(t) {

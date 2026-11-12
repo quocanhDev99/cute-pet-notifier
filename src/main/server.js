@@ -7,8 +7,11 @@
  *   • GET  /api/events        — Server-Sent Events for live dashboard updates
  *
  * Hardening: binds to loopback only, validates the Host header (DNS rebinding),
- * never sends CORS headers on /api (cross-site pages cannot read or preflight),
- * caps body sizes, and resolves static paths inside their roots only.
+ * never sends CORS headers (cross-site pages cannot read or preflight), refuses browser requests
+ * coming from another origin on /notify, caps body sizes, and resolves static paths inside their
+ * roots only. The Control Center page (which carries the API token) is only served to a client
+ * holding the session cookie, obtained through a single-use launch link minted by the app
+ * itself — other local processes cannot simply GET / to read the token.
  */
 const http = require('http');
 const fs = require('fs');
@@ -35,24 +38,40 @@ const MIME = {
 };
 
 function safeJoin(root, rel) {
-  const p = path.resolve(root, '.' + path.sep + decodeURIComponent(rel));
+  let decoded;
+  try { decoded = decodeURIComponent(rel); } catch { return null; } // malformed %-escape
+  if (decoded.includes('\0')) return null;
+  const p = path.resolve(root, '.' + path.sep + decoded);
   return p === root || p.startsWith(root + path.sep) ? p : null;
 }
 
+const httpError = (code, message) => Object.assign(new Error(message), { status: code });
+
 function sendJson(res, code, obj, extraHeaders = {}) {
+  if (res.headersSent || res.destroyed) { if (!res.writableEnded) res.destroy(); return; }
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...extraHeaders });
   res.end(JSON.stringify(obj));
 }
 
+/** Read a request body up to `limit` bytes. Over the limit: stop reading and fail with 413; the
+ *  response (sent with "Connection: close") is still delivered before the socket goes away. */
 function readBody(req, limit) {
   return new Promise((resolve, reject) => {
+    const declared = Number(req.headers['content-length']);
+    if (Number.isFinite(declared) && declared > limit) { req.pause(); reject(httpError(413, 'Payload too large')); return; }
     const chunks = [];
     let size = 0;
-    req.on('data', (c) => {
+    const onData = (c) => {
       size += c.length;
-      if (size > limit) { reject(Object.assign(new Error('Payload too large'), { code: 413 })); req.destroy(); return; }
+      if (size > limit) {
+        req.removeListener('data', onData);
+        req.pause();
+        reject(httpError(413, 'Payload too large'));
+        return;
+      }
       chunks.push(c);
-    });
+    };
+    req.on('data', onData);
     req.on('end', () => resolve(Buffer.concat(chunks)));
     req.on('error', reject);
   });
@@ -61,26 +80,55 @@ function readBody(req, limit) {
 async function readJson(req, limit = 64 * 1024) {
   const buf = await readBody(req, limit);
   if (!buf.length) return {};
-  try { return JSON.parse(buf.toString('utf8')); } catch { throw Object.assign(new Error('Invalid JSON payload'), { code: 400 }); }
+  let v;
+  try { v = JSON.parse(buf.toString('utf8')); } catch { throw httpError(400, 'Invalid JSON payload'); }
+  if (!v || typeof v !== 'object' || Array.isArray(v)) throw httpError(400, 'JSON payload must be an object');
+  return v;
 }
 
+/** Constant-time compare. An empty expected value never matches (no "token unset = open door"). */
 function safeEqual(a, b) {
   const ab = Buffer.from(String(a || ''));
   const bb = Buffer.from(String(b || ''));
-  return ab.length === bb.length && crypto.timingSafeEqual(ab, bb);
+  return bb.length > 0 && ab.length === bb.length && crypto.timingSafeEqual(ab, bb);
 }
 
 function serveFile(res, file, extraHeaders = {}) {
   fs.stat(file, (err, st) => {
     if (err || !st.isFile()) { sendJson(res, 404, { error: 'Not found' }); return; }
-    res.writeHead(200, {
-      'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream',
-      'Content-Length': st.size,
-      'Cache-Control': 'no-cache',
-      ...extraHeaders
+    const stream = fs.createReadStream(file);
+    stream.on('error', () => {
+      if (!res.headersSent) sendJson(res, 500, { error: 'Read error' });
+      else res.destroy();
     });
-    fs.createReadStream(file).pipe(res);
+    stream.once('open', () => {
+      res.writeHead(200, {
+        'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream',
+        'Content-Length': st.size,
+        'Cache-Control': 'no-cache',
+        ...extraHeaders
+      });
+      stream.pipe(res);
+    });
+    res.on('close', () => stream.destroy());
   });
+}
+
+function readCookie(req, name) {
+  for (const part of String(req.headers.cookie || '').split(';')) {
+    const i = part.indexOf('=');
+    if (i > 0 && part.slice(0, i).trim() === name) return part.slice(i + 1).trim();
+  }
+  return null;
+}
+
+/** A browser request made by a page from another origin (fetch/form from any website). */
+function crossOrigin(req, allowedOrigins) {
+  const origin = req.headers.origin;
+  if (origin && origin !== 'null' && !allowedOrigins.has(String(origin).toLowerCase())) return true;
+  if (origin === 'null') return true; // sandboxed iframes / file:// pages
+  const site = req.headers['sec-fetch-site'];
+  return !!site && site !== 'same-origin' && site !== 'none';
 }
 
 /**
@@ -92,18 +140,34 @@ function serveFile(res, file, extraHeaders = {}) {
  */
 function startNotificationServer(host) {
   const { port, apiToken } = host;
+  if (!apiToken || String(apiToken).length < 16) throw new Error('startNotificationServer: apiToken must be a random string (≥16 chars)');
   const allowedHosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
+  const allowedOrigins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`]);
   const sseClients = new Set();
+  // Control Center session: a single-use launch ticket (minted in-process) is exchanged for an
+  // HttpOnly, SameSite=Strict cookie; only a client holding it receives the page with the token.
+  const SESSION_COOKIE = 'cpc_session';
+  const sessionId = crypto.randomBytes(24).toString('hex');
+  const tickets = new Map(); // ticket → expiresAt
+  const launchUrl = (hash = '') => {
+    const now = Date.now();
+    for (const [t, exp] of tickets) if (exp < now) tickets.delete(t);
+    const ticket = crypto.randomBytes(18).toString('hex');
+    tickets.set(ticket, now + 2 * 60 * 1000);
+    const h = hash ? (String(hash).startsWith('#') ? String(hash) : `#${hash}`) : '';
+    return `http://127.0.0.1:${port}/?launch=${ticket}${h}`;
+  };
 
+  const sseWrite = (res, chunk) => {
+    if (res.writableEnded || res.destroyed) { sseClients.delete(res); return; }
+    try { res.write(chunk); } catch { sseClients.delete(res); }
+  };
   host.onEvent((type, data) => {
     const frame = `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
-    for (const res of sseClients) res.write(frame);
+    for (const res of sseClients) sseWrite(res, frame);
   });
 
   const server = http.createServer(async (req, res) => {
-    const url = new URL(req.url, `http://127.0.0.1:${port}`);
-    const p = url.pathname;
-
     if (!allowedHosts.has(String(req.headers.host || '').toLowerCase())) {
       sendJson(res, 421, { error: 'Misdirected request' });
       return;
@@ -112,24 +176,45 @@ function startNotificationServer(host) {
     res.setHeader('X-Content-Type-Options', 'nosniff');
 
     try {
-      // ---------- Public local webhook ----------
+      let url;
+      try { url = new URL(req.url, `http://127.0.0.1:${port}`); } catch { throw httpError(400, 'Bad request URL'); }
+      const p = url.pathname;
+
+      // ---------- Local webhook (scripts, CI, curl — never other websites) ----------
       if (p === '/notify' || p === '/health') {
-        const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, X-Pet-Secret' };
-        if (req.method === 'OPTIONS') { res.writeHead(204, cors); res.end(); return; }
-        if (p === '/health' && req.method === 'GET') { sendJson(res, 200, { status: 'ok', app: 'Cute Pet Companion' }, cors); return; }
+        if (crossOrigin(req, allowedOrigins)) { sendJson(res, 403, { success: false, error: 'Cross-origin requests are not allowed' }); return; }
+        if (p === '/health' && req.method === 'GET') { sendJson(res, 200, { status: 'ok', app: 'Cute Pet Companion' }); return; }
         if (p === '/notify' && req.method === 'POST') {
-          if (!host.webhookEnabled()) { sendJson(res, 503, { success: false, error: 'Webhook is disconnected in Control Center' }, cors); return; }
+          if (!host.webhookEnabled()) { sendJson(res, 503, { success: false, error: 'Webhook is disconnected in Control Center' }); return; }
           const secret = host.getWebhookSecret();
-          if (secret && !safeEqual(req.headers['x-pet-secret'], secret)) { sendJson(res, 401, { success: false, error: 'Invalid X-Pet-Secret' }, cors); return; }
+          if (secret && !safeEqual(req.headers['x-pet-secret'], secret)) { sendJson(res, 401, { success: false, error: 'Invalid X-Pet-Secret' }); return; }
           const payload = await readJson(req);
           const r = host.ingest(payload, 'webhook');
-          sendJson(res, 200, { success: true, accepted: r.accepted, reason: r.reason, suppressed: !!r.suppressed, notificationId: r.item.id, emotion: r.item.emotion, matchedBy: r.item.matchedBy }, cors);
+          sendJson(res, 200, { success: true, accepted: r.accepted, reason: r.reason, suppressed: !!r.suppressed, notificationId: r.item.id, emotion: r.item.emotion, matchedBy: r.item.matchedBy });
           return;
         }
+        sendJson(res, 405, { success: false, error: 'Method not allowed' });
+        return;
       }
 
       // ---------- Control Center UI ----------
       if (req.method === 'GET' && (p === '/' || p === '/index.html')) {
+        const ticket = url.searchParams.get('launch');
+        if (ticket) {
+          const exp = tickets.get(ticket);
+          tickets.delete(ticket);
+          if (exp && exp >= Date.now()) {
+            // The browser keeps the #section across this redirect.
+            res.writeHead(302, { Location: '/', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'Set-Cookie': `${SESSION_COOKIE}=${sessionId}; HttpOnly; SameSite=Strict; Path=/` });
+            res.end();
+            return;
+          }
+        }
+        if (!safeEqual(readCookie(req, SESSION_COOKIE), sessionId)) {
+          res.writeHead(401, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY' });
+          res.end('<!doctype html><meta charset="utf-8"><title>Cute Pet Companion</title><p style="font:15px system-ui;margin:3em">🐾 Hãy mở Control Center từ menu của Cute Pet Companion (icon dấu chân trên thanh menu / khay hệ thống).<br><small>Open the Control Center from the Cute Pet Companion tray menu.</small></p>');
+          return;
+        }
         const html = fs.readFileSync(path.join(CONTROL_DIR, 'index.html'), 'utf8').replace('__PET_API_TOKEN__', apiToken);
         res.writeHead(200, {
           'Content-Type': 'text/html; charset=utf-8',
@@ -161,10 +246,13 @@ function startNotificationServer(host) {
 
         if (p === '/api/events' && req.method === 'GET') {
           res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
-          res.write(`event: hello\ndata: {}\n\n`);
           sseClients.add(res);
-          const ping = setInterval(() => res.write(': ping\n\n'), 25000);
-          req.on('close', () => { clearInterval(ping); sseClients.delete(res); });
+          sseWrite(res, `event: hello\ndata: {}\n\n`);
+          const ping = setInterval(() => sseWrite(res, ': ping\n\n'), 25000);
+          const done = () => { clearInterval(ping); sseClients.delete(res); };
+          req.on('close', done);
+          res.on('close', done);
+          res.on('error', done);
           return;
         }
         if (p === '/api/state' && req.method === 'GET') { sendJson(res, 200, host.getState()); return; }
@@ -217,7 +305,9 @@ function startNotificationServer(host) {
           return;
         }
 
-        const pm = p.match(/^\/api\/pets\/([a-z0-9_]+)\/model$/);
+        const pm = p.match(/^\/api\/pets\/([a-z0-9_]{1,40})\/model$/);
+        // Only the app's own characters may get a model (no arbitrary folders under userData).
+        if (pm && !(host.isKnownPet && host.isKnownPet(pm[1]))) { sendJson(res, 404, { error: 'Unknown pet' }); return; }
         if (pm) {
           const dir = path.join(host.userPetsDir, pm[1]);
           if (req.method === 'POST') {
@@ -245,10 +335,13 @@ function startNotificationServer(host) {
 
       sendJson(res, 404, { error: 'Endpoint not found' });
     } catch (err) {
-      const code = Number.isInteger(err.code) ? err.code : Number.isInteger(err.status) && err.status >= 400 && err.status < 600 ? err.status : 500;
-      sendJson(res, code, { success: false, error: err.message });
+      const raw = Number.isInteger(err && err.status) ? err.status : Number.isInteger(err && err.code) ? err.code : 500;
+      const code = raw >= 400 && raw <= 599 ? raw : 500;
+      if (res.headersSent) { res.destroy(); return; }
+      sendJson(res, code, { success: false, error: String((err && err.message) || 'Internal error') }, code === 413 ? { Connection: 'close' } : {});
     }
   });
+  server.launchUrl = launchUrl;
 
   return new Promise((resolve, reject) => {
     server.once('error', reject);

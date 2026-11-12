@@ -69,6 +69,20 @@ const NAME_APPS = [
   [/chrome/i, 'chrome'], [/safari/i, 'safari'], [/spotify/i, 'spotify'], [/facetime/i, 'facetime']
 ];
 
+/** How long a shown notification suppresses an identical one (AX ↔ DB layers see it ~5 s apart).
+ *  Afterwards the same text is a NEW message ("ok", "👍"…) and must be shown again. */
+const FINGERPRINT_TTL_MS = 90 * 1000;
+const MAX_TRACKED = 500;
+
+/** Apple system apps by display name (AX layer: no bundle id). */
+const APPLE_SYSTEM_NAMES = /^(software update|cập nhật phần mềm|screen time|thời gian sử dụng|app store|finder|system settings|cài đặt hệ thống|system preferences|time machine|notification center)$/i;
+
+function setBounded(map, key, value, max = MAX_TRACKED) {
+  map.delete(key);
+  map.set(key, value);
+  while (map.size > max) map.delete(map.keys().next().value);
+}
+
 function bridgePath(ctx) {
   if (ctx.ncBridgePath) return fs.existsSync(ctx.ncBridgePath) ? ctx.ncBridgePath : null;
   const candidates = [
@@ -123,7 +137,8 @@ class MacNotificationCenterAdapter extends ApplicationAdapter {
 
   async connect() {
     if (this.platform !== 'darwin') { this.setStatus(STATUS.UNSUPPORTED, 'Chỉ có trên macOS.'); return false; }
-    
+    this.stoppedByUser = false;
+
     // 1. Start Instant Native Interceptor (if available)
     this.startNativeInterceptor();
 
@@ -166,8 +181,17 @@ class MacNotificationCenterAdapter extends ApplicationAdapter {
     if (!p || this.isTrusted || this.stoppedByUser) return;
     this.interceptorProc = null;
     this.axLive.clear();
+    if (this.rl) { this.rl.close(); this.rl = null; }
+    this.failPending('bridge-restarted');
     try { p.kill(); } catch { /* ignore */ }
-    setTimeout(() => this.startNativeInterceptor(), 300);
+    clearTimeout(this.restartTimer);
+    this.restartTimer = setTimeout(() => { this.restartTimer = null; if (!this.stoppedByUser) this.startNativeInterceptor(); }, 300);
+    if (this.restartTimer.unref) this.restartTimer.unref();
+  }
+
+  failPending(detail) {
+    for (const list of this.pendingResults.values()) for (const r of list) r({ ok: false, detail });
+    this.pendingResults.clear();
   }
 
   startNativeInterceptor() {
@@ -178,7 +202,10 @@ class MacNotificationCenterAdapter extends ApplicationAdapter {
     try {
       const proc = spawn(bin, args, { stdio: ['pipe', 'pipe', 'pipe'] });
       this.interceptorProc = proc;
+      if (this.rl) this.rl.close();
       this.rl = readline.createInterface({ input: proc.stdout });
+      proc.on('error', (err) => this.ctx.log(`[macos_nc] nc-bridge error: ${err.message}`));
+      proc.stdin.on('error', () => { /* helper gone: send() reports it */ });
       this.rl.on('line', (line) => {
         const t = line.trim();
         if (!t.startsWith('{')) return;
@@ -186,7 +213,7 @@ class MacNotificationCenterAdapter extends ApplicationAdapter {
       });
       proc.stderr.on('data', () => {}); // compiler/runtime noise only — never notification content
       proc.on('close', (code) => {
-        if (this.interceptorProc === proc) { this.interceptorProc = null; this.axLive.clear(); }
+        if (this.interceptorProc === proc) { this.interceptorProc = null; this.axLive.clear(); this.failPending('bridge-exited'); }
         this.ctx.log(`[macos_nc] nc-bridge exited (${code})`);
       });
     } catch (err) {
@@ -197,10 +224,24 @@ class MacNotificationCenterAdapter extends ApplicationAdapter {
   send(cmd) {
     if (!this.interceptorProc) return Promise.resolve({ ok: false, detail: 'bridge-not-running' });
     return new Promise((resolve) => {
+      // The helper answers by cmd+id: several identical commands in flight share one answer
+      // (a second "close 42" must not orphan the first caller's promise).
       const key = `${cmd.cmd}:${cmd.id || ''}`;
-      this.pendingResults.set(key, resolve);
-      setTimeout(() => { if (this.pendingResults.get(key) === resolve) { this.pendingResults.delete(key); resolve({ ok: false, detail: 'timeout' }); } }, 1500);
-      try { this.interceptorProc.stdin.write(JSON.stringify(cmd) + '\n'); } catch { resolve({ ok: false, detail: 'write-failed' }); }
+      let done = false;
+      const finish = (r) => { if (done) return; done = true; clearTimeout(timer); resolve(r); };
+      const list = this.pendingResults.get(key) || [];
+      list.push(finish);
+      this.pendingResults.set(key, list);
+      const drop = () => {
+        const l = this.pendingResults.get(key);
+        if (!l) return;
+        const i = l.indexOf(finish);
+        if (i >= 0) l.splice(i, 1);
+        if (!l.length) this.pendingResults.delete(key);
+      };
+      const timer = setTimeout(() => { drop(); finish({ ok: false, detail: 'timeout' }); }, 1500);
+      if (timer.unref) timer.unref();
+      try { this.interceptorProc.stdin.write(JSON.stringify(cmd) + '\n'); } catch { drop(); finish({ ok: false, detail: 'write-failed' }); }
     });
   }
 
@@ -238,8 +279,8 @@ class MacNotificationCenterAdapter extends ApplicationAdapter {
     }
     if (ev.type === 'result') {
       const key = `${ev.cmd}:${ev.id || ''}`;
-      const r = this.pendingResults.get(key);
-      if (r) { this.pendingResults.delete(key); r(ev); }
+      const list = this.pendingResults.get(key);
+      if (list) { this.pendingResults.delete(key); list.forEach(r => r(ev)); }
       return;
     }
     if (ev.type === 'gone') { this.axLive.delete(String(ev.id)); return; }
@@ -249,18 +290,25 @@ class MacNotificationCenterAdapter extends ApplicationAdapter {
     const appName = String(ev.app || '').trim() || 'Thông báo';
     if (OWN_APP_NAMES.includes(appName.toLowerCase())) return;
     const fp = makeFingerprint(appName, ev.title, ev.body);
-    if (this.handledFingerprints.has(fp)) return;
+    if (this.recentFingerprint(fp)) return;
     const sourceEventId = `ax:${id}`;
     this.rememberFingerprint(fp, sourceEventId);
     const key = (NAME_APPS.find(([re]) => re.test(appName)) || [])[1];
-    if (key && this.shouldSkip(key)) return;
-    this.axMeta.set(sourceEventId, { appName });
+    if (this.shouldSkipApp({ appKey: key, appName })) return;
+    setBounded(this.axMeta, sourceEventId, { appName });
     this.publish({ instant: true, appName, appKey: key, title: ev.title, subtitle: ev.subtitle, body: ev.body, deliveredMs: Number(ev.t) || Date.now(), sourceEventId });
   }
 
   rememberFingerprint(fp, sourceEventId) {
-    this.handledFingerprints.set(fp, sourceEventId);
-    if (this.handledFingerprints.size > 500) this.handledFingerprints.delete(this.handledFingerprints.keys().next().value);
+    setBounded(this.handledFingerprints, fp, { id: sourceEventId, at: Date.now() });
+  }
+
+  /** sourceEventId of the same notification shown within FINGERPRINT_TTL_MS, else null. */
+  recentFingerprint(fp) {
+    const hit = this.handledFingerprints.get(fp);
+    if (!hit) return null;
+    if (Date.now() - hit.at > FINGERPRINT_TTL_MS) { this.handledFingerprints.delete(fp); return null; }
+    return hit.id;
   }
 
   startWatching() {
@@ -291,7 +339,8 @@ class MacNotificationCenterAdapter extends ApplicationAdapter {
     if (this.busy) { this.pending = true; return; }
     this.busy = true;
     try {
-      const sql = `SELECT r.rec_id, a.identifier, r.delivered_date, hex(r.data) FROM record r JOIN app a ON a.app_id = r.app_id WHERE r.rec_id > ${Number(this.lastId) | 0} ORDER BY r.rec_id LIMIT 50;`;
+      const since = Math.max(0, Math.floor(Number(this.lastId) || 0)); // not `| 0`: rec_id may exceed 2^31
+      const sql = `SELECT r.rec_id, a.identifier, r.delivered_date, hex(r.data) FROM record r JOIN app a ON a.app_id = r.app_id WHERE r.rec_id > ${since} ORDER BY r.rec_id LIMIT 50;`;
       const out = await sqlite(this.db, sql);
       for (const line of out.split('\n')) {
         if (!line.trim()) continue;
@@ -306,16 +355,17 @@ class MacNotificationCenterAdapter extends ApplicationAdapter {
         if (this.shouldSkip(bundleId)) continue;
         if (!req.titl && !req.body) continue;
 
+        await this.resolveName(bundleId); // async Spotlight lookup, cached (never blocks the main loop)
         const app = this.appInfo(bundleId);
         const fp = makeFingerprint(app.label, req.titl, req.body);
         let link = null;
         try { link = deepLinkFor(bundleId, req); } catch { link = null; }
-        const shownAs = this.handledFingerprints.get(fp);
+        const shownAs = this.recentFingerprint(fp);
         if (shownAs) {
           // Already shown instantly by the AX layer → only enrich it (bundle id + deep link for later clicks).
           const meta = this.axMeta.get(shownAs);
           if (meta) meta.bundleId = bundleId;
-          if (link && link.url) this.links.set(shownAs, link.url);
+          if (link && link.url) setBounded(this.links, shownAs, link.url);
           continue;
         }
         this.rememberFingerprint(fp, `nc:${recId}:${bundleId}`);
@@ -330,6 +380,15 @@ class MacNotificationCenterAdapter extends ApplicationAdapter {
       this.busy = false;
       if (this.pending) { this.pending = false; this.schedule(); }
     }
+  }
+
+  /** AX layer: only the display name (and our short key) are known, not the bundle id. */
+  shouldSkipApp({ appKey, appName }) {
+    const cfg = this.config;
+    const s = this.ctx.settings.get();
+    if (cfg.skipConnectedSlack !== false && appKey === 'slack' && s.adapters.slack && s.adapters.slack.enabled) return true;
+    if (cfg.skipAppleSystem !== false && APPLE_SYSTEM_NAMES.test(String(appName || '').trim())) return true;
+    return false;
   }
 
   shouldSkip(bundleId) {
@@ -347,17 +406,21 @@ class MacNotificationCenterAdapter extends ApplicationAdapter {
     return { key: last.replace(/[^a-z0-9_.-]/g, '').slice(0, 40) || 'app', label: this.lookupName(bundleId) };
   }
 
+  /** Cached display name; falls back to the bundle id's last part until resolveName() ran. */
   lookupName(bundleId) {
-    if (this.names.has(bundleId)) return this.names.get(bundleId);
-    let name = null;
-    try {
-      const out = execFileSync('/usr/bin/mdfind', [`kMDItemCFBundleIdentifier == '${bundleId.replace(/'/g, '')}'c`], { encoding: 'utf8', timeout: 800 });
-      const first = out.split('\n').find(Boolean);
-      if (first) name = path.basename(first).replace(/\.app$/, '');
-    } catch { /* ignore */ }
-    if (!name) name = bundleId.split('.').pop();
-    this.names.set(bundleId, name);
-    return name;
+    return this.names.get(bundleId) || bundleId.split('.').pop();
+  }
+
+  /** App display name from Spotlight, asynchronously (execFileSync used to stall the main process). */
+  resolveName(bundleId) {
+    if (!bundleId || this.names.has(bundleId) || KNOWN_APPS.some(([re, , label]) => label && re.test(bundleId))) return Promise.resolve();
+    return new Promise((resolve) => {
+      execFile('/usr/bin/mdfind', [`kMDItemCFBundleIdentifier == '${bundleId.replace(/'/g, '')}'c`], { encoding: 'utf8', timeout: 800 }, (err, out) => {
+        const first = !err && String(out || '').split('\n').find(Boolean);
+        setBounded(this.names, bundleId, first ? path.basename(first).replace(/\.app$/, '') : bundleId.split('.').pop(), 300);
+        resolve();
+      });
+    });
   }
 
   normalizeNotification(n) {
@@ -366,10 +429,7 @@ class MacNotificationCenterAdapter extends ApplicationAdapter {
       : this.appInfo(n.bundleId || n.appName);
     const title = n.subtitle ? `${n.title || app.label} — ${n.subtitle}` : (n.title || app.label);
     const sourceEventId = n.sourceEventId || `nc:${n.recId}:${n.bundleId}`;
-    if (n.link) {
-      this.links.set(sourceEventId, n.link);
-      if (this.links.size > 500) this.links.delete(this.links.keys().next().value);
-    }
+    if (n.link) setBounded(this.links, sourceEventId, n.link);
     return {
       app: app.key,
       appName: app.label || n.appName,
@@ -461,8 +521,12 @@ class MacNotificationCenterAdapter extends ApplicationAdapter {
   }
 
   async disconnect() {
+    this.stoppedByUser = true;
     clearTimeout(this.trustRetry);
+    clearTimeout(this.restartTimer);
+    this.restartTimer = null;
     this.stopWatching();
+    this.failPending('disconnected');
     if (this.interceptorProc) {
       const proc = this.interceptorProc;
       this.interceptorProc = null;

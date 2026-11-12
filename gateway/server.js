@@ -25,6 +25,9 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
+const posInt = (v, d) => { const n = Math.floor(Number(v)); return Number.isFinite(n) && n > 0 ? n : d; };
+const nonNegNum = (v, d) => { const n = Number(v); return Number.isFinite(n) && n >= 0 ? n : d; };
+const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 const env = (k, d) => (process.env[k] !== undefined && process.env[k] !== '' ? process.env[k] : d);
 
 function createGateway(options = {}) {
@@ -34,8 +37,9 @@ function createGateway(options = {}) {
     slackSecret: options.slackSecret ?? env('SLACK_SIGNING_SECRET'),
     genericSecret: options.genericSecret ?? env('GENERIC_WEBHOOK_SECRET'),
     dataDir: options.dataDir ?? env('DATA_DIR', path.join(__dirname, 'data')),
-    toleranceSec: Number(options.toleranceSec ?? env('TOLERANCE_SEC', 300)),
-    retention: Number(options.retention ?? env('RETENTION', 5000)),
+    // Bad values (NaN, ≤ 0) fall back to the defaults instead of breaking compaction / verification.
+    toleranceSec: nonNegNum(options.toleranceSec ?? env('TOLERANCE_SEC', 300), 300),
+    retention: posInt(options.retention ?? env('RETENTION', 5000), 5000),
     realtimePrefixes: (options.realtimePrefixes ?? env('COMPOSIO_REALTIME_PREFIXES', 'SLACK_,NOTION_,OUTLOOK_')).split(',').filter(Boolean),
     pollingPrefixes: (options.pollingPrefixes ?? env('COMPOSIO_POLLING_PREFIXES', 'GMAIL_,GOOGLECALENDAR_')).split(',').filter(Boolean),
     now: options.now || (() => Date.now()),
@@ -48,12 +52,24 @@ function createGateway(options = {}) {
   const logFile = path.join(cfg.dataDir, 'events.jsonl');
   const deadFile = path.join(cfg.dataDir, 'dead-letter.jsonl');
   let events = [];          // [{seq, idem, receivedAt, event}]
+  // Idempotency keys seen recently (insertion-ordered, bounded): covers provider retries for far
+  // longer than the event log keeps events, without growing forever.
   const idemKeys = new Set();
+  const idemLimit = Math.max(cfg.retention * 4, 20000);
+  const rememberIdem = (k) => {
+    idemKeys.delete(k);
+    idemKeys.add(k);
+    while (idemKeys.size > idemLimit) idemKeys.delete(idemKeys.values().next().value);
+  };
   let seq = 0;
   if (fs.existsSync(logFile)) {
     for (const line of fs.readFileSync(logFile, 'utf8').split('\n')) {
       if (!line.trim()) continue;
-      try { const e = JSON.parse(line); events.push(e); idemKeys.add(e.idem); seq = Math.max(seq, e.seq); } catch { /* skip torn line */ }
+      try {
+        const e = JSON.parse(line);
+        if (!isObj(e) || !Number.isFinite(e.seq)) continue;
+        events.push(e); rememberIdem(e.idem); seq = Math.max(seq, e.seq);
+      } catch { /* skip torn line */ }
     }
   }
   const subscribers = new Set();
@@ -71,7 +87,7 @@ function createGateway(options = {}) {
     if (idemKeys.has(idem)) return { duplicate: true };
     const rec = { seq: ++seq, idem, receivedAt: cfg.now(), event };
     fs.appendFileSync(logFile, JSON.stringify(rec) + '\n', { mode: 0o600 });
-    idemKeys.add(idem);
+    rememberIdem(idem);
     events.push(rec);
     compact();
     for (const res of subscribers) writeSse(res, rec);
@@ -82,8 +98,13 @@ function createGateway(options = {}) {
     fs.appendFileSync(deadFile, JSON.stringify({ at: cfg.now(), source, idem, reason }) + '\n', { mode: 0o600 });
   }
 
+  function sseWrite(res, chunk) {
+    if (res.writableEnded || res.destroyed) { subscribers.delete(res); return; }
+    try { res.write(chunk); } catch { subscribers.delete(res); }
+  }
+
   function writeSse(res, rec) {
-    res.write(`id: ${rec.seq}\nevent: notification\ndata: ${JSON.stringify(rec.event)}\n\n`);
+    sseWrite(res, `id: ${rec.seq}\nevent: notification\ndata: ${JSON.stringify(rec.event)}\n\n`);
   }
 
   /* ------------------------------------------------------------ signatures */
@@ -208,17 +229,30 @@ function createGateway(options = {}) {
   }
 
   /* ------------------------------------------------------------ http */
+  /** Over the limit: stop reading and fail with 413 — the reply still goes out ("Connection: close"). */
   const readRaw = (req, limit = 1024 * 1024) => new Promise((resolve, reject) => {
+    const tooLarge = () => Object.assign(new Error('too large'), { code: 413 });
+    if (Number(req.headers['content-length']) > limit) { req.pause(); reject(tooLarge()); return; }
     const chunks = []; let size = 0;
-    req.on('data', c => { size += c.length; if (size > limit) { reject(Object.assign(new Error('too large'), { code: 413 })); req.destroy(); } else chunks.push(c); });
+    const onData = (c) => {
+      size += c.length;
+      if (size > limit) { req.removeListener('data', onData); req.pause(); reject(tooLarge()); } else chunks.push(c);
+    };
+    req.on('data', onData);
     req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
     req.on('error', reject);
   });
-  const json = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(obj)); };
+  const json = (res, code, obj, headers = {}) => {
+    if (res.headersSent || res.destroyed) { if (!res.writableEnded) res.destroy(); return; }
+    res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers });
+    res.end(JSON.stringify(obj));
+  };
+  const parseObject = (raw) => { try { const v = JSON.parse(raw); return isObj(v) ? v : null; } catch { return null; } };
 
   const server = http.createServer(async (req, res) => {
-    const url = new URL(req.url, 'http://gateway');
     try {
+      let url;
+      try { url = new URL(req.url, 'http://gateway'); } catch { json(res, 400, { error: 'bad request' }); return; }
       if (req.method === 'GET' && url.pathname === '/health') {
         json(res, 200, { ok: true, lastSeq: seq, stored: events.length, subscribers: subscribers.size, providers: { composio: !!cfg.composioSecret, slack: !!cfg.slackSecret, generic: !!cfg.genericSecret } });
         return;
@@ -227,14 +261,19 @@ function createGateway(options = {}) {
       if (req.method === 'GET' && url.pathname === '/events') {
         const auth = String(req.headers.authorization || '');
         if (!safeEq(auth, `Bearer ${cfg.desktopToken}`)) { json(res, 401, { error: 'unauthorized' }); return; }
-        const last = Number(req.headers['last-event-id'] || url.searchParams.get('since') || 0);
+        // Garbage / negative resume points replay from the start of what is retained (never "nothing").
+        const rawLast = Number(req.headers['last-event-id'] || url.searchParams.get('since') || 0);
+        const last = Number.isFinite(rawLast) && rawLast > 0 ? rawLast : 0;
         res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
-        res.write(`event: hello\ndata: ${JSON.stringify({ lastSeq: seq })}\n\n`);
+        subscribers.add(res);
+        sseWrite(res, `event: hello\ndata: ${JSON.stringify({ lastSeq: seq })}\n\n`);
         // Replay anything the desktop missed while offline/hidden (reconnect & resume).
         for (const rec of events) if (rec.seq > last) writeSse(res, rec);
-        subscribers.add(res);
-        const hb = setInterval(() => res.write(': hb\n\n'), 20000);
-        req.on('close', () => { clearInterval(hb); subscribers.delete(res); });
+        const hb = setInterval(() => sseWrite(res, ': hb\n\n'), 20000);
+        const done = () => { clearInterval(hb); subscribers.delete(res); };
+        req.on('close', done);
+        res.on('close', done);
+        res.on('error', done);
         return;
       }
 
@@ -246,7 +285,8 @@ function createGateway(options = {}) {
           if (!cfg.composioSecret) { json(res, 404, { error: 'composio disabled' }); return; }
           const v = verifyComposio(req.headers, raw);
           if (!v.ok) { cfg.log(`composio rejected: ${v.reason}`); json(res, 401, { error: v.reason }); return; }
-          let body; try { body = JSON.parse(raw); } catch { deadLetter('composio', v.id, 'invalid_json'); json(res, 200, { ok: true, deadLetter: true }); return; }
+          const body = parseObject(raw);
+          if (!body) { deadLetter('composio', v.id, 'invalid_json'); json(res, 200, { ok: true, deadLetter: true }); return; }
           const event = normalizeComposio(body, v.id);
           if (!event) { json(res, 200, { ok: true, ignored: true }); return; }
           const r = enqueue(`composio:${v.id}`, event);
@@ -259,7 +299,8 @@ function createGateway(options = {}) {
           if (!cfg.slackSecret) { json(res, 404, { error: 'slack disabled' }); return; }
           const v = verifySlack(req.headers, raw);
           if (!v.ok) { cfg.log(`slack rejected: ${v.reason}`); json(res, 401, { error: v.reason }); return; }
-          const body = JSON.parse(raw);
+          const body = parseObject(raw);
+          if (!body) { deadLetter('slack', null, 'invalid_json'); json(res, 400, { error: 'invalid json' }); return; }
           if (body.type === 'url_verification') { json(res, 200, { challenge: body.challenge }); return; }
           if (body.type !== 'event_callback') { json(res, 200, { ok: true, ignored: true }); return; }
           const event = normalizeSlack(body);
@@ -273,7 +314,8 @@ function createGateway(options = {}) {
           if (!cfg.genericSecret) { json(res, 404, { error: 'generic disabled' }); return; }
           const v = verifyGeneric(req.headers, raw);
           if (!v.ok) { json(res, 401, { error: v.reason }); return; }
-          let body; try { body = JSON.parse(raw); } catch { json(res, 400, { error: 'invalid json' }); return; }
+          const body = parseObject(raw);
+          if (!body) { json(res, 400, { error: 'invalid json' }); return; }
           const event = normalizeGeneric(body);
           const idem = req.headers['x-event-id'] || event.sourceEventId || crypto.createHash('sha256').update(raw).digest('hex');
           const r = enqueue(`generic:${idem}`, event);
@@ -283,7 +325,9 @@ function createGateway(options = {}) {
       }
       json(res, 404, { error: 'not found' });
     } catch (err) {
-      json(res, err.code === 413 ? 413 : 500, { error: err.code === 413 ? 'payload too large' : 'internal error' });
+      const big = err && err.code === 413;
+      if (!big) cfg.log(`internal error: ${err && err.message}`);
+      json(res, big ? 413 : 500, { error: big ? 'payload too large' : 'internal error' }, big ? { Connection: 'close' } : {});
     }
   });
 

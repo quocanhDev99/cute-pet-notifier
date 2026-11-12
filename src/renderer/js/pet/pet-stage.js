@@ -145,7 +145,8 @@ export class PetStage {
       if (!head.ok || token !== this.loadToken) return;
       const t0 = performance.now();
       const gltf = await new GLTFLoader().loadAsync(url);
-      if (token !== this.loadToken || this.disposed) return;
+      // Superseded or disposed while loading: free the GPU resources nobody will ever show.
+      if (token !== this.loadToken || this.disposed) { if (gltf && gltf.scene) disposeObject(gltf.scene); return; }
       this.useGltf(gltf);
       this.onEvent('model', { id, source: 'glb', loadMs: Math.round(performance.now() - t0), bytes: Number(head.headers.get('content-length')) || null });
     } catch (err) {
@@ -302,6 +303,12 @@ export class PetStage {
 
   /* ------------------------------------------------------------ pointer */
 
+  /** addEventListener that dispose() undoes (the overlay listens on `document`, which outlives us). */
+  listen(target, type, fn, opts) {
+    target.addEventListener(type, fn, opts);
+    (this.listeners || (this.listeners = [])).push([target, type, fn, opts]);
+  }
+
   initPointer() {
     this.raycaster = new THREE.Raycaster();
     const el = this.renderer.domElement;
@@ -344,7 +351,7 @@ export class PetStage {
       this.wake(800);
     };
 
-    target.addEventListener('pointermove', (e) => {
+    this.listen(target, 'pointermove', (e) => {
       if (routed && (!insideCanvas(e) || ignore(e))) { if (this.pointerInside) leave(); return; }
       const r = el.getBoundingClientRect();
       const nx = ((e.clientX - r.left) / r.width) * 2 - 1;
@@ -374,11 +381,11 @@ export class PetStage {
     });
 
     // Leaving the canvas (direct mode) or the whole window (routed mode).
-    (routed ? document.documentElement : el).addEventListener('pointerleave', leave);
+    this.listen(routed ? document.documentElement : el, 'pointerleave', leave);
 
     // Capture phase in routed mode: clicks on card buttons or inside notification cards must always
     // pass through to the card elements directly, never intercepted by the pet's body/double-tap.
-    target.addEventListener('click', (e) => {
+    this.listen(target, 'click', (e) => {
       if (ignore(e) || (e.target && e.target.closest && (e.target.closest('.card') || e.target.closest('.card-slot')))) return;
       if (this.suppressClick) { this.suppressClick = false; if (routed && hitTest(e).over) { e.stopPropagation(); e.preventDefault(); } return; }
       const hit = hitTest(e);
@@ -449,7 +456,7 @@ export class PetStage {
     }
     const rawDt = (now - this.lastFrame) / 1000;
     this.lastFrame = now;
-    const settled = !this.holds.size && now > this.awakeUntil && !this.anim.busy && !(this.fx && this.fx.busy && this.fx.active.size === 0);
+    const settled = !this.holds.size && now > this.awakeUntil && !this.anim.busy && !(this.fx && (this.fx.busy || this.fx.active.size > 0));
     if (settled) { this.running = false; return; }
     try {
       const t0 = performance.now();
@@ -725,9 +732,17 @@ export class PetStage {
   dispose() {
     this.disposed = true;
     clearTimeout(this.ambientTimer);
+    clearTimeout(this.bodyTapTimer);
     document.removeEventListener('visibilitychange', this.onVisibility);
+    for (const [target, type, fn, opts] of this.listeners || []) target.removeEventListener(type, fn, opts);
+    this.listeners = [];
     this.ro.disconnect();
     this.clearCharacter();
+    if (this.shadow) {
+      if (this.shadow.parent) this.shadow.parent.remove(this.shadow);
+      disposeObject(this.shadow);
+      this.shadow = null;
+    }
     this.envTex.dispose();
     this.renderer.dispose();
     this.renderer.forceContextLoss();

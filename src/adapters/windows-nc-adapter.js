@@ -178,6 +178,9 @@ class WindowsNotificationAdapter extends ApplicationAdapter {
         if (this.ready || this.process !== proc) return;
         // Still waiting for the user to allow notification access: keep that guidance on screen.
         if (this.accessStatus && this.accessStatus !== 'Allowed') return;
+        // Hung (e.g. a WinRT call that never returns): stop it, so it can't keep banners switched off.
+        this.killListener();
+        this.restoreBanners();
         this.setStatus(STATUS.ERROR, `Trình đọc thông báo không phản hồi sau 25 giây${this.lastStderr ? ` (${firstLine(this.lastStderr, 160)})` : ''}.`);
       }, 25000);
       if (this.watchdog.unref) this.watchdog.unref();
@@ -312,7 +315,7 @@ class WindowsNotificationAdapter extends ApplicationAdapter {
 
   async disconnect() {
     this.killListener();
-    this.restoreBanners();
+    if (!this.shutDown) this.restoreBanners(); // already restored synchronously while quitting
     this.setStatus(this.platform === 'win32' ? STATUS.DISCONNECTED : STATUS.UNSUPPORTED, this.platform === 'win32' ? '' : 'Chỉ có trên Windows 10/11.');
     return true;
   }
@@ -325,6 +328,8 @@ class WindowsNotificationAdapter extends ApplicationAdapter {
 
   /** Called from app 'before-quit': banners must be back before the process exits. */
   shutdownSync() {
+    if (this.shutDown) return;
+    this.shutDown = true;
     this.killListener();
     this.restoreBanners({ sync: true });
   }

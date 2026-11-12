@@ -13,7 +13,9 @@ const path = require('path');
 const { ApplicationAdapter, STATUS } = require('./base-adapter');
 
 function parseSse(buffer, onEvent) {
-  // Returns the unconsumed remainder.
+  // Returns the unconsumed remainder. SSE lines may end in CRLF, LF or CR: normalise to LF first.
+  // A CR at the very end is kept as is — its LF may still be in the next chunk.
+  buffer = buffer.replace(/\r\n/g, '\n').replace(/\r(?!$)/g, '\n');
   let idx;
   while ((idx = buffer.indexOf('\n\n')) !== -1) {
     const frame = buffer.slice(0, idx);
@@ -62,6 +64,7 @@ class GatewayAdapter extends ApplicationAdapter {
     this.abort = null;
     this.retry = 0;
     this.stopped = true;
+    this.gen = 0;
     this.cursorFile = ctx.dataDir ? path.join(ctx.dataDir, 'gateway-cursor.json') : null;
     this.cursor = 0;
     try { if (this.cursorFile && fs.existsSync(this.cursorFile)) this.cursor = JSON.parse(fs.readFileSync(this.cursorFile, 'utf8')).lastSeq || 0; } catch { this.cursor = 0; }
@@ -73,17 +76,20 @@ class GatewayAdapter extends ApplicationAdapter {
   }
 
   async connect() {
+    const gen = ++this.gen; // a disconnect() (or newer connect) while we await makes this one stale
     const url = validGatewayUrl(this.config.url || '');
     const token = this.ctx.secrets.get('gateway.token');
     if (!url) { this.setStatus(STATUS.ERROR, 'URL phải là https:// (http chỉ cho phép với localhost khi phát triển)'); return false; }
     if (!token) { this.setStatus(STATUS.AUTH, 'Chưa có DESKTOP_TOKEN'); return false; }
     try {
       const h = await this.fetch(`${url}/health`, { headers: { 'User-Agent': 'CutePetCompanion' } });
+      if (gen !== this.gen) return false;
       if (!h.ok) { this.setStatus(STATUS.ERROR, `Gateway /health trả về ${h.status}`); return false; }
       const health = await h.json();
-      this.providers = Object.entries(health.providers || {}).filter(([, v]) => v).map(([k]) => k);
+      if (gen !== this.gen) return false;
+      this.providers = Object.entries((health && health.providers) || {}).filter(([, v]) => v).map(([k]) => k);
     } catch (err) {
-      this.setStatus(STATUS.ERROR, `Không kết nối được gateway: ${err.message}`);
+      if (gen === this.gen) this.setStatus(STATUS.ERROR, `Không kết nối được gateway: ${err.message}`);
       return false;
     }
     this.stopped = false;
@@ -93,8 +99,10 @@ class GatewayAdapter extends ApplicationAdapter {
 
   async openStream(token) {
     if (this.stopped) return false;
+    if (this.abort) { try { this.abort.abort(); } catch { /* ignore */ } } // one stream at a time
     const ctl = new AbortController();
     this.abort = ctl;
+    const live = () => !this.stopped && this.abort === ctl;
     let res;
     try {
       res = await this.fetch(`${this.url}/events`, {
@@ -102,24 +110,26 @@ class GatewayAdapter extends ApplicationAdapter {
         signal: ctl.signal
       });
     } catch (err) {
-      if (!this.stopped) { this.setStatus(STATUS.ERROR, `Mất kết nối: ${err.message}`); this.scheduleReconnect(); }
+      if (live()) { this.setStatus(STATUS.ERROR, `Mất kết nối: ${err.message}`); this.scheduleReconnect(); }
       return false;
     }
+    if (!live()) { try { ctl.abort(); } catch { /* ignore */ } return false; } // disconnected meanwhile
     if (res.status === 401) { this.setStatus(STATUS.AUTH, 'DESKTOP_TOKEN bị gateway từ chối'); return false; }
     if (!res.ok || !res.body) { this.setStatus(STATUS.ERROR, `Gateway /events trả về ${res.status}`); this.scheduleReconnect(); return false; }
 
     this.retry = 0;
     this.setStatus(STATUS.CONNECTED, `SSE đang mở · providers: ${(this.providers || []).join(', ') || 'chưa cấu hình'} · cursor ${this.cursor}`);
-    this.pump(res.body).catch(() => {}).finally(() => {
-      if (!this.stopped) { this.setStatus(STATUS.ERROR, 'Luồng SSE bị đóng, đang kết nối lại…'); this.scheduleReconnect(); }
+    this.pump(res.body, live).catch(() => {}).finally(() => {
+      if (live()) { this.setStatus(STATUS.ERROR, 'Luồng SSE bị đóng, đang kết nối lại…'); this.scheduleReconnect(); }
     });
     return true;
   }
 
-  async pump(body) {
+  async pump(body, live = () => true) {
     const decoder = new TextDecoder();
     let buf = '';
     for await (const chunk of body) {
+      if (!live()) return;
       buf += decoder.decode(chunk, { stream: true });
       buf = parseSse(buf, (ev) => {
         if (ev.event !== 'notification') return;
@@ -146,6 +156,7 @@ class GatewayAdapter extends ApplicationAdapter {
 
   async disconnect() {
     this.stopped = true;
+    this.gen++;
     clearTimeout(this.reconnectTimer);
     if (this.abort) { try { this.abort.abort(); } catch { /* ignore */ } this.abort = null; }
     this.setStatus(STATUS.DISCONNECTED, '');

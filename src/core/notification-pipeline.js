@@ -268,24 +268,32 @@ class NotificationPipeline extends EventEmitter {
   }
 
   enqueue(item, s) {
-    // Burst grouping from the same app into one summary card.
-    const sameApp = this.queue.filter(q => q.app === item.app && !q.group);
+    // Burst grouping from the same app into one summary card. Anonymous items (their app was
+    // replaced by 'default') only group with each other, never with real 'default' notifications.
+    const groupKey = (q) => (q.privacy === 'anonymous_source_only' ? '\u0000anonymous' : `app:${q.app}`);
+    const key = groupKey(item);
+    const en = !!(s.appearance && s.appearance.language === 'en');
+    const groupTitle = (n) => item.privacy === 'anonymous_source_only'
+      ? (en ? `${n} new notifications` : `${n} thông báo mới`)
+      : (en ? `${n} new notifications from ${item.appName || item.app}` : `${n} thông báo mới từ ${item.appName || item.app}`);
+    const groupMessage = (list) => (item.privacy && item.privacy !== 'full_content' && item.privacy !== 'masked' ? '' : list.slice(-3).map(m => `• ${m.title}`).join('\n'));
+    const sameApp = this.queue.filter(q => groupKey(q) === key && !q.group);
     if (sameApp.length + 1 >= s.notifications.groupThreshold) {
       const members = [...sameApp.flatMap(q => q.members || [q]), item];
-      this.queue = this.queue.filter(q => !(q.app === item.app && !q.group));
-      const existing = this.queue.find(q => q.group && q.app === item.app);
+      this.queue = this.queue.filter(q => !(groupKey(q) === key && !q.group));
+      const existing = this.queue.find(q => q.group && groupKey(q) === key);
       if (existing) {
-        existing.members.push(item);
-        existing.title = item.privacy === 'anonymous_source_only' ? `${existing.members.length} thông báo mới` : `${existing.members.length} thông báo mới từ ${item.appName || item.app}`;
-        existing.message = item.privacy && item.privacy !== 'full_content' && item.privacy !== 'masked' ? '' : existing.members.slice(-3).map(m => `• ${m.title}`).join('\n');
+        existing.members.push(...members);
+        existing.title = groupTitle(existing.members.length);
+        existing.message = groupMessage(existing.members);
       } else {
         this.queue.push({
           ...item,
           id: 'g_' + item.id,
           group: true,
           members,
-          title: item.privacy === 'anonymous_source_only' ? `${members.length} thông báo mới` : `${members.length} thông báo mới từ ${item.appName || item.app}`,
-          message: item.privacy && item.privacy !== 'full_content' && item.privacy !== 'masked' ? '' : members.slice(-3).map(m => `• ${m.title}`).join('\n')
+          title: groupTitle(members.length),
+          message: groupMessage(members)
         });
       }
       this.stats.grouped++;

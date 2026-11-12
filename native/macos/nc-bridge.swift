@@ -35,6 +35,15 @@ final class Bridge {
   var scanPending = false
   var autoHide = CommandLine.arguments.contains("--autohide")
 
+  /// Remove the old observer's source from the run loop before replacing it (otherwise every
+  /// Notification Center restart / trust change leaks a live source that keeps firing).
+  func detach() {
+    if let obs = observer {
+      CFRunLoopRemoveSource(CFRunLoopGetCurrent(), AXObserverGetRunLoopSource(obs), .defaultMode)
+    }
+    observer = nil
+  }
+
   func attach() {
     guard let nc = NSRunningApplication.runningApplications(withBundleIdentifier: NC_BUNDLE).first else { return }
     if nc.processIdentifier == pid, observer != nil { return }
@@ -119,21 +128,30 @@ bridge.attach()
 
 // Re-attach when Notification Center restarts; light safety scan.
 Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
-  if NSRunningApplication.runningApplications(withBundleIdentifier: NC_BUNDLE).first?.processIdentifier != bridge.pid { bridge.observer = nil; bridge.attach() }
+  if NSRunningApplication.runningApplications(withBundleIdentifier: NC_BUNDLE).first?.processIdentifier != bridge.pid { bridge.detach(); bridge.attach() }
   if !bridge.banners.isEmpty { bridge.scan() }
 }
 var lastTrusted = trustedNow
 Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
   let t = AXIsProcessTrusted()
-  if t != lastTrusted { lastTrusted = t; emit(["type": "trust", "trusted": t]); bridge.observer = nil; bridge.attach() }
+  if t != lastTrusted { lastTrusted = t; emit(["type": "trust", "trusted": t]); bridge.detach(); bridge.attach() }
 }
 
-// stdin commands
+// stdin commands. A read can end mid-line (or hold several lines): keep the unfinished tail and
+// only parse complete, newline-terminated lines.
+var stdinBuffer = Data()
 FileHandle.standardInput.readabilityHandler = { h in
   let data = h.availableData
   if data.isEmpty { exit(0) } // parent closed the pipe → quit with it
-  for line in String(decoding: data, as: UTF8.self).split(separator: "\n") {
-    guard let obj = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any], let cmd = obj["cmd"] as? String else { continue }
+  stdinBuffer.append(data)
+  if stdinBuffer.count > 1 << 20 { stdinBuffer.removeAll() } // garbage without newlines: drop it
+  var lines: [Data] = []
+  while let nl = stdinBuffer.firstIndex(of: 0x0A) {
+    lines.append(stdinBuffer.subdata(in: stdinBuffer.startIndex..<nl))
+    stdinBuffer.removeSubrange(stdinBuffer.startIndex...nl)
+  }
+  for line in lines {
+    guard let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any], let cmd = obj["cmd"] as? String else { continue }
     let id = obj["id"] as? String ?? ""
     DispatchQueue.main.async {
       var res: (Bool, String) = (false, "unknown-cmd")

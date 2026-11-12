@@ -124,8 +124,28 @@ const sound = new SoundKit();
 let cfg = null;
 let preset = null;
 let stage = null;
-let current = null; // { item, el, timer, remaining, startedAt }
+let current = null; // { item, el, timer, remaining, startedAt, timers, busy }
+let pendingCleanup = null; // the previous card's exit animation: { timer, run }
+let petOverride = null; // species temporarily shown for a card (item.pet)
+
+/** setTimeout bound to the current card: cancelled when that card finishes or is replaced. */
+function cardLater(fn, ms) {
+  const c = current;
+  if (!c) return;
+  const id = setTimeout(() => { if (current === c) fn(); }, ms);
+  c.timers.push(id);
+}
+
+/** A new card is coming: finish the old card's exit right now so its late cleanup can't clobber it. */
+function flushPendingCleanup() {
+  if (!pendingCleanup) return;
+  const p = pendingCleanup;
+  pendingCleanup = null;
+  clearTimeout(p.timer);
+  p.run(true);
+}
 let mouseCaptured = false;
+let lastCardPress = -1e9;
 let dndSleeping = false;
 let eff = { presence: 'full', mode: { id: 'none' }, hidden: false, reducedMotion: false };
 
@@ -169,17 +189,26 @@ function esc(str) {
 /* Report interactive rectangles to the main process (it hit-tests the real cursor). Cheap: only
    sent when they change; re-measured each frame for a moment after layout changes/animations. */
 let lastRectsKey = '';
+let lastDockKey = '';
 let rectsUntil = 0;
 let rectsRaf = 0;
 let rectsFallbackTimer = null;
 function measureRects() {
   rectsRaf = 0;
   if (rectsFallbackTimer) { clearTimeout(rectsFallbackTimer); rectsFallbackTimer = null; }
-  const els = [current && current.el].filter(Boolean);
+  const els = [current && current.el, !badgeEl.hidden && badgeEl].filter(Boolean);
   const hidden = dock.classList.contains('hidden');
-  const rects = hidden ? [] : els.map((el) => { const r = el.getBoundingClientRect(); return { x: Math.round(r.left - 8), y: Math.round(r.top - 8), w: Math.round(r.width + 16), h: Math.round(r.height + 16) }; }).filter(r => r.w > 16 && r.h > 16);
+  const rects = hidden ? [] : els.map((el) => { const r = el.getBoundingClientRect(); return { x: Math.round(r.left - 8), y: Math.round(r.top - 8), w: Math.round(r.width + 16), h: Math.round(r.height + 16) }; }).filter(r => r.w > 8 && r.h > 8);
   const key = JSON.stringify(rects);
   if (key !== lastRectsKey) { lastRectsKey = key; if (api && api.setHitRects) api.setHitRects(rects); }
+  // The whole pet + card area: main uses it to tell "a click on the pet/card activated the app"
+  // from "the user re-opened the app from Finder/Launchpad" (only the latter opens the Control Center).
+  const d = hidden ? null : dock.getBoundingClientRect();
+  const dockKey = d ? `${Math.round(d.left)},${Math.round(d.top)},${Math.round(d.width)},${Math.round(d.height)}` : '';
+  if (dockKey !== lastDockKey) {
+    lastDockKey = dockKey;
+    if (api && api.setDockRect) api.setDockRect(d ? { x: Math.round(d.left), y: Math.round(d.top), w: Math.round(d.width), h: Math.round(d.height) } : null);
+  }
   if (performance.now() < rectsUntil) {
     rectsRaf = requestAnimationFrame(measureRects);
     rectsFallbackTimer = setTimeout(measureRects, 40);
@@ -229,12 +258,27 @@ function placeDock() {
   dock.style.bottom = `${Math.max(0, window.innerHeight - (y + ph))}px`;
   if (side() === 'left') { dock.style.left = 'auto'; dock.style.right = `${Math.max(0, window.innerWidth - (x + pw))}px`; }
   else { dock.style.right = 'auto'; dock.style.left = `${x}px`; }
-  // Clamp: a tall card near the top edge must not leave the screen.
   requestAnimationFrame(() => {
+    if (isDraggingPet) return;
+    // Keep the PET at the saved point: in Peeker mode it is centred under a card wider than itself,
+    // so anchoring the dock edge alone would slide the pet sideways.
+    const pr = petSlot.getBoundingClientRect();
+    const shift = Math.round(pr.left - x);
+    if (Math.abs(shift) > 1) {
+      if (dock.style.right !== 'auto') dock.style.right = `${parseFloat(dock.style.right) + shift}px`;
+      else dock.style.left = `${parseFloat(dock.style.left) - shift}px`;
+    }
+    // Clamp: a tall/wide card near an edge must not leave the screen.
     const r = dock.getBoundingClientRect();
     if (r.top < 0) dock.style.bottom = `${Math.max(0, parseFloat(dock.style.bottom) + r.top)}px`;
-    if (r.left < 0 && dock.style.right !== 'auto') dock.style.right = `${Math.max(0, parseFloat(dock.style.right) + r.left)}px`;
-    if (r.right > window.innerWidth && dock.style.left !== 'auto') dock.style.left = `${Math.max(0, parseFloat(dock.style.left) - (r.right - window.innerWidth))}px`;
+    if (r.left < 0) {
+      if (dock.style.right !== 'auto') dock.style.right = `${parseFloat(dock.style.right) + r.left}px`;
+      else dock.style.left = `${parseFloat(dock.style.left) - r.left}px`;
+    } else if (r.right > window.innerWidth) {
+      const over = r.right - window.innerWidth;
+      if (dock.style.left !== 'auto') dock.style.left = `${parseFloat(dock.style.left) - over}px`;
+      else dock.style.right = `${parseFloat(dock.style.right) + over}px`;
+    }
   });
 }
 
@@ -356,12 +400,13 @@ function onStageEvent(type) {
     say(lines[Math.floor(Math.random() * lines.length)], 'angry');
     sound.hmph();
   } else if (type === 'body-double') {
+    // Only a real double tap on the pet itself — never a quick double click on a card button
+    // (e.g. Approve's "click again to confirm") that ended up next to the pet's body.
+    if (performance.now() - lastCardPress < 800) return;
     if (api) api.openControlCenter();
   } else if (type === 'kick-impact') {
-    if (current && current.el) {
-      current.el.classList.add('kicked');
-      sound.whoosh();
-    }
+    const el = cardSlot.querySelector('.card:not(.kicked)');
+    if (el && !(current && current.el === el)) { el.classList.add('kicked'); sound.whoosh(); }
   }
 }
 
@@ -440,7 +485,7 @@ function buildCard(item) {
           <div class="row-main"><b>${esc(r.title)}</b>${r.subtitle ? `<small>${esc(r.subtitle)}</small>` : ''}</div>
           <div class="row-btns">
             ${r.url ? `<button class="btn row-open" data-url="${esc(r.url)}" title="${esc(t('openUrl'))}">↗</button>` : ''}
-            ${r.actions.includes('approve') && item.source === 'composio' ? `<button class="btn approve row-approve">${esc(t('approve'))}</button>` : ''}
+            ${(r.actions || []).includes('approve') && item.source === 'composio' ? `<button class="btn approve row-approve">${esc(t('approve'))}</button>` : ''}
           </div>
         </li>`).join('')}</ul>${item.moreCount ? `<p class="rows-more">${esc(t('moreRows').replace('{n}', item.moreCount))}</p>` : ''}` : ''}
       <footer>
@@ -463,10 +508,11 @@ function showNotification(item) {
     if (stage) stage.resume();
   }
   if (current) finishCard('replace');
+  flushPendingCleanup();
   dndSleeping = false;
   const mode = item.presentationMode || 'billboard';
   const el = buildCard(item);
-  current = { item, el, remaining: item.duration, startedAt: 0, timer: null };
+  current = { item, el, remaining: item.duration, startedAt: 0, timer: null, timers: [], busy: 0 };
   measureRects();
   refreshHitRects(1600);
 
@@ -478,19 +524,21 @@ function showNotification(item) {
   placeDock();
   stage.hold('card');
   stage.setAnnoying(item.annoying);
-  if (item.pet && item.pet !== cfg.settings.activePet) stage.setSpecies(item.pet);
+  const wantPet = item.pet && item.pet !== cfg.settings.activePet ? item.pet : null;
+  if (wantPet !== petOverride) { stage.setSpecies(wantPet || cfg.settings.activePet); petOverride = wantPet; }
 
   const reveal = () => {
+    if (!current || current.el !== el) return; // replaced before it was revealed
     el.classList.add('in');
     stage.setHold(mode === 'courier' ? null : mode, side());
     stage.setReducedMotion(eff.reducedMotion || item.motion === 'reduced');
     stage.setEmotion(item.emotion);
     if (!item.silent) {
       sound.emotion(item.emotion, speciesVoice());
-      if (speciesVoice() === 'meow' && ['happy', 'excited', 'love'].includes(item.emotion)) setTimeout(() => sound.bell(), 450);
+      if (speciesVoice() === 'meow' && ['happy', 'excited', 'love'].includes(item.emotion)) cardLater(() => sound.bell(), 450);
     }
     startTimer();
-    if (item.app === 'wellbeing' && (item.actions || []).includes('break-start')) setTimeout(() => speak(pickLine('voiceBreak')), 500);
+    if (item.app === 'wellbeing' && (item.actions || []).includes('break-start')) cardLater(() => speak(pickLine('voiceBreak')), 500);
   };
 
   // Latency mark: the first painted frame of the presentation (pet reaction / courier run-in).
@@ -502,10 +550,10 @@ function showNotification(item) {
     dock.classList.add('courier-enter');
     stage.setEmotion('excited');
     stage.setHold('courierRun', side());
-    setTimeout(() => {
+    cardLater(() => {
       dock.classList.remove('courier-enter');
       stage.setHold('courierPresent', side());
-      setTimeout(reveal, 200);
+      cardLater(reveal, 200);
     }, 450);
   } else {
     requestAnimationFrame(reveal);
@@ -546,6 +594,7 @@ function showNotification(item) {
     approve.classList.remove('confirm');
     approve.disabled = true;
     approve.textContent = t('approving');
+    if (current && current.el === el) current.busy++; // the card stays until the result comes back
     const row = approve.closest('.row');
     if (api) api.onAction('approve', { id: item.id, source: item.source, externalId: row ? row.dataset.key : item.externalId });
   }));
@@ -589,7 +638,7 @@ function pauseTimer() {
 }
 
 function resumeTimer() {
-  if (!current || current.timer) return;
+  if (!current || current.timer || current.busy > 0) return;
   current.remaining = Math.max(current.remaining, 2500);
   startTimer();
 }
@@ -599,13 +648,22 @@ function finishCard(how) {
   refreshHitRects(900);
   const { item, el } = current;
   clearTimeout(current.timer);
+  current.timers.forEach(clearTimeout);
   current = null;
+  dock.classList.remove('courier-enter');
 
   if (how === 'close' && api) api.onAction('close', { id: item.id });
   if (how === 'click' && api) api.onAction('click', { id: item.id, url: item.url, source: item.source, externalId: item.externalId });
 
-  const cleanup = () => {
+  const cleanup = (superseded = false) => {
+    if (pendingCleanup && pendingCleanup.run === cleanup) pendingCleanup = null;
     el.remove();
+    if (superseded) {
+      // A new card already took the dock: only release what this card held.
+      stage.release('card');
+      if (api) api.onAction('finished', { id: item.id });
+      return;
+    }
     dock.classList.remove('has-card');
     dock.className = dock.className.replace(/mode-\S+/, 'mode-resident');
     placeDock();
@@ -613,7 +671,7 @@ function finishCard(how) {
     stage.setHold(null);
     stage.setAnnoying(residentAnnoying());
     stage.release('card');
-    if (item.pet && item.pet !== cfg.settings.activePet) stage.setSpecies(cfg.settings.activePet);
+    if (petOverride) { stage.setSpecies(cfg.settings.activePet); petOverride = null; }
     stage.setReducedMotion(eff.reducedMotion);
     stage.setEmotion(residentEmotion());
     if (!cfg.settings.appearance.residentPet || eff.hidden) {
@@ -623,7 +681,8 @@ function finishCard(how) {
     if (api) api.onAction('finished', { id: item.id });
   };
 
-  if (how === 'replace-quiet') { el.classList.add('out'); setTimeout(cleanup, 380); return; }
+  const schedule = (ms) => { pendingCleanup = { run: cleanup, timer: setTimeout(cleanup, ms) }; };
+  if (how === 'replace-quiet') { el.classList.add('out'); schedule(380); return; }
   if (how === 'replace') { el.remove(); if (api) api.onAction('finished', { id: item.id }); return; }
 
   if (how === 'kick') {
@@ -631,12 +690,12 @@ function finishCard(how) {
     stage.play('kick');
     say(t('kickQuip'), 'angry');
     setTimeout(() => el.classList.add('kicked'), 380); // fallback if no impact event (GLB)
-    setTimeout(cleanup, 1100);
+    schedule(1100);
     return;
   }
   el.classList.add(how === 'click' ? 'out-zoom' : 'out');
   if (how === 'close' && !item.annoying) stage.play('wave');
-  setTimeout(cleanup, 420);
+  schedule(420);
 }
 
 /* ------------------------------------------------------------------ Eye-break countdown */
@@ -742,6 +801,9 @@ badgeEl.addEventListener('click', (e) => { e.stopPropagation(); if (api) api.ope
 // Pet presses are detected on the page by ray-casting the pet (the slot itself ignores the mouse).
 const onPetBody = (e) => !!(stage && stage.hitTest && !(e.target && e.target.closest && (e.target.closest('.pet-badge') || e.target.closest('.card') || e.target.closest('.card-slot'))) && stage.hitTest(e).over);
 document.addEventListener('pointerdown', (e) => {
+  const onCard = !!(e.target && e.target.closest && e.target.closest('.card'));
+  if (onCard) lastCardPress = performance.now();
+  if (api && api.markInteraction) api.markInteraction(onCard); // guards in main (macOS 'activate', open-control)
   if (e.button !== 0 || !onPetBody(e)) return; // left button, on the pet's body only
   beginPetPress(e);
 }, true);
@@ -817,7 +879,7 @@ document.addEventListener('pointermove', (e) => {
   }
 });
 
-document.addEventListener('pointerup', () => {
+function endPetPress() {
   if (!isPointerDownOnPet) return;
   isPointerDownOnPet = false;
   clearInterval(dragSayInterval);
@@ -834,7 +896,11 @@ document.addEventListener('pointerup', () => {
     const pos = { x: Math.round(rect.left), y: Math.round(rect.top) };
     if (api && api.savePosition) api.savePosition(pos);
   }
-});
+}
+document.addEventListener('pointerup', endPetPress);
+document.addEventListener('pointercancel', endPetPress);
+document.documentElement.addEventListener('lostpointercapture', endPetPress);
+window.addEventListener('blur', endPetPress);
 
 /* ------------------------------------------------------------------ battery (System adapter) */
 
@@ -864,6 +930,7 @@ if (api) {
     refreshHitRects(1200);
   });
   api.onActionResult && api.onActionResult((r) => {
+    if (current && current.item.id === r.id && current.busy > 0) current.busy--;
     if (!current || current.item.id !== r.id) { if (r.ok) say(t('approvedSay'), 'love'); else say(t('approveFail') + (r.error || ''), 'angry'); return; }
     const row = r.key ? [...current.el.querySelectorAll('.row')].find(x => x.dataset.key === r.key) : null;
     const b = row ? row.querySelector('.approve') : current.el.querySelector('footer .approve');
@@ -878,6 +945,7 @@ if (api) {
     } else {
       if (b) { b.disabled = false; b.textContent = t('approve'); }
       say(t('approveFail') + (r.error || ''), 'angry');
+      if (!current.busy && !current.el.matches(':hover')) resumeTimer();
     }
   });
   api.onBreakStart && api.onBreakStart(({ minutes }) => startBreak(minutes));

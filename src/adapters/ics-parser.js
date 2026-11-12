@@ -55,11 +55,17 @@ function unescapeText(v) {
   return String(v || '').replace(/\\n/gi, '\n').replace(/\\([,;\\])/g, '$1');
 }
 
+const FMT_CACHE = new Map(); // building an Intl.DateTimeFormat is the expensive part: one per zone
 function tzOffsetMs(ts, timeZone) {
-  const fmt = new Intl.DateTimeFormat('en-US', {
-    timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit'
-  });
+  let fmt = FMT_CACHE.get(timeZone);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+    if (FMT_CACHE.size > 64) FMT_CACHE.clear();
+    FMT_CACHE.set(timeZone, fmt);
+  }
   const p = {};
   for (const { type, value } of fmt.formatToParts(new Date(ts))) p[type] = value;
   const asUtc = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second);
@@ -112,60 +118,121 @@ function addDaysWall(w, n) {
   return { y: t.getUTCFullYear(), mo: t.getUTCMonth(), d: t.getUTCDate(), h: w.h, mi: w.mi, s: w.s };
 }
 
-function addMonthsWall(w, n) {
-  const t = new Date(Date.UTC(w.y, w.mo + n, 1));
-  const daysIn = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).getUTCDate();
-  if (w.d > daysIn) return null; // RFC: skip invalid dates (e.g. Feb 30)
-  return { y: t.getUTCFullYear(), mo: t.getUTCMonth(), d: w.d, h: w.h, mi: w.mi, s: w.s };
+function weekdayOf(w) { return new Date(Date.UTC(w.y, w.mo, w.d)).getUTCDay(); }
+
+const posInt = (v, d) => { const n = parseInt(v, 10); return Number.isFinite(n) && n > 0 ? n : d; };
+// Any zone is within ±14 h of UTC: "wall time read as UTC" brackets the real instant. Lets the loops
+// skip the (Intl-based) exact conversion for occurrences nowhere near the window.
+const ZONE_SLACK = 15 * 3600 * 1000;
+const approxUtc = (w) => Date.UTC(w.y, w.mo, w.d, w.h, w.mi, w.s);
+
+/** "2TU" → { ord: 2, day: 2 }, "FR" → { ord: 0, day: 5 }, "-1SU" → { ord: -1, day: 0 }. */
+function parseByDay(list) {
+  return String(list).split(',').map((x) => {
+    const m = /^([+-]?\d{1,2})?([A-Z]{2})$/.exec(x.trim().toUpperCase());
+    if (!m) return null;
+    const day = DAY_CODES.indexOf(m[2]);
+    return day < 0 ? null : { ord: m[1] ? parseInt(m[1], 10) : 0, day };
+  }).filter(Boolean);
 }
 
-function weekdayOf(w) { return new Date(Date.UTC(w.y, w.mo, w.d)).getUTCDay(); }
+/** Days of month y/mo (0-based mo) matching BYDAY / BYMONTHDAY, or the start's day. Sorted. */
+function monthDays(y, mo, startDay, byDay, byMonthDay) {
+  const daysIn = new Date(Date.UTC(y, mo + 1, 0)).getUTCDate();
+  let days = null;
+  if (byMonthDay && byMonthDay.length) {
+    days = byMonthDay.map(d => (d < 0 ? daysIn + 1 + d : d)).filter(d => d >= 1 && d <= daysIn);
+  }
+  if (byDay && byDay.length) {
+    const first = new Date(Date.UTC(y, mo, 1)).getUTCDay();
+    const set = new Set();
+    for (const { ord, day } of byDay) {
+      const firstHit = 1 + ((day - first + 7) % 7);
+      const hits = [];
+      for (let d = firstHit; d <= daysIn; d += 7) hits.push(d);
+      if (!ord) hits.forEach(d => set.add(d));
+      else { const d = ord > 0 ? hits[ord - 1] : hits[hits.length + ord]; if (d) set.add(d); }
+    }
+    days = days ? days.filter(d => set.has(d)) : [...set];
+  }
+  if (!days) days = startDay <= daysIn ? [startDay] : []; // RFC: skip invalid dates (e.g. Feb 30)
+  return [...new Set(days)].sort((a, b) => a - b);
+}
 
 /** Expand occurrences of a (possibly recurring) event between [from, to]. */
 function expand(ev, from, to) {
-  const dur = ev.end ? ev.end.ts - ev.start.ts : 0;
+  const dur = Math.max(0, ev.end ? ev.end.ts - ev.start.ts : 0);
   const out = [];
   const push = (ts) => {
     if (ev.exdates.has(ts)) return;
-    if (ts + Math.max(dur, 0) >= from && ts <= to) out.push(ts);
+    if (ts + dur >= from && ts <= to) out.push(ts);
   };
   if (!ev.rrule) { push(ev.start.ts); return out; }
 
   const r = parseRRule(ev.rrule);
-  const interval = Math.max(1, parseInt(r.INTERVAL || '1', 10));
-  const count = r.COUNT ? parseInt(r.COUNT, 10) : Infinity;
-  const until = r.UNTIL ? (parseDate({ value: r.UNTIL, params: {} }) || {}).ts : Infinity;
-  const byDay = r.BYDAY ? r.BYDAY.split(',').map(d => DAY_CODES.indexOf(d.replace(/^[+-]?\d+/, ''))).filter(d => d >= 0) : null;
+  const interval = posInt(r.INTERVAL, 1);
+  const count = r.COUNT ? posInt(r.COUNT, Infinity) : Infinity;
+  const untilTs = r.UNTIL ? (parseDate({ value: r.UNTIL, params: {} }) || {}).ts : undefined;
+  const until = Number.isFinite(untilTs) ? untilTs : Infinity;
+  const byDayRaw = r.BYDAY ? parseByDay(r.BYDAY) : null;
+  const byDay = byDayRaw && byDayRaw.length ? byDayRaw : null;
+  const byMonthDay = r.BYMONTHDAY ? r.BYMONTHDAY.split(',').map(x => parseInt(x, 10)).filter(n => Number.isFinite(n) && n !== 0 && Math.abs(n) <= 31) : null;
+  const byMonth = r.BYMONTH ? r.BYMONTH.split(',').map(x => parseInt(x, 10) - 1).filter(n => n >= 0 && n <= 11) : null;
   const tz = ev.start.tz;
   let n = 0;
   const MAX_ITER = 40000;
 
-  if (r.FREQ === 'DAILY' || (r.FREQ === 'WEEKLY')) {
-    const days = r.FREQ === 'WEEKLY' ? (byDay && byDay.length ? byDay : [weekdayOf(ev.start.wall)]) : null;
+  /** One candidate occurrence; returns false once the rule (or the window) is exhausted. */
+  const startApprox = approxUtc(ev.start.wall);
+  const visit = (w) => {
+    if (n >= count) return false;
+    const approx = approxUtc(w);
+    if (approx < startApprox) return true; // same zone: wall order = time order; not an occurrence yet
+    if (approx - ZONE_SLACK > to || approx - ZONE_SLACK > until) return false;
+    n++; // COUNT counts every occurrence since DTSTART, also those before the window
+    if (approx + ZONE_SLACK + dur < from) return true; // far before the window: no exact conversion needed
+    const ts = wallToUtc(w, tz);
+    if (ts > until || ts > to) return false;
+    push(ts);
+    return true;
+  };
+
+  if (r.FREQ === 'DAILY' || r.FREQ === 'WEEKLY') {
+    const days = r.FREQ === 'WEEKLY' ? (byDay ? byDay.map(b => b.day) : [weekdayOf(ev.start.wall)]) : null;
     const startOffset = (weekdayOf(ev.start.wall) + 6) % 7; // WKST=MO
     for (let i = 0; i < MAX_ITER; i++) {
       const w = addDaysWall(ev.start.wall, i);
       let include;
-      if (r.FREQ === 'DAILY') include = i % interval === 0 && (!byDay || byDay.includes(weekdayOf(w)));
+      if (r.FREQ === 'DAILY') include = i % interval === 0 && (!byDay || byDay.some(b => b.day === weekdayOf(w))) && (!byMonth || byMonth.includes(w.mo));
       else {
         const weekIdx = Math.floor((i + startOffset) / 7);
         include = weekIdx % interval === 0 && days.includes(weekdayOf(w));
       }
       if (!include) continue;
-      const ts = wallToUtc(w, tz);
-      if (ts > until || n >= count || ts > to) break;
-      n++;
-      push(ts);
+      if (!visit(w)) break;
     }
   } else if (r.FREQ === 'MONTHLY' || r.FREQ === 'YEARLY') {
-    const step = r.FREQ === 'MONTHLY' ? interval : interval * 12;
+    const s0 = ev.start.wall;
+    const monthly = r.FREQ === 'MONTHLY';
+    outer:
     for (let i = 0; i < MAX_ITER / 10; i++) {
-      const w = addMonthsWall(ev.start.wall, i * step);
-      if (!w) continue;
-      const ts = wallToUtc(w, tz);
-      if (ts > until || n >= count || ts > to) break;
-      n++;
-      push(ts);
+      // MONTHLY: every INTERVAL months (optionally limited to BYMONTH);
+      // YEARLY: every INTERVAL years, in the BYMONTH months (default: DTSTART's month).
+      const months = [];
+      if (monthly) {
+        const t = new Date(Date.UTC(s0.y, s0.mo + i * interval, 1));
+        if (!byMonth || byMonth.includes(t.getUTCMonth())) months.push([t.getUTCFullYear(), t.getUTCMonth()]);
+      } else {
+        const y = s0.y + i * interval;
+        for (const mo of (byMonth || [s0.mo]).slice().sort((a, b) => a - b)) months.push([y, mo]);
+      }
+      for (const [y, mo] of months) {
+        // A Feb 1st meeting must not stop the month loop: check the window per month.
+        if (approxUtc({ y, mo, d: 1, h: 0, mi: 0, s: 0 }) - ZONE_SLACK > Math.min(to, until)) break outer;
+        for (const d of monthDays(y, mo, s0.d, byDay, byMonthDay)) {
+          if (!visit({ y, mo, d, h: s0.h, mi: s0.mi, s: s0.s })) break outer;
+        }
+      }
     }
   } else {
     push(ev.start.ts);

@@ -45,6 +45,8 @@ class MessagingApps {
     this.exists = opts.exists || ((p) => { try { return fs.existsSync(p); } catch { return false; } });
     this.exec = opts.exec || run;
     this.home = opts.home || os.homedir();
+    this.env = opts.env || null;
+    this.readdir = opts.readdir || null;
     this.cache = null;
     this.icons = new Map();
   }
@@ -59,10 +61,26 @@ class MessagingApps {
   }
 
   winPath(exe) {
-    const local = process.env.LOCALAPPDATA || path.join(this.home, 'AppData', 'Local');
+    const env = this.env || process.env;
+    const local = env.LOCALAPPDATA || path.join(this.home, 'AppData', 'Local');
     const base = exe.replace(/\.exe$/i, '');
-    const guesses = [path.join(local, base, exe), path.join(local, 'Programs', base, exe), path.join(local, 'Microsoft', 'WindowsApps', exe)];
-    return guesses.find(p => this.exists(p)) || null;
+    const programFiles = [env.ProgramFiles || 'C:\\Program Files', env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', env.ProgramW6432].filter(Boolean);
+    const guesses = [
+      path.join(local, base, exe),
+      path.join(local, 'Programs', base, exe),
+      path.join(local, 'Microsoft', 'WindowsApps', exe),
+      ...programFiles.map(pf => path.join(pf, base, exe))
+    ];
+    const hit = guesses.find(p => this.exists(p));
+    if (hit) return hit;
+    // Squirrel installs (Discord, Slack, Teams classic…): %LOCALAPPDATA%\<App>\app-<version>\<exe>
+    for (const root of [path.join(local, base), ...programFiles.map(pf => path.join(pf, base))]) {
+      let dirs = [];
+      try { dirs = (this.readdir ? this.readdir(root) : fs.readdirSync(root)).filter(d => /^app-\d/.test(d)); } catch { continue; }
+      dirs.sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+      for (const d of dirs) { const p = path.join(root, d, exe); if (this.exists(p)) return p; }
+    }
+    return null;
   }
 
   async running() {
@@ -80,8 +98,10 @@ class MessagingApps {
 
   async icon(p) {
     if (!p) return null;
-    if (!this.icons.has(p)) this.icons.set(p, await this.getIcon(p).catch(() => null));
-    return this.icons.get(p);
+    if (this.icons.has(p)) return this.icons.get(p);
+    const icon = await this.getIcon(p).catch(() => null);
+    if (icon) this.icons.set(p, icon); // a failed read is retried next time, not cached as "no icon"
+    return icon;
   }
 
   /** @returns {Promise<Array<{ app: string, label: string, installed: boolean, running: boolean, icon: string|null }>>} */

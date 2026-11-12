@@ -22,7 +22,7 @@ const EN = {
   'Thú cưng đang hoạt động': 'Active pet', 'Sẵn sàng nhận tin': 'Ready for notifications', 'Đang không làm phiền': 'Do Not Disturb is on',
   'Chưa có thông báo': 'No notifications yet', 'Cảm xúc gần nhất:': 'Latest emotion:',
   'Đã nhận': 'Received', 'Đã hiển thị': 'Displayed', 'Gộp / trùng lặp': 'Grouped / duplicate', 'Ẩn do DND': 'Hidden by DND',
-  'Gửi thông báo thử ra desktop': 'Send a test notification to the desktop', 'Phân bố cảm xúc': 'Emotion distribution', 'Kết nối': 'Connections',
+  'Gửi thông báo thử ra desktop': 'Send a test notification to the desktop', 'Phân bố cảm xúc': 'Emotion distribution',
   'Inbox & chế độ': 'Inbox & mode', 'Chưa đọc': 'Unread', 'Chế độ hiện tại': 'Current mode', 'Độ trễ đo thực tế': 'Measured latency',
   'Chưa có mẫu đo — gửi vài thông báo nhé.': 'No samples yet — send a few notifications.', 'Thông báo gần đây': 'Recent notifications',
   'Hàng đợi:': 'Queue:', 'Chưa có thông báo nào. Thử gửi một cái nhé! 🐾': 'No notifications yet. Try sending one! 🐾',
@@ -84,7 +84,7 @@ const EN = {
   'Ứng dụng đã tắt tiếng (vào thẳng Inbox)': 'Muted apps (go straight to the Inbox)', 'chưa đọc': 'unread', 'tin chưa đọc': 'unread',
   'Đánh dấu đã đọc': 'Mark all read', 'Xóa Inbox': 'Clear Inbox', 'Không có tin nào đang chờ 🎉': 'Nothing waiting 🎉', 'Inbox trống — không có tin nào bị giữ lại. 🐾': 'Inbox is empty — nothing held back. 🐾',
   'Thử chính sách với từng mức ưu tiên': 'Test the policy per priority', 'Gửi một thông báo thử qua pipeline thật (không bỏ qua Attention Engine) và cho biết nó được hiện hay vào Inbox.': 'Sends a test notification through the real pipeline (Attention Engine included) and tells you whether it was shown or went to the Inbox.',
-  'Hiển thị': 'Shown', 'Ít quan trọng → Inbox': 'Low priority → Inbox', 'Quá nhiều tin cùng app (cooldown)': 'Too many from one app (cooldown)', 'App đã tắt tiếng': 'App muted',
+  'Ít quan trọng → Inbox': 'Low priority → Inbox', 'Quá nhiều tin cùng app (cooldown)': 'Too many from one app (cooldown)', 'App đã tắt tiếng': 'App muted',
   'Đang ẩn thú cưng': 'Pet hidden', 'Hiện tối giản': 'Minimal presence', 'Khẩn cấp — vượt rào': 'Critical — bypass', 'Hàng đợi đầy': 'Queue full', 'Thử nghiệm': 'Test', 'Mở ↗': 'Open ↗', 'Xóa': 'Delete',
 
   // ---------- focus page
@@ -227,7 +227,7 @@ Object.assign(EN, {
   'Để thú cưng mang tới thông báo từ máy tính và các ứng dụng bạn dùng.': 'Let the pet bring notifications from your computer and the apps you use.',
   'Ứng dụng của tôi': 'My apps', 'Cập nhật': 'Refresh', 'Chưa chọn sự kiện nào': 'No events selected yet', 'Chọn sự kiện': 'Choose events', 'Đăng nhập': 'Sign in', 'Thiết lập': 'Set up', 'Gỡ': 'Remove',
   'Chưa có ứng dụng nào. Tìm và thêm ở bên dưới nhé 👇': 'No apps yet. Find and add one below 👇', 'Thêm ứng dụng': 'Add apps', 'Hơn 1000 ứng dụng qua Composio': '1000+ apps via Composio',
-  'Tìm ứng dụng: Gmail, Notion, Jira, Teams…': 'Search apps: Gmail, Notion, Jira, Teams…', 'Đã thêm': 'Added', 'Kết nối': 'Connect', 'Không tìm thấy ứng dụng phù hợp.': 'No matching apps.',
+  'Tìm ứng dụng: Gmail, Notion, Jira, Teams…': 'Search apps: Gmail, Notion, Jira, Teams…', 'Đã thêm': 'Added', '＋ Kết nối': '＋ Connect', 'Kết nối tài khoản': 'Connect account', 'Không tìm thấy ứng dụng phù hợp.': 'No matching apps.',
   'Giao diện, ngôn ngữ và quyền riêng tư.': 'Appearance, language and privacy.', 'Màu giao diện': 'App color', 'Chung': 'General', 'Ngôn ngữ (Language)': 'Language',
   '🇻🇳 Tiếng Việt': '🇻🇳 Vietnamese', 'Mở cùng máy tính': 'Open at login', 'Thú cưng tự xuất hiện khi bạn đăng nhập.': 'The pet appears when you log in.', 'Hiện trên màn hình': 'Show on display',
   'Quyền riêng tư': 'Privacy', 'Nhớ thông báo gần đây': 'Remember recent notifications', 'Chỉ giữ trong bộ nhớ, mất khi tắt app.': 'Kept in memory only, cleared when the app quits.',

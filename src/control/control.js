@@ -42,6 +42,8 @@ async function api(path, { method = 'GET', body, raw } = {}) {
   return data;
 }
 
+/** Only http(s) links may become an <a href> (an inbox URL comes from notifications). */
+const safeUrl = (u) => { try { const x = new URL(String(u)); return x.protocol === 'http:' || x.protocol === 'https:' ? x.href : ''; } catch { return ''; } };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c]));
 const get = (obj, path) => path.split('.').reduce((o, k) => (o == null ? o : o[k]), obj);
 function patchOf(path, value) {
@@ -89,6 +91,8 @@ const isOn = (a) => a && (a.status === 'Connected' || a.status === 'Permission L
 
 let saveTimer = null;
 let pendingPatch = {};
+let savesInFlight = 0;
+let saveWaiters = [];
 function deepMerge(a, b) {
   for (const [k, v] of Object.entries(b)) {
     if (v && typeof v === 'object' && !Array.isArray(v)) a[k] = deepMerge(a[k] && typeof a[k] === 'object' ? a[k] : {}, v);
@@ -107,18 +111,34 @@ function queueSave(patch, immediate = false) {
   if (patch.personality && stage) { setPreviewEmotion('idle'); stage.play('wave'); } // show the new attitude (the desktop pet follows via settings)
   clearTimeout(saveTimer);
   saveTimer = setTimeout(flushSave, immediate ? 0 : 280);
+  // Resolves once this change is stored (callers re-render then, instead of guessing with a timer).
+  return new Promise(resolve => saveWaiters.push(resolve));
 }
 
+/** Local edits not yet confirmed by the server: queued ones and those whose PUT is still running. */
+const savePending = () => savesInFlight > 0 || Object.keys(pendingPatch).length > 0;
+
 async function flushSave() {
+  clearTimeout(saveTimer);
   const p = pendingPatch;
+  const waiters = saveWaiters;
   pendingPatch = {};
+  saveWaiters = [];
+  if (!Object.keys(p).length) { waiters.forEach(w => w()); return; }
   const navChanged = p.system && 'advancedMode' in p.system;
+  savesInFlight++;
   try {
-    S.settings = await api('/api/settings', { method: 'PUT', body: p });
-    syncInputs();
+    const fresh = await api('/api/settings', { method: 'PUT', body: p });
+    // Edits made while this request was running are newer than the server's answer: keep them.
+    S.settings = deepMerge(fresh, JSON.parse(JSON.stringify(pendingPatch)));
+    if (savesInFlight === 1 && !Object.keys(pendingPatch).length) syncInputs();
     flashSaved();
     if (navChanged) { renderNav(); if (route === 'monitor' && !advanced()) location.hash = '#settings'; }
   } catch (err) { toast(`Lưu thất bại: ${err.message}`, 'error'); }
+  finally {
+    savesInFlight--;
+    waiters.forEach(w => w());
+  }
 }
 
 function flashSaved() {
@@ -457,7 +477,7 @@ function ctSourceNotice(appId) {
     if (api && api.state && !['ready', 'loading'].includes(api.state)) return `<div class="ct-banner warn"><span class="ct-banner-ico">⚠️</span><div><b>Chưa lấy được danh sách chat</b><small>${esc(api.detail || '')}</small></div><button class="btn btn-ghost small" data-action="ct-api-reload">Thử lại</button></div>`;
     return '';
   }
-  if (src && src.canConnect) return `<div class="ct-banner"><span class="ct-banner-ico">🔗</span><div><b>Xem đủ danh sách chat ${esc(label)}</b><small>Đăng nhập tài khoản công ty hoặc trường học — bé chỉ xem tên chat, không đọc tin nhắn.</small></div><button class="btn btn-ghost small" data-action="ct-connect" data-arg="${esc(src.toolkit)}" ${ct.connecting ? 'disabled' : ''}>${ct.connecting ? '⏳ Chờ đăng nhập…' : 'Kết nối'}</button></div>`;
+  if (src && src.canConnect) return `<div class="ct-banner"><span class="ct-banner-ico">🔗</span><div><b>Xem đủ danh sách chat ${esc(label)}</b><small>Đăng nhập tài khoản công ty hoặc trường học — bé chỉ xem tên chat, không đọc tin nhắn.</small></div><button class="btn btn-ghost small" data-action="ct-connect" data-arg="${esc(src.toolkit)}" ${ct.connecting ? 'disabled' : ''}>${ct.connecting ? '⏳ Chờ đăng nhập…' : 'Kết nối tài khoản'}</button></div>`;
   return ctManualHint(appId);
 }
 
@@ -831,14 +851,17 @@ async function makeThumbnails() {
   host.style.cssText = 'position:fixed;left:-9999px;top:0;width:260px;height:280px';
   document.body.appendChild(host);
   const tmp = new PetStage(host, { species: 'cat_mochi', ambient: false, interactive: false, assetBase: '/assets/' });
-  for (const c of S.characters) {
-    tmp.setSpecies(c.id);
-    tmp.setEmotion('happy');
-    for (let i = 0; i < 40; i++) tmp.update(0.03);
-    thumbs[c.id] = tmp.snapshot();
+  try {
+    for (const c of S.characters) {
+      await tmp.setSpecies(c.id); // the GLB (when there is one) must be in the scene before the snapshot
+      tmp.setEmotion('happy');
+      for (let i = 0; i < 40; i++) tmp.update(0.03);
+      thumbs[c.id] = tmp.snapshot();
+    }
+  } finally {
+    tmp.dispose();
+    host.remove();
   }
-  tmp.dispose();
-  host.remove();
 }
 
 /* ================================================================== building blocks */
@@ -1573,7 +1596,7 @@ async function eventsModal(toolkit) {
 
 const DELIVERY_LABEL = { realtime_push: '⚡ Realtime push', near_realtime_poll: '⏱️ Near real-time (poll)', scheduled_sync: '🗓️ Scheduled sync', native_os: '🖥️ System event', manual: '✋ Manual' };
 const REASON_LABEL = {
-  allowed: 'Hiển thị', low_priority: 'Ít quan trọng → Inbox', cooldown: 'Quá nhiều tin cùng app (cooldown)', app_muted: 'App đã tắt tiếng', contact_ignored: 'Người quen: Bỏ qua', contact_inbox: 'Người quen: chỉ lưu Hộp thư', relationship_hours: 'Ngoài giờ của mối quan hệ', relationship_digest: 'Gom theo mối quan hệ',
+  allowed: 'Đã hiển thị', low_priority: 'Ít quan trọng → Inbox', cooldown: 'Quá nhiều tin cùng app (cooldown)', app_muted: 'App đã tắt tiếng', contact_ignored: 'Người quen: Bỏ qua', contact_inbox: 'Người quen: chỉ lưu Hộp thư', relationship_hours: 'Ngoài giờ của mối quan hệ', relationship_digest: 'Gom theo mối quan hệ',
   presence_hidden: 'Đang ẩn thú cưng', presence_minimal: 'Hiện tối giản', critical_bypass: 'Khẩn cấp — vượt rào', queue_overflow: 'Hàng đợi đầy', manual_test: 'Thử nghiệm', not_mentioned: 'Chat không nhắc tên → Inbox'
 };
 const reasonLabel = (r) => REASON_LABEL[r] || (r || '').replace(/^mode_(\w+)_min_(\w+)$/, 'Chế độ $1 chỉ cho mức ≥ $2').replace(/^mode_(\w+)_blocks_(\w+)$/, 'Chế độ $1 chặn nhóm $2').replace(/^mode_(\w+)$/, 'Chế độ $1');
@@ -1767,7 +1790,7 @@ function inboxRows(list) {
       <div class="h-main"><b>${esc(h.title)}</b><small>${esc(h.message || '')}</small></div>
       <div class="h-meta">
         <small>${esc(h.app)} · ${arrivedAt(h.receivedAt)}${friendlyReason(h.reason) ? ` · ${esc(friendlyReason(h.reason))}` : ''}</small>
-        <span class="row-actions">${h.who ? `<button class="btn btn-ghost small" data-action="inbox-classify" data-arg="${esc(h.id)}" title="Xếp người gửi / nhóm này vào Người quen">👥 Xếp nhóm</button>` : ''}${h.url ? `<a class="link" href="${esc(h.url)}" target="_blank" rel="noopener">Mở ↗</a>` : ''}<button class="icon-btn" data-action="inbox-del" data-arg="${esc(h.id)}" title="Xóa">✕</button></span>
+        <span class="row-actions">${h.who ? `<button class="btn btn-ghost small" data-action="inbox-classify" data-arg="${esc(h.id)}" title="Xếp người gửi / nhóm này vào Người quen">👥 Xếp nhóm</button>` : ''}${safeUrl(h.url) ? `<a class="link" href="${esc(safeUrl(h.url))}" target="_blank" rel="noopener">Mở ↗</a>` : ''}<button class="icon-btn" data-action="inbox-del" data-arg="${esc(h.id)}" title="Xóa">✕</button></span>
       </div>
     </div>`).join('');
 }
@@ -1900,7 +1923,7 @@ function bindUploads() {
   main.querySelectorAll('[data-upload]').forEach(inp => inp.addEventListener('change', async () => {
     const file = inp.files[0];
     if (!file) return;
-    if (file.size > 60 * 1024 * 1024) { toast('File quá lớn (tối đa 60MB)', 'error'); return; }
+    if (file.size > 60 * 1024 * 1024) { toast('File quá lớn (tối đa 60MB)', 'error'); inp.value = ''; return; }
     try {
       await api(`/api/pets/${inp.dataset.upload}/model`, { method: 'POST', raw: await file.arrayBuffer() });
       toast('Đã nhập mô hình .glb 🎉', 'ok');
@@ -1908,6 +1931,7 @@ function bindUploads() {
       if (inp.dataset.upload === S.settings.activePet && stage) stage.reloadModel();
       render();
     } catch (err) { toast(err.message, 'error'); }
+    finally { inp.value = ''; } // picking the same file again must fire 'change' again
   }));
 }
 
@@ -2016,10 +2040,9 @@ const actions = {
     const input = document.getElementById('new-app');
     const name = (input ? input.value : '').trim().toLowerCase().replace(/[^a-z0-9_.-]/g, '');
     if (!name) { toast('Nhập tên ứng dụng trước nhé', 'error'); return; }
-    queueSave({ appRules: { ...S.settings.appRules, [name]: 'excited' } }, true);
-    setTimeout(render, 350);
+    queueSave({ appRules: { ...S.settings.appRules, [name]: 'excited' } }, true).then(() => render());
   },
-  'reset-keywords'() { queueSave({ keywordRules: S.defaults.keywordRules }, true); setTimeout(render, 350); },
+  'reset-keywords'() { queueSave({ keywordRules: S.defaults.keywordRules }, true).then(() => render()); },
   async 'clear-queue'() { await api('/api/queue/clear', { method: 'POST' }); toast('Đã xóa hàng đợi'); },
   async 'clear-history'() { await api('/api/history', { method: 'DELETE' }); S.pipeline.history = []; toast('Đã xóa thông báo gần đây'); },
   async 'reset-settings'() {
@@ -2077,8 +2100,7 @@ const actions = {
     const full = S.chatNameSuggestion || '';
     if (!full) return;
     const given = full.split(/\s+/)[0]; // macOS full name is "Given Family" → the name people @ you with
-    queueSave({ chat: { names: [full, `@${given}`] } }, true);
-    setTimeout(render, 350);
+    queueSave({ chat: { names: [full, `@${given}`] } }, true).then(() => render());
   },
   async 'ig-save-key'() {
     const inp = document.getElementById('composio-key');
@@ -2145,20 +2167,17 @@ const actions = {
   'toggle-private'(app) {
     const cur = new Set(S.settings.privacy.hiddenApps || []);
     if (cur.has(app)) cur.delete(app); else cur.add(app);
-    queueSave({ privacy: { hiddenApps: [...cur] } }, true);
-    setTimeout(render, 300);
+    queueSave({ privacy: { hiddenApps: [...cur] } }, true).then(() => render());
   },
   appear(id) {
     if (!APPEAR_PATCH[id]) return;
-    queueSave(APPEAR_PATCH[id], true);
-    setTimeout(render, 150);
+    queueSave(APPEAR_PATCH[id], true).then(() => render());
   },
   'size-preset'(id) {
     const p = SIZE_PRESETS.find(x => x[0] === id);
     if (!p) return;
     const v = p[3];
-    queueSave({ appearance: { petScale: v.petScale }, notifications: { size: v.size, cardScale: v.cardScale } }, true);
-    setTimeout(render, 150);
+    queueSave({ appearance: { petScale: v.petScale }, notifications: { size: v.size, cardScale: v.cardScale } }, true).then(() => render());
   },
   'ct-app'(app) {
     Object.assign(ct, { app, manual: false, picks: [], q: '', mq: '', open: null, kind: 'chat', limit: 60, cursor: -1 });
@@ -2283,20 +2302,19 @@ const actions = {
         names.push(p.name);
       }
     }
-    queueSave({ contacts: list }, true);
+    const saved = queueSave({ contacts: list }, true);
     const g = ctGroupLabel({ group, label });
     toast(`${ct.editId ? 'Đã lưu' : 'Đã thêm'} ${names.length > 1 ? `${names.length} người` : names[0]} → ${g.emoji} ${g.label}`, 'ok');
     Object.assign(ct, { editId: null, picks: [], manualName: '', emotion: '', attention: 'auto' });
-    setTimeout(async () => { await refreshContactDirectory(); }, 350);
+    saved.then(() => refreshContactDirectory());
   },
   'contact-remove'(i) {
     const list = [...(S.settings.contacts || [])];
     const [gone] = list.splice(Number(i), 1);
     if (!gone) return;
     if (ct.editId === gone.id) ct.editId = null;
-    queueSave({ contacts: list }, true);
+    queueSave({ contacts: list }, true).then(() => paintContacts());
     toast(`Đã xoá ${gone.name} khỏi người quen`, 'ok');
-    setTimeout(paintContacts, 300);
   },
   'inbox-classify'(id) {
     const it = ((S.pipeline.inbox && S.pipeline.inbox.items) || []).find(x => x.id === id);
@@ -2361,8 +2379,7 @@ const actions = {
   'toggle-mute'(app) {
     const cur = new Set(S.settings.attention.mutedApps || []);
     if (cur.has(app)) cur.delete(app); else cur.add(app);
-    queueSave({ attention: { mutedApps: [...cur] } }, true);
-    setTimeout(render, 300);
+    queueSave({ attention: { mutedApps: [...cur] } }, true).then(() => render());
   },
   'mute-add'() {
     const inp = document.getElementById('mute-app');
@@ -2400,9 +2417,9 @@ const actions = {
     } catch (err) { toast(err.message, 'error'); }
   },
   'reset-position'() {
-    queueSave({ appearance: { customPosition: { x: null, y: null } } }, true);
+    const saved = queueSave({ appearance: { customPosition: { x: null, y: null } } }, true);
     toast('Đã đưa bé về góc đã chọn', 'ok');
-    setTimeout(() => render(), 350);
+    saved.then(() => render());
   }
 };
 
@@ -2441,15 +2458,17 @@ document.addEventListener('change', async (e) => {
 });
 
 function updateAdapter(d, rerenderCard = false) {
+  if (!d || !d.id) return;
   const i = S.adapters.findIndex(a => a.id === d.id);
-  if (i >= 0) S.adapters[i] = d;
-  document.querySelectorAll(`[data-adapter-status="${d.id}"]`).forEach(el => { el.className = `status ${STATUS_CLASS[d.status]}`; el.textContent = STATUS_VI[d.status]; });
-  const det = document.querySelector(`[data-adapter-detail="${d.id}"]`);
-  if (det) det.textContent = d.detail || '';
-  if (rerenderCard && route === 'monitor' && sub === 'tech') {
-    const card = main.querySelector(`[data-adapter="${d.id}"]`);
-    if (card) card.outerHTML = adapterCard(d);
-  }
+  if (i >= 0) S.adapters[i] = d; else S.adapters.push(d);
+  // Wherever this adapter is shown (Monitor → Tech cards, Connect, Home), patch it in place.
+  const card = main.querySelector(`article.adapter[data-adapter="${d.id}"]`);
+  // Rebuild the whole card when asked, or when its state changed and the user isn't typing in it.
+  if (card && (rerenderCard || !card.contains(document.activeElement))) { card.outerHTML = adapterCard(d); return; }
+  document.querySelectorAll(`[data-adapter-status="${d.id}"]`).forEach(el => { el.className = `status ${STATUS_CLASS[d.status] || ''}`; el.textContent = STATUS_VI[d.status] || d.status; });
+  document.querySelectorAll(`[data-adapter-detail="${d.id}"]`).forEach(el => {
+    el.textContent = `${d.detail || ''}${d.lastEventAt ? ` · sự kiện gần nhất ${timeAgo(d.lastEventAt)} (${d.eventCount})` : ''}`;
+  });
 }
 
 /* ================================================================== live updates */
@@ -2466,10 +2485,10 @@ function connectEvents() {
     const prev = adapter(d.id);
     const changed = !prev || prev.status !== d.status || JSON.stringify(prev.extra) !== JSON.stringify(d.extra);
     updateAdapter(d);
-    if (changed && (route === 'connect' || route === 'home') && modalEl.hidden) render();
+    if (changed && modalEl.hidden && (route === 'connect' || route === 'home')) render(); // Monitor → Tech cards are patched in place above
   });
   es.addEventListener('settings', (e) => {
-    if (Object.keys(pendingPatch).length) return;
+    if (savePending()) return; // our own save is on its way; this snapshot may predate it
     const prevAdv = advanced();
     S.settings = JSON.parse(e.data);
     setLanguage(S.settings.appearance.language);

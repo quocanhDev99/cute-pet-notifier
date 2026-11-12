@@ -35,17 +35,28 @@ if ($BannerBackup -and (Test-Path $BannerBackup)) {
     try {
         (Get-Content $BannerBackup -Raw | ConvertFrom-Json).PSObject.Properties | ForEach-Object {
             # Older backups stored "<aumid>" -> ShowBanner only.
-            $k = if ($_.Name.Contains('|')) { $_.Name } else { "$($_.Name)|ShowBanner" }
+            $k = if ($_.Name.EndsWith('|ShowBanner') -or $_.Name.EndsWith('|SoundFile') -or $_.Name.EndsWith("|$GlobalSound")) { $_.Name } else { "$($_.Name)|ShowBanner" }
             $origValues[$k] = $_.Value
         }
     } catch {}
 }
 
+$Utf8NoBom = New-Object System.Text.UTF8Encoding $false
+
 function Save-Backup {
     if (-not $BannerBackup) { return }
     $tmp = "$BannerBackup.tmp"
-    ConvertTo-Json -InputObject $origValues -Compress | Set-Content -Path $tmp -Encoding UTF8
+    # Windows PowerShell 5.1's "Set-Content -Encoding UTF8" writes a BOM, which Node's JSON.parse rejects.
+    $json = ConvertTo-Json -InputObject $origValues -Compress
+    [System.IO.File]::WriteAllText($tmp, $json, $Utf8NoBom)
     Move-Item -Path $tmp -Destination $BannerBackup -Force
+}
+
+# "<subkey>|<name>": an AUMID may itself contain '|', the value name never does -> split at the LAST one.
+function Split-Id([string]$id) {
+    $i = $id.LastIndexOf('|')
+    if ($i -lt 0) { return @($id, 'ShowBanner') }
+    return @($id.Substring(0, $i), $id.Substring($i + 1))
 }
 
 function Set-NotifValue([string]$subkey, [string]$name, $value, [string]$type) {
@@ -74,9 +85,9 @@ function Silence-App([string]$aumid) {
     Set-NotifValue $aumid 'SoundFile' '' 'String'
 }
 
-if ($RestoreBanners) {
+function Restore-All {
     foreach ($id in @($origValues.Keys)) {
-        $parts = $id.Split('|')
+        $parts = Split-Id $id
         $subkey = $parts[0]; $name = $parts[1]
         $key = if ($subkey) { Join-Path $NotifRoot $subkey } else { $NotifRoot }
         $orig = $origValues[$id]
@@ -86,8 +97,22 @@ if ($RestoreBanners) {
             else { New-ItemProperty -Path $key -Name $name -Value ([int]$orig) -PropertyType DWord -Force | Out-Null }
         } catch {}
     }
-    if ($BannerBackup -and (Test-Path $BannerBackup)) { Remove-Item $BannerBackup -Force }
-    Emit-JSON @{ type = "banners-restored"; count = $origValues.Count }
+    if ($BannerBackup -and (Test-Path $BannerBackup)) { Remove-Item $BannerBackup -Force -ErrorAction SilentlyContinue }
+    $script:origValues = @{}
+    $handledApps.Clear()
+}
+
+if ($RestoreBanners) {
+    $n = $origValues.Count
+    Restore-All
+    Emit-JSON @{ type = "banners-restored"; count = $n }
+    exit 0
+}
+
+# The app crashed, was killed or was uninstalled while banners were switched off: put them back
+# ourselves instead of leaving Windows silent until the next launch.
+function Exit-ParentGone {
+    if ($Suppress -eq 1) { try { Restore-All } catch {} }
     exit 0
 }
 
@@ -100,7 +125,8 @@ if ($Suppress -eq 1) {
         Get-ChildItem -Path $NotifRoot -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
             $props = Get-ItemProperty -Path $_.PSPath -ErrorAction SilentlyContinue
             if ($props -and $null -ne $props.LastNotificationAddedTime) {
-                Silence-App ($_.Name.Substring($_.Name.IndexOf($marker) + $marker.Length))
+                $at = $_.Name.IndexOf($marker, [System.StringComparison]::OrdinalIgnoreCase)
+                if ($at -ge 0) { Silence-App ($_.Name.Substring($at + $marker.Length)) }
             }
         }
     } catch {}
@@ -150,7 +176,7 @@ Emit-JSON @{ type = "status"; status = $accessStatus.ToString(); os = "win32" }
 if ($accessStatus -ne [Windows.UI.Notifications.Management.UserNotificationListenerAccessStatus]::Allowed) {
     # Keep running: the user may switch notification access on in Settings, then we pick it up.
     while ($listener.GetAccessStatus() -ne [Windows.UI.Notifications.Management.UserNotificationListenerAccessStatus]::Allowed) {
-        if ($ParentPid -gt 0 -and -not (Get-Process -Id $ParentPid -ErrorAction SilentlyContinue)) { exit 0 }
+        if ($ParentPid -gt 0 -and -not (Get-Process -Id $ParentPid -ErrorAction SilentlyContinue)) { Exit-ParentGone }
         Start-Sleep -Seconds 3
     }
     Emit-JSON @{ type = "status"; status = "Allowed"; os = "win32" }
@@ -161,10 +187,12 @@ $toastKind = [Windows.UI.Notifications.NotificationKinds]::Toast
 $processedIds = New-Object 'System.Collections.Generic.HashSet[uint32]'
 
 # Seed with what is already in Action Center so we don't replay history on startup
+$isReady = $false
 try {
     $existing = Await ($listener.GetNotificationsAsync($toastKind)) $listType
     foreach ($n in $existing) { $null = $processedIds.Add($n.Id) }
     Emit-JSON @{ type = "ready"; initialCount = $existing.Count }
+    $isReady = $true
 } catch {
     Emit-JSON @{ type = "error"; message = "read_failed: $($_.Exception.Message)" }
 }
@@ -174,7 +202,7 @@ $tick = 0
 while ($true) {
     $tick++
     if ($ParentPid -gt 0 -and ($tick % 16) -eq 0) {
-        if (-not (Get-Process -Id $ParentPid -ErrorAction SilentlyContinue)) { break }
+        if (-not (Get-Process -Id $ParentPid -ErrorAction SilentlyContinue)) { Exit-ParentGone }
     }
 
     try {
@@ -224,14 +252,15 @@ while ($true) {
 
         # Forget ids no longer in Action Center (keeps the set bounded without replaying anything)
         $processedIds.IntersectWith($currentIds)
-        if ($failures -ge 20) { Emit-JSON @{ type = "ready"; recovered = $true } }
+        # Back after an error was reported (also when the very first read failed): say so.
+        if (-not $isReady) { Emit-JSON @{ type = "ready"; recovered = $true; initialCount = @($active).Count }; $isReady = $true }
         # Diagnostics (~every 10 s): how many toasts Windows keeps in Action Center right now.
         if (($tick % 40) -eq 1) { Emit-JSON @{ type = "heartbeat"; inCenter = @($active).Count } }
         $failures = 0
     } catch {
         # Transient COM / WinRT errors happen (e.g. during desktop unlock); only report if it persists (~5 s).
         $failures++
-        if ($failures -eq 20) { Emit-JSON @{ type = "error"; message = "read_failed: $($_.Exception.Message)" } }
+        if ($failures -eq 20) { Emit-JSON @{ type = "error"; message = "read_failed: $($_.Exception.Message)" }; $isReady = $false }
     }
 
     Start-Sleep -Milliseconds 250

@@ -8,6 +8,28 @@ const { parseICS, upcomingOccurrences } = require('./ics-parser');
 
 const MAX_ICS_BYTES = 15 * 1024 * 1024;
 
+/** Response text, stopping at `max` bytes even when no Content-Length was sent (chunked). */
+async function readTextLimited(res, max) {
+  const len = Number(res.headers.get('content-length') || 0);
+  if (len > max) throw Object.assign(new Error('too large'), { tooLarge: true });
+  if (!res.body || typeof res.body.getReader !== 'function') {
+    const text = await res.text();
+    if (Buffer.byteLength(text) > max) throw Object.assign(new Error('too large'), { tooLarge: true });
+    return text;
+  }
+  const reader = res.body.getReader();
+  const chunks = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) { try { await reader.cancel(); } catch { /* ignore */ } throw Object.assign(new Error('too large'), { tooLarge: true }); }
+    chunks.push(Buffer.from(value));
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}
+
 class CalendarAdapter extends ApplicationAdapter {
   constructor(ctx, fetchImpl = globalThis.fetch) {
     super(ctx, {
@@ -28,6 +50,8 @@ class CalendarAdapter extends ApplicationAdapter {
     this.notified = new Set();
     this.syncTimer = null;
     this.tickTimer = null;
+    this.running = false; // reminders run while connected, even if a later re-sync fails
+    this.gen = 0;
   }
 
   intervalSeconds() { return Math.max(5, this.config.pollMinutes || 10) * 60; }
@@ -42,8 +66,9 @@ class CalendarAdapter extends ApplicationAdapter {
     const url = this.url();
     if (!url) { this.setStatus(STATUS.AUTH, 'Chưa có link iCal'); return false; }
     if (!/^https:\/\//i.test(url)) { this.setStatus(STATUS.ERROR, 'Link phải bắt đầu bằng https:// hoặc webcal://'); return false; }
-    const ok = await this.sync();
-    if (!ok) return false;
+    const gen = ++this.gen;
+    const ok = await this.sync({ initial: true });
+    if (!ok || gen !== this.gen) return false; // failed, or disconnected while downloading
     this.startTimers();
     return true;
   }
@@ -52,12 +77,15 @@ class CalendarAdapter extends ApplicationAdapter {
     clearInterval(this.syncTimer);
     clearInterval(this.tickTimer);
     const pollMin = Math.max(5, this.config.pollMinutes || 10);
+    this.running = true;
     this.syncTimer = setInterval(() => this.sync(), pollMin * 60 * 1000);
     this.tickTimer = setInterval(() => this.tick(), 30 * 1000);
     this.tick();
   }
 
   async disconnect() {
+    this.gen++;
+    this.running = false;
     clearInterval(this.syncTimer);
     clearInterval(this.tickTimer);
     this.syncTimer = this.tickTimer = null;
@@ -65,32 +93,39 @@ class CalendarAdapter extends ApplicationAdapter {
     return true;
   }
 
-  async sync() {
+  async sync({ initial = false } = {}) {
+    const gen = this.gen;
+    // A periodic re-sync that fails keeps the reminders of the calendar we already have running.
+    const fail = (status, detail) => {
+      if (gen !== this.gen) return false;
+      if (!initial && this.running && this.events.length) this.setStatus(STATUS.LIMITED, `⚠️ ${detail} — vẫn nhắc theo lịch đã tải`);
+      else this.setStatus(status, detail);
+      return false;
+    };
     try {
       const res = await this.fetch(this.url(), { headers: { 'User-Agent': 'CutePetCompanion', Accept: 'text/calendar' } });
+      if (gen !== this.gen) return false;
       if (res.status === 401 || res.status === 403 || res.status === 404) {
-        this.setStatus(STATUS.AUTH, `Link iCal bị từ chối (${res.status}) — kiểm tra lại link bí mật`);
-        return false;
+        return fail(STATUS.AUTH, `Link iCal bị từ chối (${res.status}) — kiểm tra lại link bí mật`);
       }
-      if (!res.ok) { this.setStatus(STATUS.ERROR, `Máy chủ lịch trả về ${res.status}`); return false; }
-      const len = Number(res.headers.get('content-length') || 0);
-      if (len > MAX_ICS_BYTES) { this.setStatus(STATUS.ERROR, 'File lịch quá lớn'); return false; }
-      const text = await res.text();
-      if (!text.includes('BEGIN:VCALENDAR')) { this.setStatus(STATUS.ERROR, 'Link không trả về dữ liệu iCal'); return false; }
-      this.events = parseICS(text.slice(0, MAX_ICS_BYTES));
+      if (!res.ok) return fail(STATUS.ERROR, `Máy chủ lịch trả về ${res.status}`);
+      let text;
+      try { text = await readTextLimited(res, MAX_ICS_BYTES); } catch (err) { if (err.tooLarge) return fail(STATUS.ERROR, 'File lịch quá lớn'); throw err; }
+      if (gen !== this.gen) return false;
+      if (!text.includes('BEGIN:VCALENDAR')) return fail(STATUS.ERROR, 'Link không trả về dữ liệu iCal');
+      this.events = parseICS(text);
       const now = Date.now();
       const next = upcomingOccurrences(this.events, now, now + 7 * 864e5)[0];
       const nextLabel = next ? ` · tiếp theo: "${next.summary}" ${new Date(next.start).toLocaleString('vi-VN', { weekday: 'short', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}` : '';
       this.setStatus(STATUS.CONNECTED, `${this.events.length} sự kiện${nextLabel}`);
       return true;
     } catch (err) {
-      this.setStatus(STATUS.ERROR, `Không tải được lịch: ${err.message}`);
-      return false;
+      return fail(STATUS.ERROR, `Không tải được lịch: ${err.message}`);
     }
   }
 
   tick() {
-    if (this.status !== STATUS.CONNECTED) return;
+    if (!this.running) return;
     const lead = (this.config.leadMinutes ?? 5) * 60 * 1000;
     const now = Date.now();
     for (const occ of upcomingOccurrences(this.events, now, now + lead + 30 * 1000)) {

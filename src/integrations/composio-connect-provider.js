@@ -127,7 +127,9 @@ const RECIPES = {
 // Bitbucket: Composio's list tool has no reviewer filter and its responses get truncated, so
 // this one uses COMPOSIO_PROXY_EXECUTE with Bitbucket's own query language instead.
 RECIPES.bitbucket = { name: 'Bitbucket', event: 'PR cần bạn review (có nút Approve) · approve / yêu cầu sửa / bình luận trên PR của bạn', app: 'bitbucket', custom: true };
-const BB_REPO_LIMIT = 25;
+const BB_REPO_LIMIT = 25;        // most recently updated repos per workspace
+const BB_REPO_TOTAL_LIMIT = 100; // across all workspaces (was a hard 25 in total)
+const BB_BATCH_ROWS = 6;         // PR rows one summary card shows
 const BB_REPO_REFRESH_MS = 30 * 60 * 1000;
 const BB_FIELDS = 'values.id,values.title,values.updated_on,values.links.html.href,values.author.display_name,values.participants.user.uuid,values.participants.approved,values.destination.repository.full_name,values.source.branch.name,values.destination.branch.name';
 const bbBranch = (pr) => { const a = pick(pr, 'source.branch.name'), b = pick(pr, 'destination.branch.name'); return a && b ? `${a} → ${b}` : null; };
@@ -229,7 +231,7 @@ class ComposioConnectProvider extends EventEmitter {
       const r = await this.proxy('bitbucket', `/repositories/${w}`, { query: { sort: '-updated_on', pagelen: BB_REPO_LIMIT, fields: 'values.slug' } });
       for (const v of arrAt(r.data, 'values')) if (bbSafe(v.slug)) repos.push({ ws: w, slug: v.slug });
     }
-    this.bb.repos = repos.slice(0, BB_REPO_LIMIT);
+    this.bb.repos = repos.slice(0, BB_REPO_TOTAL_LIMIT);
     this.bb.reposAt = Date.now();
     return this.bb.repos;
   }
@@ -264,7 +266,9 @@ class ComposioConnectProvider extends EventEmitter {
     const first = !this.seen.has('bitbucket');
     const seen = this.seen.get('bitbucket') || new Set();
     const fresh = items.filter(it => !seen.has(it.key));
-    items.forEach(it => seen.add(it.key));
+    // Only what is actually shown becomes "seen": PRs beyond the card's rows come again next poll.
+    const shown = fresh.length > 1 ? fresh.slice(0, BB_BATCH_ROWS) : fresh;
+    shown.forEach(it => seen.add(it.key));
     this.seen.set('bitbucket', seen);
     const sidOf = (it) => `composio:bitbucket:${crypto.createHash('sha1').update(it.key).digest('hex').slice(0, 16)}`;
     for (const it of fresh) {
@@ -273,7 +277,7 @@ class ComposioConnectProvider extends EventEmitter {
     }
     if (fresh.length > 1) {
       // Several at once (e.g. at start-up): ONE card listing every PR, each row with its own Approve.
-      const rows = fresh.slice(0, 6);
+      const rows = shown;
       this.emit('notification', {
         title: `🔍 ${fresh.length} PR đang chờ bạn review`, message: '', app: 'bitbucket',
         url: 'https://bitbucket.org/dashboard/pullrequests', priority: 'important', duration: 60000,
@@ -377,8 +381,13 @@ class ComposioConnectProvider extends EventEmitter {
       if (cur.c > was.c) {
         const n = cur.c - was.c;
         const last = await this.proxy('bitbucket', `/repositories/${ws}/${repo}/pullrequests/${pr.id}/comments`, { query: { sort: '-created_on', pagelen: 5, fields: 'values.user.uuid,values.user.display_name,values.content.raw,values.deleted' } }).catch(() => null);
-        const fromOthers = last && last.status === 200 ? arrAt(last.data, 'values').filter(c => !c.deleted && pick(c, 'user.uuid') !== me) : [];
-        if (last && last.status === 200 && !fromOthers.length) continue; // only my own comments
+        if (!last || last.status !== 200) {
+          // Can't tell whose comments they are (they may be my own): say nothing now, retry next poll.
+          next[key] = { ...cur, c: was.c };
+          continue;
+        }
+        const fromOthers = arrAt(last.data, 'values').filter(c => !c.deleted && pick(c, 'user.uuid') !== me);
+        if (!fromOthers.length) continue; // only my own comments
         const c0 = fromOthers[0];
         this.emit('notification', {
           ...base,
@@ -413,11 +422,14 @@ class ComposioConnectProvider extends EventEmitter {
     const prev = this.snap.jiraAct;
     const first = !this.snap.jiraActInit;
     let emitted = 0;
+    const active = new Set();
     for (const is of arrAt(r.data, 'issues')) {
       const key = String(is.key || '');
       if (!/^[A-Z][A-Z0-9_]+-\d+$/.test(key)) continue;
       const updated = toTime(pick(is, 'fields.updated')) || 0;
       const was = prev[key];
+      active.add(key);
+      delete prev[key]; // re-insert: key order = least recently seen first (for eviction below)
       prev[key] = updated;
       if (first || !was || updated <= was) continue;
       const summary = String(pick(is, 'fields.summary') || '');
@@ -459,7 +471,10 @@ class ComposioConnectProvider extends EventEmitter {
       });
       emitted++;
     }
-    for (const k of Object.keys(prev)) if (Object.keys(prev).length > 300) delete prev[k]; else break;
+    // Bound the snapshot, never forgetting an issue that is in the current result (it would be
+    // re-baselined and its next comment missed).
+    let extra = Object.keys(prev).length - 300;
+    for (const k of Object.keys(prev)) { if (extra <= 0) break; if (!active.has(k)) { delete prev[k]; extra--; } }
     this.snap.jiraActInit = true;
     (this.lastCounts = this.lastCounts || {})['jira-activity'] = { items: arrAt(r.data, 'issues').length, baseline: first };
     return emitted;

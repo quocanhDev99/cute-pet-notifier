@@ -254,8 +254,9 @@ class ChatSources {
   async slackUser(id) {
     this.slackNames = this.slackNames || new Map();
     if (this.slackNames.has(id)) return this.slackNames.get(id);
-    let name = id;
-    try { const r = await this.slackApi('users.info', { user: id }); name = r.user.profile.display_name || r.user.real_name || r.user.name || id; } catch { /* keep id */ }
+    let name = null;
+    try { const r = await this.slackApi('users.info', { user: id }); name = (r && r.user && (r.user.profile.display_name || r.user.real_name || r.user.name)) || null; } catch { /* retry next time */ }
+    if (!name) return id; // a failed lookup must not pin the raw id as the name forever
     this.slackNames.set(id, name);
     return name;
   }

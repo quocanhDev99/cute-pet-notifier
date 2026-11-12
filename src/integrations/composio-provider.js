@@ -237,7 +237,8 @@ class ComposioProvider {
     } else {
       const t = triggers.find(x => x.slug === s);
       if (t && t.instanceId) await this.request('DELETE', `/api/v3.1/trigger_instances/manage/${encodeURIComponent(t.instanceId)}`);
-      triggers.splice(triggers.findIndex(x => x.slug === s), 1);
+      const i = triggers.findIndex(x => x.slug === s);
+      if (i >= 0) triggers.splice(i, 1); // not found → nothing to remove (splice(-1) dropped the LAST one)
     }
     return this.upsertApp(tk, { triggers });
   }

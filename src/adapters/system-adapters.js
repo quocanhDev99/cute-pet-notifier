@@ -7,6 +7,9 @@
  */
 const { ApplicationAdapter, STATUS } = require('./base-adapter');
 
+// Short names the pet uses for itself; custom pets fall back to a neutral word.
+const PET_NAMES = { cat_mochi: 'Mochi', dog_boba: 'Boba', bunny_cloud: 'Cloud', penguin_pip: 'Pip' };
+
 class SystemEventsAdapter extends ApplicationAdapter {
   constructor(ctx, powerMonitor) {
     super(ctx, {
@@ -43,7 +46,7 @@ class SystemEventsAdapter extends ApplicationAdapter {
       const s = typeof state === 'string' ? state : state && state.state;
       if (this.config.thermal && (s === 'serious' || s === 'critical')) this.publish({ kind: 'thermal', state: s });
     });
-    on('resume', () => this.publish({ kind: 'resume' }));
+    on('resume', () => { if (this.config.lockScreen) this.publish({ kind: 'resume' }); });
     this.setStatus(STATUS.CONNECTED, 'Đang lắng nghe sự kiện nguồn & màn hình');
     return true;
   }
@@ -69,11 +72,12 @@ class SystemEventsAdapter extends ApplicationAdapter {
       this.publish({ kind: charging ? 'charging' : 'unplugged', pct });
     }
     if (charging) prev.warned.clear();
-    for (const threshold of [20, 10]) {
-      if (!charging && pct <= threshold && !prev.warned.has(threshold)) {
-        prev.warned.add(threshold);
+    if (!charging) {
+      // A big drop (25% → 8%) crosses several thresholds at once: warn once, mark them all.
+      const crossed = [20, 10].filter(th => pct <= th && !prev.warned.has(th));
+      if (crossed.length) {
+        crossed.forEach(th => prev.warned.add(th));
         this.publish({ kind: 'battery', pct });
-        break;
       }
     }
     prev.level = pct;
@@ -88,14 +92,24 @@ class SystemEventsAdapter extends ApplicationAdapter {
 
   publish(e) { super.publish({ ...e, at: Date.now() }); }
 
+  /** The active pet's name and the UI language (the messages are the pet talking). */
+  voice() {
+    let s = {};
+    try { s = (this.ctx && this.ctx.settings && this.ctx.settings.get()) || {}; } catch { s = {}; }
+    const en = !!(s.appearance && s.appearance.language === 'en');
+    const name = PET_NAMES[s.activePet] || (en ? 'your pet' : 'bé');
+    return { en, name, Name: name.charAt(0).toUpperCase() + name.slice(1) };
+  }
+
   systemPayload(e) {
+    const { en, name, Name } = this.voice();
     switch (e.kind) {
-      case 'battery': return { app: 'system', title: `🔋 Pin yếu: còn ${e.pct}%`, message: 'Cắm sạc đi sen ơi, Mochi sắp hết năng lượng rồi!', priority: e.pct <= 10 ? 'critical' : 'important', forceEmotion: e.pct <= 10 ? 'surprised' : 'sad' };
-      case 'charging': return { app: 'system', title: '⚡ Đang sạc pin', message: `Pin ${e.pct}% — Mochi được nạp năng lượng rồi!`, forceEmotion: 'happy' };
-      case 'unplugged': return { app: 'system', title: '🔌 Đã rút sạc', message: `Đang dùng pin (${e.pct}%).`, forceEmotion: 'thinking' };
-      case 'unlock': return { app: 'system', title: '👋 Chào mừng trở lại!', message: `Sen đi đâu mất ${e.away} phút, Mochi nhớ ghê!`, forceEmotion: 'love' };
-      case 'resume': return { app: 'system', title: '☀️ Máy vừa thức dậy', message: 'Mochi cũng vừa ngủ dậy nè, làm việc tiếp thôi!', forceEmotion: 'happy' };
-      case 'thermal': return { app: 'system', title: '🔥 Máy đang quá nóng', message: `Trạng thái nhiệt: ${e.state}. Đóng bớt ứng dụng nặng nhé!`, priority: 'critical', forceEmotion: 'surprised' };
+      case 'battery': return { app: 'system', title: en ? `🔋 Battery low: ${e.pct}% left` : `🔋 Pin yếu: còn ${e.pct}%`, message: en ? `Plug in the charger, ${name} is running out of energy!` : `Cắm sạc đi sen ơi, ${name} sắp hết năng lượng rồi!`, priority: e.pct <= 10 ? 'critical' : 'important', forceEmotion: e.pct <= 10 ? 'surprised' : 'sad' };
+      case 'charging': return { app: 'system', title: en ? '⚡ Charging' : '⚡ Đang sạc pin', message: en ? `Battery ${e.pct}% — ${name} is recharging!` : `Pin ${e.pct}% — ${name} được nạp năng lượng rồi!`, forceEmotion: 'happy' };
+      case 'unplugged': return { app: 'system', title: en ? '🔌 Charger unplugged' : '🔌 Đã rút sạc', message: en ? `Running on battery (${e.pct}%).` : `Đang dùng pin (${e.pct}%).`, forceEmotion: 'thinking' };
+      case 'unlock': return { app: 'system', title: en ? '👋 Welcome back!' : '👋 Chào mừng trở lại!', message: en ? `You were away for ${e.away} min, ${name} missed you!` : `Sen đi đâu mất ${e.away} phút, ${name} nhớ ghê!`, forceEmotion: 'love' };
+      case 'resume': return { app: 'system', title: en ? '☀️ Your computer just woke up' : '☀️ Máy vừa thức dậy', message: en ? `${Name} just woke up too, let's get back to work!` : `${Name} cũng vừa ngủ dậy nè, làm việc tiếp thôi!`, forceEmotion: 'happy' };
+      case 'thermal': return { app: 'system', title: en ? '🔥 Your computer is overheating' : '🔥 Máy đang quá nóng', message: en ? `Thermal state: ${e.state}. Close some heavy apps!` : `Trạng thái nhiệt: ${e.state}. Đóng bớt ứng dụng nặng nhé!`, priority: 'critical', forceEmotion: 'surprised' };
       default: return null;
     }
   }

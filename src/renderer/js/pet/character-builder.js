@@ -511,13 +511,19 @@ export function buildCharacter(sp) {
   return rig;
 }
 
+const TEXTURE_KEYS = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap', 'alphaMap',
+  'bumpMap', 'displacementMap', 'lightMap', 'specularMap', 'gradientMap', 'matcap',
+  'clearcoatMap', 'clearcoatNormalMap', 'clearcoatRoughnessMap', 'sheenColorMap', 'sheenRoughnessMap',
+  'transmissionMap', 'thicknessMap', 'iridescenceMap', 'iridescenceThicknessMap', 'anisotropyMap',
+  'specularIntensityMap', 'specularColorMap'];
+
 export function disposeObject(obj) {
   obj.traverse(o => {
     if (o.geometry) o.geometry.dispose();
     if (o.material) {
       const mats = Array.isArray(o.material) ? o.material : [o.material];
       for (const m of mats) {
-        for (const k of ['map', 'normalMap', 'roughnessMap', 'emissiveMap']) if (m[k]) m[k].dispose();
+        for (const k of TEXTURE_KEYS) if (m[k] && m[k].isTexture) m[k].dispose();
         m.dispose();
       }
     }

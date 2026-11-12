@@ -36,6 +36,8 @@ class SlackAdapter extends ApplicationAdapter {
     this.retry = 0;
     this.reconnectTimer = null;
     this.team = '';
+    this.gen = 0; // bumped by disconnect(): async work started before it must not restart anything
+    this.deferred = new Map(); // channel:ts → timer (channel "message" waiting for its app_mention)
   }
 
   async api(method, token, params = {}) {
@@ -52,6 +54,7 @@ class SlackAdapter extends ApplicationAdapter {
     if (!appToken) { this.setStatus(STATUS.AUTH, 'Chưa có App-Level Token (xapp-)'); return false; }
     if (!appToken.startsWith('xapp-')) { this.setStatus(STATUS.AUTH, 'App-Level Token phải bắt đầu bằng xapp-'); return false; }
     this.stopped = false;
+    const gen = ++this.gen;
     const botToken = this.ctx.secrets.get('slack.botToken');
     if (botToken) {
       try {
@@ -59,32 +62,49 @@ class SlackAdapter extends ApplicationAdapter {
         if (auth.ok) { this.team = auth.team; this.botUserId = auth.user_id; }
       } catch { /* names are optional */ }
     }
+    if (gen !== this.gen || this.stopped) return false;
     return this.openSocket(appToken);
   }
 
   async openSocket(appToken) {
+    const gen = this.gen;
+    const stale = () => this.stopped || gen !== this.gen;
+    if (stale()) return false;
+    let ws = null;
     try {
       const r = await this.api('apps.connections.open', appToken);
+      if (stale()) return false;
       if (!r.ok) {
         const authErr = ['invalid_auth', 'not_authed', 'token_revoked', 'not_allowed_token_type'].includes(r.error);
         this.setStatus(authErr ? STATUS.AUTH : STATUS.ERROR, `Slack: ${r.error}`);
         return false;
       }
       await new Promise((resolve, reject) => {
-        const ws = new WebSocket(r.url);
-        this.ws = ws;
+        ws = new WebSocket(r.url);
+        this.connecting = ws;
         const timeout = setTimeout(() => reject(new Error('timeout')), 15000);
         ws.on('message', (data) => this.onMessage(ws, data));
         ws.on('open', () => { clearTimeout(timeout); resolve(); });
         ws.on('error', (err) => { clearTimeout(timeout); reject(err); });
-        ws.on('close', () => { if (this.ws === ws) this.scheduleReconnect(); });
+        // Only a socket that was really open reconnects on close; a failed open is retried once,
+        // by the catch below (not twice: error + close used to double the backoff).
+        ws.on('close', () => { clearTimeout(timeout); if (this.ws === ws) { this.ws = null; this.scheduleReconnect(); } else reject(new Error('closed')); });
       });
+      if (this.connecting === ws) this.connecting = null;
+      if (stale()) { try { ws.close(); } catch { /* ignore */ } return false; }
+      if (this.ws && this.ws !== ws) { const old = this.ws; this.ws = null; try { old.close(); } catch { /* ignore */ } }
+      this.ws = ws;
       this.retry = 0;
       const hasBot = !!this.ctx.secrets.get('slack.botToken');
       this.setStatus(hasBot ? STATUS.CONNECTED : STATUS.LIMITED,
         hasBot ? `Socket Mode đang lắng nghe${this.team ? ` · ${this.team}` : ''}` : 'Đã kết nối — thiếu Bot Token nên chỉ hiện ID người gửi');
       return true;
     } catch (err) {
+      if (ws) {
+        if (this.connecting === ws) this.connecting = null;
+        try { ws.terminate(); } catch { /* ignore */ } // e.g. the 15 s timeout: don't leave it half-open
+      }
+      if (stale()) return false;
       this.setStatus(STATUS.ERROR, `Không mở được WebSocket: ${err.message}`);
       this.scheduleReconnect();
       return false;
@@ -96,15 +116,23 @@ class SlackAdapter extends ApplicationAdapter {
     clearTimeout(this.reconnectTimer);
     const delay = Math.min(60000, 2000 * 2 ** this.retry++);
     this.detail = `Mất kết nối, thử lại sau ${Math.round(delay / 1000)}s`;
+    const gen = this.gen;
     this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
       const t = this.ctx.secrets.get('slack.appToken');
-      if (t && !this.stopped) this.openSocket(t);
+      if (t && !this.stopped && gen === this.gen) this.openSocket(t);
     }, delay);
+    if (this.reconnectTimer.unref) this.reconnectTimer.unref();
   }
 
   async disconnect() {
     this.stopped = true;
+    this.gen++;
     clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+    for (const t of this.deferred.values()) clearTimeout(t);
+    this.deferred.clear();
+    if (this.connecting) { const ws = this.connecting; this.connecting = null; try { ws.terminate(); } catch { /* ignore */ } }
     if (this.ws) { const ws = this.ws; this.ws = null; try { ws.close(); } catch { /* ignore */ } }
     this.setStatus(STATUS.DISCONNECTED, '');
     return true;
@@ -126,7 +154,23 @@ class SlackAdapter extends ApplicationAdapter {
     if (mode === 'mentions' && !isDm && !isMention) return;
     // app_mention + message events can both fire for the same post
     if (ev.type === 'message' && !isDm && mode !== 'all') return;
-    this.enrichAndPublish({ ...ev, _eventId: msg.payload.event_id, _eventTime: msg.payload.event_time }, isDm, isMention);
+    const full = { ...ev, _eventId: msg.payload.event_id, _eventTime: msg.payload.event_time };
+    const key = `${ev.channel}:${ev.ts}`;
+    if (isMention) {
+      // The mention wins over a plain "message" copy of the same post, whichever arrived first.
+      clearTimeout(this.deferred.get(key));
+      this.deferred.delete(key);
+    } else if (ev.type === 'message' && !isDm) {
+      if (this.botUserId && String(ev.text || '').includes(`<@${this.botUserId}>`)) return; // its app_mention follows
+      // Without the bot id we can't tell: give a possible app_mention a moment to arrive first.
+      clearTimeout(this.deferred.get(key));
+      this.deferred.set(key, setTimeout(() => {
+        this.deferred.delete(key);
+        if (!this.stopped) this.enrichAndPublish(full, isDm, false);
+      }, 1500));
+      return;
+    }
+    this.enrichAndPublish(full, isDm, isMention);
   }
 
   async name(kind, id) {
@@ -134,19 +178,20 @@ class SlackAdapter extends ApplicationAdapter {
     const key = `${kind}:${id}`;
     if (this.names.has(key)) return this.names.get(key);
     const bot = this.ctx.secrets.get('slack.botToken');
-    let label = id;
-    if (bot) {
-      try {
-        if (kind === 'user') {
-          const r = await this.api('users.info', bot, { user: id });
-          if (r.ok) label = r.user.profile.display_name || r.user.real_name || r.user.name;
-        } else {
-          const r = await this.api('conversations.info', bot, { channel: id });
-          if (r.ok && r.channel.name) label = `#${r.channel.name}`;
-        }
-      } catch { /* keep id */ }
-    }
+    if (!bot) return id; // nothing to look up with (not cached: a bot token may be added later)
+    let label = null;
+    try {
+      if (kind === 'user') {
+        const r = await this.api('users.info', bot, { user: id });
+        if (r.ok) label = r.user.profile.display_name || r.user.real_name || r.user.name || null;
+      } else {
+        const r = await this.api('conversations.info', bot, { channel: id });
+        if (r.ok && r.channel.name) label = `#${r.channel.name}`;
+      }
+    } catch { /* network error: try again next time */ }
+    if (!label) return id; // never cache the raw id as if it were the name
     this.names.set(key, label);
+    if (this.names.size > 2000) this.names.delete(this.names.keys().next().value);
     return label;
   }
 

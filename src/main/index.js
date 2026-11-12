@@ -43,10 +43,14 @@ if (!isPrimaryInstance) {
   // Electron also fires "activate" for the very first launch (e.g. login item) → ignore that one.
   // Clicking the pet or a card button also makes macOS activate the app: that must NOT pop the
   // Control Center up, so ignore activations while / right after the cursor is on the overlay.
+  // The click's own IPC can arrive a little AFTER 'activate', so decide a moment later.
   app.on('activate', () => {
     if (!activateReady) return;
-    if (cursorInRect || Date.now() - lastOverlayUse < 2500) return;
-    openControlCenter();
+    const at = Date.now();
+    setTimeout(() => {
+      if (overlayCausedActivation(at)) return;
+      openControlCenter();
+    }, 350);
   });
 }
 
@@ -72,6 +76,8 @@ const messagingApps = new MessagingApps({
   }
 });
 let lastModeKey = '';
+let httpServer = null; // our own local server (null when it failed to start, e.g. port in use)
+let serverError = null;
 const bus = new EventEmitter();
 const apiToken = crypto.randomBytes(24).toString('hex');
 /**
@@ -150,9 +156,16 @@ function refreshEffectiveState(force = false) {
   const wasHidden = lastModeKey ? JSON.parse(lastModeKey).hidden : false;
   lastModeKey = key;
   if (eff.hidden && !wasHidden) {
-    // Hidden / Gaming: stop presentation immediately, keep events in the Inbox.
-    pipeline.flushQueueToInbox(eff.mode.hidePet ? `mode_${eff.mode.id}` : 'presence_hidden');
-    sendOverlay('notification:dismiss', { reason: 'hidden' });
+    // Hidden / Gaming: stop presentation immediately, keep events in the Inbox — including the card
+    // that is on screen right now. Critical cards stay (they bypass Hidden, Blueprint §7.1).
+    const reason = eff.mode.hidePet ? `mode_${eff.mode.id}` : 'presence_hidden';
+    pipeline.flushQueueToInbox(reason);
+    const cur = pipeline.current;
+    if (cur && cur.priority !== 'critical') {
+      if (inbox) inbox.add({ ...cur, reason });
+      dismissNativeBanner(cur);
+      sendOverlay('notification:dismiss', { reason: 'hidden' });
+    }
   }
   sendOverlay('overlay:config', overlayPayload());
   buildTrayMenu();
@@ -190,7 +203,7 @@ function createOverlay() {
   overlay.webContents.on('console-message', (_e, _level, message) => console.log(`[Overlay] ${message}`));
   overlay.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   overlay.webContents.on('will-navigate', (e) => e.preventDefault());
-  overlay.on('closed', () => { overlay = null; });
+  overlay.on('closed', () => { overlay = null; stopHitTimer(); });
 }
 
 function fitOverlayToDisplay() {
@@ -220,13 +233,16 @@ function pushBadge(force = false) {
    resize) OR the real cursor is inside one of the reported interactive rectangles. */
 let rendererWantsMouse = false;
 let cursorInRect = false;
+let lastCardUse = 0; // last press on a card / card action (buttons must never open the Control Center)
 let lastOverlayUse = 0; // last time the cursor was on the pet / a card (see the 'activate' guard)
 let hitRects = [];
+let dockRect = null; // pet + card area in overlay coordinates (reported by the renderer)
 let hitTimer = null;
 let overlayIgnoring = true;
 function applyMouseCapture() {
   if (!overlay || overlay.isDestroyed()) return;
   const ignore = !(rendererWantsMouse || cursorInRect);
+  if (!ignore) lastOverlayUse = Date.now(); // pressing / dragging the pet counts as using the overlay
   if (ignore === overlayIgnoring) return;
   overlayIgnoring = ignore;
   if (ignore) {
@@ -234,6 +250,12 @@ function applyMouseCapture() {
   } else {
     overlay.setIgnoreMouseEvents(false);
   }
+}
+function stopHitTimer() {
+  if (hitTimer) { clearInterval(hitTimer); hitTimer = null; }
+  hitRects = [];
+  cursorInRect = false;
+  applyMouseCapture();
 }
 function pollCursor() {
   if (!overlay || overlay.isDestroyed() || !overlay.isVisible()) return;
@@ -245,9 +267,30 @@ function pollCursor() {
   if (inside !== cursorInRect) { cursorInRect = inside; applyMouseCapture(); }
 }
 
+/** Was this activation just a click on the pet / a card / the badge (not a re-launch of the app)? */
+function overlayCausedActivation(at) {
+  if (cursorInRect || lastOverlayUse >= at - 3000) return true;
+  if (!overlay || overlay.isDestroyed() || !overlay.isVisible() || !dockRect) return false;
+  const p = screen.getCursorScreenPoint();
+  const b = overlay.getBounds();
+  const x = p.x - b.x, y = p.y - b.y, m = 40;
+  return x >= dockRect.x - m && x <= dockRect.x + dockRect.w + m && y >= dockRect.y - m && y <= dockRect.y + dockRect.h + m;
+}
+
 function quitApp() { setTimeout(() => app.quit(), 150); return { ok: true }; }
 
+/** Control Center URL with a single-use launch ticket (the page carries the API token). */
+function controlUrl(section) {
+  return httpServer ? httpServer.launchUrl(section ? `#${section}` : '') : null;
+}
+
+function showServerError() {
+  dialog.showErrorBox('Cute Pet Companion', serverError || L('Máy chủ nội bộ chưa chạy.', 'The local server is not running.'));
+}
+
 function openControlCenter(section) {
+  // Port 3721 taken by another program: never open (and trust) whatever answers there.
+  if (!httpServer) { showServerError(); return; }
   if (controlWin && !controlWin.isDestroyed()) {
     controlWin.show();
     controlWin.focus();
@@ -266,7 +309,7 @@ function openControlCenter(section) {
     icon: process.platform === 'darwin' ? undefined : APP_ICON,
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true }
   });
-  controlWin.loadURL(`http://127.0.0.1:${PORT}/${section ? '#' + section : ''}`);
+  controlWin.loadURL(controlUrl(section));
   controlWin.once('ready-to-show', () => controlWin.show());
   controlWin.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//.test(url)) shell.openExternal(url);
@@ -281,53 +324,7 @@ function openControlCenter(section) {
   }
   controlWin.on('closed', () => {
     controlWin = null;
-    /**
- * macOS install sanity checks (packaged builds only):
- *  • Intel build on an Apple-chip Mac runs under Rosetta → 3D animation stutters badly
- *    (measured: 2–5 s main-thread stalls). Tell the user to install the "-arm64" DMG.
- *  • Running straight from the DMG / Downloads → offer to move into Applications
- *    (stable path for permissions and updates).
- */
-function installInfo() {
-  if (process.platform !== 'darwin' || !app.isPackaged) return { rosetta: false, inApplications: true };
-  let inApplications = true;
-  try { inApplications = app.isInApplicationsFolder(); } catch { /* ignore */ }
-  return { rosetta: !!app.runningUnderARM64Translation, inApplications };
-}
-
-async function checkMacInstall() {
-  const info = installInfo();
-  if (info.rosetta) {
-    await dialog.showMessageBox({
-      type: 'warning',
-      title: 'Cute Pet Companion',
-      message: L('Bạn đang dùng bản cho Mac Intel trên máy chip Apple', 'You are running the Intel build on an Apple-chip Mac'),
-      detail: L(
-        'macOS phải dịch app qua Rosetta nên hoạt họa của bé sẽ chậm và giật.\n\nHãy tải và cài file có đuôi "-arm64.dmg" (dành cho chip Apple M1/M2/M3/M4), rồi xoá bản này.',
-        'macOS translates the app through Rosetta, so the pet\'s animation will be slow and choppy.\n\nPlease download and install the file ending in "-arm64.dmg" (for Apple M1/M2/M3/M4), then delete this copy.'
-      ),
-      buttons: [L('Đã hiểu', 'OK')]
-    }).catch(() => {});
-  }
-  if (!info.inApplications) {
-    const r = await dialog.showMessageBox({
-      type: 'question',
-      title: 'Cute Pet Companion',
-      message: L('Chuyển app vào thư mục Applications?', 'Move the app to the Applications folder?'),
-      detail: L(
-        'App đang chạy từ file cài đặt hoặc thư mục Tải về. Chuyển vào Applications để quyền Trợ năng và các bản cập nhật hoạt động ổn định.',
-        'The app is running from the installer or Downloads. Moving it to Applications keeps permissions and updates working reliably.'
-      ),
-      buttons: [L('Chuyển vào Applications', 'Move to Applications'), L('Để sau', 'Not now')],
-      defaultId: 0, cancelId: 1
-    }).catch(() => ({ response: 1 }));
-    if (r.response === 0) {
-      try { app.moveToApplicationsFolder(); } catch (err) { console.error('[Main] move to Applications failed:', err && err.message); }
-    }
-  }
-}
-
-if (process.platform === 'darwin' && app.dock) app.dock.hide();
+    if (process.platform === 'darwin' && app.dock) app.dock.hide();
   });
 }
 
@@ -358,7 +355,7 @@ function buildTrayMenu() {
   const posLabels = { 'top-left': 'Trên trái', 'top-center': 'Trên giữa', 'top-right': 'Trên phải', 'middle-left': 'Giữa trái', 'middle-right': 'Giữa phải', 'bottom-left': 'Dưới trái', 'bottom-center': 'Dưới giữa', 'bottom-right': 'Dưới phải' };
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: L('🐾 Mở Control Center', '🐾 Open Control Center'), click: () => openControlCenter() },
-    { label: L('🌐 Mở trong trình duyệt', '🌐 Open in browser'), click: () => shell.openExternal(`http://127.0.0.1:${PORT}`) },
+    { label: L('🌐 Mở trong trình duyệt', '🌐 Open in browser'), click: () => { const u = controlUrl(); if (u) shell.openExternal(u); else showServerError(); } },
     { type: 'separator' },
     {
       label: L('🎭 Thử 8 cảm xúc', '🎭 Try the 8 emotions'),
@@ -476,7 +473,7 @@ function applySystemSettings(s) {
 
 function registerIpc() {
   ipcMain.on('window:set-ignore-mouse-events', (e, ignore) => {
-    if (overlay && e.sender === overlay.webContents) { rendererWantsMouse = !ignore; applyMouseCapture(); }
+    if (overlay && e.sender === overlay.webContents) { rendererWantsMouse = !ignore; if (!ignore) lastOverlayUse = Date.now(); applyMouseCapture(); }
   });
   // Interactive rectangles (notification cards) in overlay coordinates. The main
   // process hit-tests the real cursor against them, more robust than renderer-only
@@ -485,11 +482,22 @@ function registerIpc() {
     if (!overlay || e.sender !== overlay.webContents || !Array.isArray(rects)) return;
     hitRects = rects.slice(0, 8).map(r => ({ x: Number(r.x), y: Number(r.y), w: Number(r.w), h: Number(r.h) }))
       .filter(r => [r.x, r.y, r.w, r.h].every(Number.isFinite) && r.w > 0 && r.h > 0);
-    if (hitRects.length && !hitTimer) hitTimer = setInterval(pollCursor, 33);
-    if (!hitRects.length && hitTimer) { clearInterval(hitTimer); hitTimer = null; cursorInRect = false; applyMouseCapture(); }
+    if (hitRects.length && !hitTimer) { hitTimer = setInterval(pollCursor, 33); hitTimer.unref(); }
+    if (!hitRects.length && hitTimer) stopHitTimer();
+  });
+  ipcMain.on('overlay:interaction', (e, onCard) => {
+    if (!overlay || e.sender !== overlay.webContents) return;
+    lastOverlayUse = Date.now();
+    if (onCard === true) lastCardUse = lastOverlayUse;
+  });
+  ipcMain.on('overlay:dock-rect', (e, r) => {
+    if (!overlay || e.sender !== overlay.webContents) return;
+    const ok = r && typeof r === 'object' && [r.x, r.y, r.w, r.h].every(Number.isFinite);
+    dockRect = ok ? { x: Number(r.x), y: Number(r.y), w: Number(r.w), h: Number(r.h) } : null;
   });
   ipcMain.on('pet:save-position', (e, pos) => {
     if (!overlay || e.sender !== overlay.webContents) return;
+    lastOverlayUse = Date.now();
     if (pos && typeof pos === 'object') {
       settings.update({ appearance: { customPosition: pos } });
     }
@@ -498,12 +506,18 @@ function registerIpc() {
     if (!overlay || e.sender !== overlay.webContents) return;
     lastOverlayUse = Date.now();
     const { action, id, url, source, externalId } = msg;
+    if (!['rendered', 'finished'].includes(action)) lastCardUse = lastOverlayUse; // a button on the card
     if (action === 'click') {
       if (typeof url === 'string' && /^https?:\/\//.test(url)) shell.openExternal(url);
       if (source) hub.handleAction(source, 'open', externalId);
       // The unread badge counts down: what the user just opened (same app/chat) is read now.
       const opened = (pipeline.current && pipeline.current.id === id) ? pipeline.current : pipeline.history.find(h => h.id === id);
-      if (opened && inbox) inbox.markConversationRead(opened.app, opened.privacy && opened.privacy !== 'full_content' ? null : opened.title);
+      if (opened && inbox) {
+        const masked = (it) => it.privacy && it.privacy !== 'full_content';
+        // A grouped card's title is a summary ("3 thông báo mới từ Zalo"): mark each member's chat.
+        const parts = opened.group && Array.isArray(opened.members) ? opened.members : [opened];
+        for (const m of parts) inbox.markConversationRead(m.app, masked(m) ? null : m.title);
+      }
     }
     if (action === 'approve' && source === 'composio' && typeof externalId === 'string') {
       integrations.approvePullRequest(externalId)
@@ -516,9 +530,11 @@ function registerIpc() {
     if (breaks && action === 'close') { const cur = pipeline.current; if (cur && cur.id === id && cur.app === 'wellbeing') breaks.dismiss(); }
     if (action === 'open-url' && typeof url === 'string' && /^https:\/\//.test(url)) shell.openExternal(url);
     if (action === 'finished') {
-      // Close the hidden native banner too (alert-style banners would otherwise stay off-screen).
+      // Close the hidden native banner too (alert-style banners would otherwise stay off-screen) —
+      // also when this card was already replaced and pipeline.current is a newer one.
       const cur = pipeline.current;
-      if (cur && cur.id === id && cur.source && cur.externalId) hub.handleAction(cur.source, 'dismiss', cur.externalId);
+      const done = cur && cur.id === id ? cur : pipeline.history.find(h => h.id === id);
+      dismissNativeBanner(done);
       pipeline.finished(id);
     }
     if (action === 'rendered') {
@@ -532,7 +548,13 @@ function registerIpc() {
     const sys = hub.get('system');
     if (sys && info && typeof info === 'object') sys.reportBattery({ level: Number(info.level), charging: !!info.charging });
   });
-  ipcMain.on('overlay:open-control', (e, section) => { if (overlay && e.sender === overlay.webContents) openControlCenter(section === 'inbox' ? 'inbox' : undefined); });
+  ipcMain.on('overlay:open-control', (e, section) => {
+    if (!overlay || e.sender !== overlay.webContents) return;
+    // macOS + Windows: the pet's double tap must not fire from clicks on a card (Approve asks for
+    // two clicks; Open/Kick/rows sit next to the pet's body). The badge (section 'inbox') is its own button.
+    if (section !== 'inbox' && Date.now() - lastCardUse < 1000) { log('[overlay] open-control ignored (card was just clicked)'); return; }
+    openControlCenter(section === 'inbox' ? 'inbox' : undefined);
+  });
   // Right-click on the pet: always-reachable menu (the tray icon can be hidden behind the MacBook notch).
   // Right-click on a notification card: "Xếp nhóm nhanh" for its sender / group chat.
   ipcMain.on('overlay:context-menu', (e, opts) => {
@@ -557,9 +579,22 @@ function registerIpc() {
   });
 }
 
+/** Close the off-screen native banner (macOS AX / Windows) behind a card; once per item. */
+const dismissedBanners = new Set();
+function dismissNativeBanner(item) {
+  if (!item || !item.source || !item.externalId || !hub) return;
+  const key = `${item.source}:${item.externalId}`;
+  if (dismissedBanners.has(key)) return;
+  dismissedBanners.add(key);
+  if (dismissedBanners.size > 500) dismissedBanners.delete(dismissedBanners.values().next().value);
+  hub.handleAction(item.source, 'dismiss', item.externalId);
+}
+
 /* ------------------------------------------------------------------ Familiar contacts: quick assign */
 
-const contactKeyOf = (c) => `${c.app || '*'}|${c.kind === 'chat' ? 'chat' : 'person'}|${String(c.name || '').toLowerCase().trim()}`;
+const { fold } = require('../core/chat-filter');
+// Same key as the Control Center (ctKey): accent-folded, so "Nhung" and "Nhưng" can't diverge.
+const contactKeyOf = (c) => `${c.app || '*'}|${c.kind === 'chat' ? 'chat' : 'person'}|${fold(c.name).trim()}`;
 
 /** Add / change / remove ONE familiar-contact rule (used from the card menu and the Control Center). */
 function assignContact({ name, kind, app: appId, group }) {
@@ -658,6 +693,7 @@ async function boot() {
     buildTrayMenu();
   });
   pipeline.on('history', (h) => bus.emit('event', 'history', h));
+  pipeline.on('preempted', (prev) => dismissNativeBanner(prev)); // replaced card: its banner too
 
   settings.on('change', (s) => {
     refreshEffectiveState(true);
@@ -669,9 +705,8 @@ async function boot() {
 
   registerIpc();
 
-  let serverError = null;
   try {
-    await startNotificationServer({
+    httpServer = await startNotificationServer({
       port: PORT,
       apiToken,
       userPetsDir: userPetsDir(),
@@ -697,6 +732,7 @@ async function boot() {
       chatSources,
       messagingApps,
       quit: quitApp,
+      isKnownPet: (id) => characterList().some(c => c.id === id),
       onModelChanged: (id) => { sendOverlay('model:changed', { id }); bus.emit('event', 'characters', characterList()); },
       onEvent: (fn) => bus.on('event', fn)
     });
@@ -777,7 +813,7 @@ async function boot() {
     fs.writeFileSync(firstRunFlag, String(Date.now()));
     setTimeout(() => {
       pipeline.ingest({ title: 'Mèo Mochi chào sen! 🐾', message: 'Mình sẽ mang thông báo tới cho bạn. Mở Control Center từ icon dấu chân trên thanh menu nhé!', app: 'default', forceEmotion: 'love', priority: 'important' }, 'system', { bypassDedupe: true, defaults: { deliveryMode: 'native_os' } });
-      openControlCenter();
+      if (httpServer) openControlCenter();
     }, 1500);
   }
 }
@@ -840,12 +876,23 @@ app.whenReady().then(() => {
       { role: 'windowMenu' }
     ]));
   }
-  boot();
+  boot().catch((err) => {
+    log('boot failed', err && err.stack ? err.stack : String(err));
+    dialog.showErrorBox('Cute Pet Companion', `${L('Không khởi động được', 'Failed to start')}: ${err && err.message}`);
+    app.quit();
+  });
 });
 
+let quitting = false;
 app.on('before-quit', () => {
+  if (quitting) return; // before-quit can fire more than once
+  quitting = true;
+  if (breaks) breaks.stop();
+  if (integrations) { try { integrations.stop(); } catch { /* ignore */ } }
+  stopHitTimer();
   if (!hub) return;
   // Windows: turn native banners back on synchronously — the async path could be cut off by exit.
+  // shutdownSync marks the adapter so stopAll() below doesn't start a second, async restore.
   const win = hub.get('windows_nc');
   if (win && win.shutdownSync) win.shutdownSync();
   hub.stopAll();
