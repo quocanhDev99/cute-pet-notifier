@@ -846,18 +846,44 @@ const previewControls = ({ emotions = true } = {}) => `
     </div>
   </div>`;
 
+/** Pet card thumbnails. Cached per model (a second WebGL scene + GLB parsing on every Control
+ *  Center start made the first seconds stutter), built in idle time, one pet per idle slot. */
+const THUMB_CACHE = 'cpc-thumbs-v1';
+const thumbKey = (c) => `${c.id}|${c.customModel ? 'custom' : c.bundledModel ? 'bundled' : 'proc'}|${S.version || ''}`;
+const idle = () => new Promise(r => (window.requestIdleCallback ? requestIdleCallback(() => r(), { timeout: 1500 }) : setTimeout(r, 60)));
+
+function paintThumb(id) {
+  const el = main.querySelector(`[data-thumb="${id}"]`);
+  if (el && thumbs[id]) el.innerHTML = `<img src="${thumbs[id]}" alt="">`;
+}
+
 async function makeThumbnails() {
+  let cache = {};
+  try { cache = JSON.parse(localStorage.getItem(THUMB_CACHE) || '{}') || {}; } catch { cache = {}; }
+  const todo = [];
+  for (const c of S.characters) {
+    const hit = cache[thumbKey(c)];
+    if (hit) { thumbs[c.id] = hit; paintThumb(c.id); } else todo.push(c);
+  }
+  if (!todo.length) return;
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;left:-9999px;top:0;width:260px;height:280px';
   document.body.appendChild(host);
-  const tmp = new PetStage(host, { species: 'cat_mochi', ambient: false, interactive: false, assetBase: '/assets/' });
+  const tmp = new PetStage(host, { species: todo[0].id, ambient: false, interactive: false, assetBase: '/assets/' });
   try {
-    for (const c of S.characters) {
+    for (const c of todo) {
+      await idle(); // never compete with what the user is doing right now
       await tmp.setSpecies(c.id); // the GLB (when there is one) must be in the scene before the snapshot
       tmp.setEmotion('happy');
       for (let i = 0; i < 40; i++) tmp.update(0.03);
       thumbs[c.id] = tmp.snapshot();
+      cache[thumbKey(c)] = thumbs[c.id];
+      paintThumb(c.id);
     }
+    // Keep only current models' entries.
+    const keep = new Set(S.characters.map(thumbKey));
+    for (const k of Object.keys(cache)) if (!keep.has(k)) delete cache[k];
+    try { localStorage.setItem(THUMB_CACHE, JSON.stringify(cache)); } catch { /* quota: just not cached */ }
   } finally {
     tmp.dispose();
     host.remove();
@@ -1033,7 +1059,7 @@ const pages = {
       <div class="grid-pets">
         ${S.characters.map(c => `
           <article class="pet-card ${S.settings.activePet === c.id ? 'active' : ''}" data-action="pick-pet" data-arg="${c.id}">
-            <div class="pet-thumb">${thumbs[c.id] ? `<img src="${thumbs[c.id]}" alt="">` : '<div class="thumb-loading">…</div>'}</div>
+            <div class="pet-thumb" data-thumb="${c.id}">${thumbs[c.id] ? `<img src="${thumbs[c.id]}" alt="">` : '<div class="thumb-loading">…</div>'}</div>
             <div class="pet-meta">
               <h3>${esc(c.name)}</h3>
               ${S.settings.activePet === c.id ? '<span class="btn btn-done small">✓ Đang dùng</span>' : '<span class="btn btn-primary small">Chọn</span>'}
@@ -1896,12 +1922,19 @@ function parseHash() {
   return [r, s];
 }
 
+let renderedView = '';
 function render() {
   [route, sub] = parseHash();
+  // Re-rendering the SAME page after a setting change must feel like an in-place update: no
+  // entrance animation, no jump back to the top. Only navigating to another page animates.
+  const view = `${route}/${sub || ''}`;
+  const sameView = view === renderedView;
+  renderedView = view;
+  const keepScroll = sameView ? main.scrollTop : 0;
   nav.querySelectorAll('a').forEach(a => a.classList.toggle('active', a.dataset.route === route));
   stageHome.appendChild(previewEl);
-  main.innerHTML = `<div class="page page-${route}">${pages[route]()}</div>`;
-  main.scrollTop = 0;
+  main.innerHTML = `<div class="page page-${route}${sameView ? ' no-enter' : ''}">${pages[route]()}</div>`;
+  main.scrollTop = keepScroll;
   syncInputs();
   if (document.getElementById('preview-host')) {
     mountPreview('preview-host');
@@ -2551,7 +2584,7 @@ window.addEventListener('focus', () => {
   renderNav();
   render();
   connectEvents();
-  makeThumbnails().then(() => { if (route === 'pet') render(); }).catch(() => {});
+  makeThumbnails().catch(() => {}); // thumbnails are painted in place as they become ready
   // While waiting for the Accessibility permission, re-check every 4 s and flip to ✓ by itself.
   setInterval(async () => {
     if (S.platform !== 'darwin' || !(route === 'connect' || route === 'home') || !modalEl.hidden) return;

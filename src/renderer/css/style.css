@@ -463,3 +463,19 @@ body.reduced-motion .pet-badge.bump { animation: none; }
    button edge turned into a lost click). Pressed feel = shadow + brightness instead. */
 .card .btn:hover { transform: none; filter: brightness(1.06); }
 .card .btn:active { transform: none; filter: brightness(.94); box-shadow: 0 1px 0 rgba(0,0,0,.18) inset, 0 1px 0 rgba(0,0,0,.08); }
+
+/* The badge follows the pet's head (renderer.placeBadge sets `translate`); `transform` stays free
+   for the bump / hover scale. Fallback position until the first frame. */
+.pet-badge { top: 0; left: 0; right: auto; translate: calc(var(--pet) * 0.62) calc(var(--pet) * 0.06); transform-origin: 15% 85%; }
+
+/* Landing dust (renderer.dustPuff): two soft puffs out of the feet. */
+.dust-puff {
+  position: absolute; left: 50%; bottom: 6%; width: calc(var(--pet) * 0.5); height: calc(var(--pet) * 0.12);
+  margin-left: calc(var(--pet) * -0.25); pointer-events: none; z-index: 0;
+  background:
+    radial-gradient(closest-side, rgba(225, 205, 195, .75), rgba(225, 205, 195, 0)) left center / 45% 100% no-repeat,
+    radial-gradient(closest-side, rgba(225, 205, 195, .75), rgba(225, 205, 195, 0)) right center / 45% 100% no-repeat;
+  transform: scale(calc(var(--s, 1) * .4)); opacity: .9;
+  animation: dust-puff .6s cubic-bezier(.2, .8, .3, 1) forwards;
+}
+@keyframes dust-puff { to { transform: scale(calc(var(--s, 1) * 1.25)) translateY(-6px); opacity: 0; } }

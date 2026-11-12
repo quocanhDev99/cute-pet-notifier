@@ -7,8 +7,12 @@ import { AnimationController } from './animation-controller.js';
 import { resolveSemanticBones, resolveClip, morphWeightsFor } from './semantic-map.js';
 import { EffectsSystem } from './fx.js';
 
+const HEAD_R = 0.58; // procedural head radius (character-builder)
+const _anchor = new THREE.Vector3();
+
 /** Frame rate while the pet only holds a resting mood (no card, no interaction). */
-const MOOD_FPS = 24;
+// 30 divides 60 / 120 Hz refresh evenly: 24 fps gave uneven 33/50 ms frame steps (visible judder).
+const MOOD_FPS = 30;
 
 const EYE_TYPES = ['open', 'arcHappy', 'arcClosed', 'star', 'heart'];
 
@@ -44,6 +48,15 @@ export class PetStage {
     this.pettingScore = 0;
     this.lastPointer = null;
     this.grabVelocity = { x: 0, y: 0 };
+    // Carry physics (screen px for the pointer, scene units for the body).
+    this.drag = {
+      held: false, ptr: null, prev: null, vx: 0, vy: 0, // pointer + smoothed velocity (px/s)
+      ang: 0, angV: 0,       // pendulum swing around the grab point (rad)
+      pin: 0,                // 1 = hanging from the grab point, 0 = standing on the feet
+      h: 0, hv: 0,           // height above the floor + vertical speed
+      sy: 1, syV: 0,         // vertical squash/stretch spring
+      dizzy: 0               // post-shake wobble amplitude
+    };
     this.disposed = false;
     this.faceShown = {};
     this.frameTimes = [];
@@ -113,6 +126,9 @@ export class PetStage {
 
     this.pivot = new THREE.Group();
     this.pivot.add(this.shadow);
+    // The pet itself lives in `body`: it swings / lifts / falls while the shadow stays on the floor.
+    this.body = new THREE.Group();
+    this.pivot.add(this.body);
     this.scene.add(this.pivot);
   }
 
@@ -158,11 +174,11 @@ export class PetStage {
 
   clearCharacter() {
     if (this.rig) {
-      this.pivot.remove(this.rig.root);
+      this.body.remove(this.rig.root);
       if (this.fx) this.fx.dispose();
       disposeObject(this.rig.root);
     }
-    if (this.gltfScene) { this.pivot.remove(this.gltfScene); disposeObject(this.gltfScene); }
+    if (this.gltfScene) { this.body.remove(this.gltfScene); disposeObject(this.gltfScene); }
     if (this.mixer) this.mixer.stopAllAction();
     this.rig = null; this.fx = null; this.gltfScene = null; this.mixer = null; this.gltf = null;
     this.faceShown = {};
@@ -170,7 +186,7 @@ export class PetStage {
 
   useProcedural(id) {
     this.rig = buildCharacter(getSpecies(id));
-    this.pivot.add(this.rig.root);
+    this.body.add(this.rig.root);
     this.fx = new EffectsSystem(this.rig);
     this.source = 'procedural';
   }
@@ -197,7 +213,7 @@ export class PetStage {
     });
     // Keep the procedural rig for FX anchors, hide its meshes.
     this.rig.root.traverse(o => { if (o.isMesh) o.visible = false; });
-    this.pivot.add(sceneObj);
+    this.body.add(sceneObj);
     this.gltfScene = sceneObj;
     const base = {};
     for (const [k, b] of Object.entries(bones)) if (b) base[k] = b.quaternion.clone();
@@ -270,8 +286,103 @@ export class PetStage {
 
   setGrabbed(isGrabbed, velocity) {
     if (velocity) this.grabVelocity = velocity;
+    const d = this.drag;
+    if (isGrabbed && !d.held) {
+      d.sy = 0.84; d.syV = 0; // anticipation: a quick squash, then the spring pops it up
+      d.ptr = d.prev = null; d.vx = d.vy = 0;
+    }
+    if (!isGrabbed && d.held) d.hv = Math.max(d.hv, 0.4); // let go: a tiny upward toss, then gravity
+    d.held = !!isGrabbed;
     this.anim.setGrabbed(isGrabbed);
     this.wake(isGrabbed ? 1200 : 1600);
+  }
+
+  /** Pointer (or thrown dock) position in screen px while carried: drives the swing. */
+  dragPointer(x, y) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    this.drag.ptr = { x, y };
+    this.wake(400);
+  }
+
+  /** Shaken hard while held: wobble a while after landing. */
+  setDizzy() { this.drag.dizzy = 1; this.wake(1800); }
+
+  /**
+   * Carry physics — springs, not keyframes, so every drag looks different:
+   *  • the body hangs from the grab point (top of the head) and swings like a damped pendulum,
+   *    leaning back against the drag direction and overshooting when the hand stops;
+   *  • moving up stretches it, moving down squashes it; picking up starts with a squash;
+   *  • it is lifted off the floor (the shadow stays down there), and on release it falls with
+   *    gravity, squashes on impact and bounces once — 'landed' reports the impact.
+   */
+  stepDrag(dt) {
+    const d = this.drag;
+    if (dt <= 0) return;
+    const reduced = this.anim.reducedMotion;
+    // Pointer velocity from per-frame displacement: zero as soon as the pointer stops.
+    let vx = 0, vy = 0;
+    if (d.ptr && d.prev) { vx = (d.ptr.x - d.prev.x) / dt; vy = (d.ptr.y - d.prev.y) / dt; }
+    if (d.ptr) d.prev = { ...d.ptr };
+    const k = 1 - Math.exp(-dt * 14);
+    d.vx += (Math.max(-4000, Math.min(4000, vx)) - d.vx) * k;
+    d.vy += (Math.max(-4000, Math.min(4000, vy)) - d.vy) * k;
+
+    // Pendulum: target lean from the (air-dragged) velocity, underdamped spring toward it.
+    const target = reduced ? 0 : Math.max(-0.42, Math.min(0.42, -d.vx * 0.0003));
+    const K = 55, C = 7.5;
+    d.angV += (K * (target - d.ang) - C * d.angV) * dt;
+    d.ang += d.angV * dt;
+    if (reduced) { d.ang = 0; d.angV = 0; }
+
+    // Hanging point blends in / out (smooth hand-over between head pivot and feet pivot).
+    d.pin += ((d.held ? 1 : 0) - d.pin) * (1 - Math.exp(-dt * 8));
+
+    // Height: lifted while held; free fall + one bounce after release.
+    if (d.held) {
+      d.h += (0.18 - d.h) * (1 - Math.exp(-dt * 10)); // on top of the grab pose's own lift
+      d.hv = 0;
+    } else if (d.h > 0 || d.hv > 0) {
+      d.hv -= 11 * dt;
+      d.h += d.hv * dt;
+      if (d.h <= 0) {
+        const impact = -d.hv;
+        d.h = 0;
+        if (impact > 0.9 && !reduced) {
+          d.hv = impact * 0.28;                      // one small bounce
+          d.sy = 1 - Math.min(0.28, impact * 0.11);  // squash on impact
+          d.syV = 0;
+        } else d.hv = 0;
+        if (impact > 0.4) this.onEvent('landed', { impact });
+      }
+    }
+
+    // Squash & stretch spring (vertical speed while carried stretches / squashes).
+    const syTarget = 1 + (reduced ? 0 : Math.max(-0.07, Math.min(0.12, -d.vy * 0.00007)) * d.pin);
+    d.syV += (190 * (syTarget - d.sy) - 13 * d.syV) * dt;
+    d.sy += d.syV * dt;
+
+    d.dizzy = Math.max(0, d.dizzy - dt * 0.7);
+  }
+
+  /** Apply the carry physics to the body group (rotation about the grab point when held). */
+  applyDrag(t) {
+    const d = this.drag, b = this.body;
+    const wobble = d.dizzy > 0 ? Math.sin(t * 13) * 0.22 * d.dizzy * d.dizzy : 0;
+    const ang = d.ang * Math.max(d.pin, 0.35) + wobble;
+    const py = 1.9 * d.pin; // grab point: top of the head while held, the feet when standing
+    b.rotation.z = ang;
+    b.position.x = py * Math.sin(ang);
+    b.position.y = d.h + py * (1 - Math.cos(ang));
+    const sy = Math.max(0.6, d.sy);
+    b.scale.set(1 / Math.sqrt(sy), sy, 1 / Math.sqrt(sy));
+  }
+
+  /** Carry physics at rest (nothing left to animate). */
+  dragSettled() {
+    const d = this.drag;
+    return !d.held && d.h <= 0 && d.hv === 0 && Math.abs(d.ang) < 0.003 && Math.abs(d.angV) < 0.02 &&
+      Math.abs(d.sy - 1) < 0.003 && Math.abs(d.syV) < 0.02 && d.pin < 0.01 && d.dizzy <= 0 &&
+      Math.abs(d.vx) < 1 && Math.abs(d.vy) < 1;
   }
 
   play(action) {
@@ -288,6 +399,27 @@ export class PetStage {
   /** Hidden / Gaming presence: stop rendering entirely (0% GPU/CPU) until resume(). */
   pause() { this.paused = true; this.running = false; }
   resume() { if (!this.paused) return; this.paused = false; this.lastFrame = performance.now(); this.wake(1200); }
+
+  /**
+   * Screen point just above-right of the pet's head (canvas CSS px), for UI that must sit NEXT to
+   * the head (unread badge) instead of on it. Follows hops, stretches and the grab camera.
+   * The procedural rig keeps animating under a GLB model (FX anchors), so it works for both.
+   */
+  headAnchor() {
+    const head = this.rig && this.rig.head;
+    if (!head) return null;
+    head.updateWorldMatrix(true, false);
+    _anchor.set(HEAD_R * 0.62, HEAD_R * 0.78, 0).applyMatrix4(head.matrixWorld).project(this.camera);
+    const el = this.renderer.domElement;
+    const w = el.clientWidth, h = el.clientHeight;
+    if (!w || !h || !Number.isFinite(_anchor.x)) return null;
+    return { x: (_anchor.x + 1) / 2 * w, y: (1 - _anchor.y) / 2 * h };
+  }
+
+  /** Eased motions (look-at, evade) have arrived at their targets. */
+  motionSettled() {
+    return this.look.distanceToSquared(this.lookTarget) < 1e-4 && this.evade.distanceToSquared(this.evadeTarget) < 1e-5 && this.dragSettled();
+  }
 
   wake(ms = 1000) {
     this.awakeUntil = Math.max(this.awakeUntil, performance.now() + ms);
@@ -450,13 +582,16 @@ export class PetStage {
     // A resting mood (angry puffs, sparkles, zzz…) keeps animating, but at a gentle frame rate so a
     // pet that just sits there doesn't cost a full-speed render loop. Skipped frames don't advance
     // lastFrame, so the animation keeps real-time speed.
-    if (this.holds.size === 1 && this.holds.has('mood') && now <= this.lastFrame + 1000 / MOOD_FPS && now > this.awakeUntil && !this.anim.busy) {
+    // Half a refresh of tolerance so frames land on every 2nd vsync instead of drifting.
+    if (this.holds.size === 1 && this.holds.has('mood') && now - this.lastFrame < 1000 / MOOD_FPS - 4 && now > this.awakeUntil && !this.anim.busy && this.motionSettled()) {
       requestAnimationFrame(this.loop);
       return;
     }
     const rawDt = (now - this.lastFrame) / 1000;
     this.lastFrame = now;
-    const settled = !this.holds.size && now > this.awakeUntil && !this.anim.busy && !(this.fx && (this.fx.busy || this.fx.active.size > 0));
+    // Never stop mid-motion: a head turn / evade still easing toward its target used to freeze
+    // half-way when the wake window ran out, then jump on the next wake.
+    const settled = !this.holds.size && now > this.awakeUntil && !this.anim.busy && !(this.fx && (this.fx.busy || this.fx.active.size > 0)) && this.motionSettled();
     if (settled) { this.running = false; return; }
     try {
       const t0 = performance.now();
@@ -561,9 +696,10 @@ export class PetStage {
     const peek = this.holdMode === 'peeker';
     this.pivot.position.y += ((peek ? -0.52 : 0) - this.pivot.position.y) * (1 - Math.exp(-dt * 6));
 
-    // Grab: sway with drag velocity
-    const gv = this.grabVelocity || { x: 0, y: 0 };
-    const swayFromDrag = Math.max(-0.5, Math.min(0.5, (gv.x || 0) * -0.0006)) * grab;
+    // Grab: the swing itself is the body's pendulum (stepDrag); the spine only adds a little lag.
+    this.stepDrag(dt);
+    this.applyDrag(t);
+    const swayFromDrag = Math.max(-0.25, Math.min(0.25, this.drag.angV * -0.03)) * grab;
 
     rig.root.position.set(this.evade.x * (1 - grab), lift, this.evade.z * (1 - grab));
     this.pivot.rotation.y = p.bodyYaw + Math.sin(t * p.swayFreq) * p.sway * 0.6;
@@ -677,8 +813,9 @@ export class PetStage {
     if (rig.envelope.visible) rig.envelope.rotation.z = Math.sin(t * 3) * 0.06;
 
     // Shadow shrinks when lifted
-    const sh = Math.max(0.3, 1 - Math.max(0, rig.root.position.y) * 1.4);
+    const sh = Math.max(0.3, 1 - Math.max(0, rig.root.position.y + this.body.position.y) * 1.4);
     this.shadow.scale.set(sh, sh, 1);
+    this.shadow.position.x = this.body.position.x; // under the feet, but on the floor
     this.shadow.material.opacity = 0.9 * sh;
     this.shadow.visible = !peek;
 
@@ -692,7 +829,7 @@ export class PetStage {
     }
 
     if (this.gltfScene) this.updateGltf(dt, p, grab);
-    if (this.opts.onFrame) this.opts.onFrame({ t, breath, lift });
+    if (this.opts.onFrame) this.opts.onFrame({ t, breath, lift, head: this.headAnchor() });
   }
 
   updateGltf(dt, p, grab) {

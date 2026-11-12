@@ -1026,3 +1026,6 @@ html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after 
 
 @media (max-width: 1100px) { .status-row { grid-template-columns: repeat(2, 1fr); } }
 .dnd-toggle { white-space: nowrap; font-size: 12.5px; padding: 10px 12px; }
+
+/* Same page re-rendered after a setting change: update in place, no entrance animation. */
+.page.no-enter { animation: none !important; }
