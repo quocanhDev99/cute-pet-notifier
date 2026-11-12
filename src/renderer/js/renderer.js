@@ -264,8 +264,10 @@ function placeDock() {
     if (isDraggingPet) return;
     // Keep the PET at the saved point: in Peeker mode it is centred under a card wider than itself,
     // so anchoring the dock edge alone would slide the pet sideways.
-    const pr = petSlot.getBoundingClientRect();
-    const shift = Math.round(pr.left - x);
+    // Layout position, NOT getBoundingClientRect(): the pet may be mid-animation (Courier runs in
+    // from off-screen with a transform) and that offset must never be baked into the dock position.
+    const petLeft = dock.getBoundingClientRect().left + petSlot.offsetLeft;
+    const shift = Math.round(petLeft - x);
     if (Math.abs(shift) > 1) {
       if (dock.style.right !== 'auto') dock.style.right = `${parseFloat(dock.style.right) + shift}px`;
       else dock.style.left = `${parseFloat(dock.style.left) - shift}px`;
