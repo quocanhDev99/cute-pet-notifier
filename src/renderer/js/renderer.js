@@ -67,7 +67,6 @@ const I18N = {
     ],
     landed: ['Phù, được tiếp đất rồi! 😌', 'Chóng mặt quá sen ơi!', 'Lần sau đừng bế bổng nữa nha!'],
     dizzy: ['Oaaa… quay mòng mòng 😵‍💫', 'Đừng lắc nữa, chóng mặt quá sen ơi!', 'Thế giới đang xoay vòng vòng…'],
-    thrown: ['Ui daaa! Ném tui hả?! 😾', 'Wheee~ bay nè!', 'Hạ cánh an toàn… chắc vậy 😅'],
     kickQuip: 'Hứ! Biến đi! 🦶',
     reject: ['😤 Tránh xa ra, đừng có vuốt ve tui!'],
     kickTitle: 'Thú cưng sẽ đá văng thông báo này',
@@ -97,7 +96,6 @@ const I18N = {
     ],
     landed: ['Phew, back on solid ground! 😌', "I'm so dizzy!", "Don't pick me up like that!"],
     dizzy: ['Whoaaa… everything is spinning 😵‍💫', 'Stop shaking me, I’m so dizzy!', 'The world is going round and round…'],
-    thrown: ['Ouch! Did you just throw me?! 😾', 'Wheee~ I’m flying!', 'Landed safely… I think 😅'],
     kickQuip: 'Hmph! Begone! 🦶',
     reject: ["😤 Stay back, don't touch me!", '😾 Not now, human!', '🙄 Hands off!'],
     kickTitle: 'Your pet will kick this notification away',
@@ -263,7 +261,7 @@ function placeDock() {
   if (side() === 'left') { dock.style.left = 'auto'; dock.style.right = `${Math.max(0, window.innerWidth - (x + pw))}px`; }
   else { dock.style.right = 'auto'; dock.style.left = `${x}px`; }
   requestAnimationFrame(() => {
-    if (isDraggingPet || isThrowing) return;
+    if (isDraggingPet) return;
     // Keep the PET at the saved point: in Peeker mode it is centred under a card wider than itself,
     // so anchoring the dock edge alone would slide the pet sideways.
     const pr = petSlot.getBoundingClientRect();
@@ -356,7 +354,7 @@ function applyConfig(payload) {
   dock.style.setProperty('--pet-scale', a.petScale);
   dock.style.setProperty('--card-scale', Number(n.cardScale) || 1);
 
-  if (!isDraggingPet && !isThrowing) placeDock();
+  if (!isDraggingPet) placeDock();
 
   const prevMode = eff.mode && eff.mode.id;
   eff = payload.effective || eff;
@@ -757,7 +755,7 @@ function startBreak(minutes) {
 // time-based throttle (no compositor frame requested), and only hit-test near the dock.
 let lastMoveAt = 0;
 document.addEventListener('mousemove', (e) => {
-  if (dock.classList.contains('hidden') || isDraggingPet || isThrowing) return;
+  if (dock.classList.contains('hidden') || isDraggingPet) return;
   const now = performance.now();
   if (now - lastMoveAt < 33) return;
   lastMoveAt = now;
@@ -807,11 +805,8 @@ let lastDragTime = 0;
 let dragSayInterval = null;
 let petOffsetX = 0;
 let petOffsetY = 0;
-let dragSamples = [];   // recent pointer samples → release velocity (throw)
 let shakeTurns = [];    // times the drag direction flipped at speed → "shaken" → dizzy
 let lastDirX = 0;
-let isThrowing = false;
-let throwRaf = 0;
 
 /** Move the dock so the pet stays fully on screen (and leaves room for the bubble at the top). */
 function moveDock(left, top) {
@@ -844,36 +839,6 @@ function dustPuff(strength) {
   setTimeout(() => el.remove(), 700);
 }
 
-/**
- * Released while moving fast → the pet keeps flying with its momentum, slows down with friction
- * and bounces off the screen edges. Grabbing it again catches it mid-air.
- */
-function throwPet(vx, vy) {
-  isThrowing = true;
-  const r = dock.getBoundingClientRect();
-  let x = r.left, y = r.top, last = performance.now();
-  const step = (now) => {
-    const dt = Math.min(0.05, (now - last) / 1000);
-    last = now;
-    const f = Math.exp(-dt * 4.2); // friction
-    vx *= f; vy *= f;
-    const m = moveDock(x + vx * dt, y + vy * dt);
-    x = m.l; y = m.t;
-    if (m.hitX) { vx = -vx * 0.45; sound.pop(); }
-    if (m.hitY) { vy = -vy * 0.45; sound.pop(); }
-    if (stage) { const pr = petSlot.getBoundingClientRect(); stage.dragPointer(pr.left + pr.width / 2, pr.top); }
-    if (Math.hypot(vx, vy) < 40) { stopThrow(true); return; }
-    throwRaf = requestAnimationFrame(step);
-  };
-  throwRaf = requestAnimationFrame(step);
-}
-
-function stopThrow(save) {
-  if (!isThrowing) return;
-  cancelAnimationFrame(throwRaf);
-  isThrowing = false;
-  if (save) savePetPosition();
-}
 
 /* ------------------------------------------------------------------ Unread badge */
 let badgeCount = 0;
@@ -901,7 +866,6 @@ document.addEventListener('pointerdown', (e) => {
 
 /** Start a press that becomes a drag of the whole dock (pet + held card/video) after 6 px. */
 function beginPetPress(e) {
-  stopThrow(false); // caught mid-air: this drag will save the position
   // Capture on the page root (not on whatever element is under the pet, e.g. the card) so the
   // release can't get lost and can't turn into a click on the card.
   try { document.documentElement.setPointerCapture(e.pointerId); } catch { /* ignore */ }
@@ -912,7 +876,6 @@ function beginPetPress(e) {
   lastDragX = e.clientX;
   lastDragY = e.clientY;
   lastDragTime = performance.now();
-  dragSamples = [{ t: lastDragTime, x: e.clientX, y: e.clientY }];
   shakeTurns = [];
   lastDirX = 0;
 
@@ -954,9 +917,7 @@ document.addEventListener('pointermove', (e) => {
     lastDragY = e.clientY;
     lastDragTime = now;
 
-    // Release velocity (throw) from the last ~90 ms; direction flips at speed = shaking.
-    dragSamples.push({ t: now, x: e.clientX, y: e.clientY });
-    while (dragSamples.length > 2 && now - dragSamples[0].t > 90) dragSamples.shift();
+    // Direction flips at speed = shaking (→ dizzy after landing).
     const dir = Math.abs(vx) > 650 ? Math.sign(vx) : 0;
     if (dir && lastDirX && dir !== lastDirX) shakeTurns.push(now);
     if (dir) lastDirX = dir;
@@ -978,20 +939,10 @@ function endPetPress() {
     document.body.classList.remove('is-dragging');
     if (stage) { stage.setGrabbed(false); stage.suppressClick = true; }
     const shaken = shakeTurns.length >= 4;
-    // Speed at release: from the oldest sample still in the ~90 ms window (0 if the hand had stopped).
-    const now = performance.now();
-    const first = dragSamples[0], lastS = dragSamples[dragSamples.length - 1];
-    const span = first && lastS ? (lastS.t - first.t) / 1000 : 0;
-    const fresh = lastS && now - lastS.t < 60;
-    let tvx = span > 0.015 && fresh ? (lastS.x - first.x) / span : 0;
-    let tvy = span > 0.015 && fresh ? (lastS.y - first.y) / span : 0;
-    const speed = Math.hypot(tvx, tvy);
-    if (speed > 2600) { tvx *= 2600 / speed; tvy *= 2600 / speed; }
-    const thrown = speed > 900 && !eff.reducedMotion;
     if (shaken && stage) stage.setDizzy();
-    { const line = randomQuote(shaken ? 'dizzy' : thrown ? 'thrown' : 'landed'); say(line, shaken ? 'angry' : 'happy'); speak(line); }
-    if (thrown) throwPet(tvx, tvy);
-    else savePetPosition();
+    { const line = randomQuote(shaken ? 'dizzy' : 'landed'); say(line, shaken ? 'angry' : 'happy'); speak(line); }
+    // The pet stays exactly where it was let go (it drops to the floor there, in place).
+    savePetPosition();
   }
 }
 document.addEventListener('pointerup', endPetPress);
