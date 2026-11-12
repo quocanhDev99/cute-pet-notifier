@@ -65,7 +65,8 @@ class InboxStore extends EventEmitter {
 
   remove(id) { this.items = this.items.filter(i => i.id !== id); this.persist(); }
   clear() { this.items = []; this.persist(); }
-  unreadCount() { return this.items.filter(i => !i.read).length; }
+  /** Unread items, optionally only those matching `filter(item)`. */
+  unreadCount(filter = null) { return this.items.filter(i => !i.read && (!filter || filter(i))).length; }
   list(n = 100) { return this.items.slice(0, n); }
 
   /** Digest: grouped summary of unread items. */
@@ -102,4 +103,15 @@ class InboxStore extends EventEmitter {
   }
 }
 
-module.exports = { InboxStore };
+/**
+ * What the pet's unread badge counts, following the chat mode:
+ *   all       → every unread message sent to you;
+ *   mentions  → only 1-1 messages and mentions — group chatter the filter set aside
+ *               (reason 'not_mentioned') stays readable in the Inbox but isn't counted.
+ */
+function badgeFilter(settings) {
+  const onlyForMe = !!(settings && settings.chat && settings.chat.mode === 'mentions');
+  return onlyForMe ? (it) => it.reason !== 'not_mentioned' : null;
+}
+
+module.exports = { InboxStore, badgeFilter };

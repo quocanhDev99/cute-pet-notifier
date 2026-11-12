@@ -15,7 +15,7 @@ const { IntegrationsManager } = require('../integrations');
 const { BreakReminder } = require('../core/break-reminder');
 let breaks = null;
 const { NotificationPipeline } = require('../core/notification-pipeline');
-const { InboxStore } = require('../core/inbox-store');
+const { InboxStore, badgeFilter } = require('../core/inbox-store');
 const { ContactDirectory } = require('../core/contact-directory');
 const { ChatSources } = require('../integrations/chat-sources');
 const { MessagingApps } = require('./messaging-apps');
@@ -214,11 +214,14 @@ function sendOverlay(channel, data) {
   if (overlay && !overlay.isDestroyed()) overlay.webContents.send(channel, data);
 }
 
+/** Unread Inbox items the pet's badge counts — follows the chat mode (see badgeFilter). */
+function badgeUnread() { return inbox.unreadCount(badgeFilter(settings.get())); }
+
 /** Unread counter on the pet (like an app-icon badge): unread Inbox items + cards still queued. */
 let lastBadge = -1;
 function pushBadge(force = false) {
   if (!inbox || !pipeline) return;
-  const count = inbox.unreadCount() + pipeline.queue.length;
+  const count = badgeUnread() + pipeline.queue.length;
   if (!force && count === lastBadge) return;
   lastBadge = count;
   sendOverlay('pet:badge', { count });
@@ -696,6 +699,7 @@ async function boot() {
   pipeline.on('preempted', (prev) => dismissNativeBanner(prev)); // replaced card: its banner too
 
   settings.on('change', (s) => {
+    pushBadge(); // switching the chat mode changes what the badge counts
     refreshEffectiveState(true);
     fitOverlayToDisplay();
     buildTrayMenu();

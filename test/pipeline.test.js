@@ -209,3 +209,23 @@ test('opening a notification marks that conversation read in the Inbox (unread b
   assert.strictEqual(inbox.markConversationRead('zalo', null), 1, 'no title (privacy masked) → whole app');
   assert.strictEqual(inbox.unreadCount(), 1);
 });
+
+test('pet badge follows the chat mode: "only for me" counts 1-1 + mentions, "all" counts every message', () => {
+  const { InboxStore, badgeFilter } = require('../src/core/inbox-store');
+  const s = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+  s.chat.mode = 'mentions';
+  s.chat.names = ['@Mai'];
+  const inbox = new InboxStore(null, { getSettings: () => s });
+  const p = new NotificationPipeline({ getSettings: () => s, inbox });
+  // While mentions mode is on, these group messages are set aside into the Inbox.
+  for (let i = 0; i < 3; i++) assert.strictEqual(p.ingest({ app: 'zalo', title: 'Nhóm Dự Án', message: `Minh: tin ${i}`, sourceEventId: `g${i}` }).reason, 'not_mentioned');
+  // Messages for me that reached the Inbox for another reason still count (e.g. a card cut short).
+  inbox.add({ id: 'dm', app: 'zalo', title: 'Lan', message: 'hi', reason: 'replaced' });
+  inbox.add({ id: 'mention', app: 'zalo', title: 'Nhóm Dự Án', message: 'Minh: @Mai xem giúp', reason: 'presence_hidden' });
+
+  assert.strictEqual(inbox.unreadCount(), 5, 'the Inbox keeps everything');
+  assert.strictEqual(inbox.unreadCount(badgeFilter(s)), 2, 'mentions mode: only 1-1 + mentions are counted');
+  s.chat.mode = 'all';
+  assert.strictEqual(badgeFilter(s), null);
+  assert.strictEqual(inbox.unreadCount(badgeFilter(s)), 5, 'all mode: every message sent to me is counted');
+});
