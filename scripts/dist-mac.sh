@@ -2,6 +2,8 @@
 # Build → sign with the stable local identity → DMG (arm64 + x64).
 set -eu
 cd "$(dirname "$0")/.."
+# No installer from a broken tree: every test (incl. the Electron overlay layout test) must pass.
+npm test
 sh scripts/build-native.sh
 npm run build
 npx electron-builder --mac dir --arm64 --x64

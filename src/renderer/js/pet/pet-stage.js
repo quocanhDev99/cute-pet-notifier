@@ -7,8 +7,8 @@ import { AnimationController } from './animation-controller.js';
 import { resolveSemanticBones, resolveClip, morphWeightsFor } from './semantic-map.js';
 import { EffectsSystem } from './fx.js';
 
-const HEAD_R = 0.58; // procedural head radius (character-builder)
-const _anchor = new THREE.Vector3();
+const _box = new THREE.Box3();
+const _corner = new THREE.Vector3();
 
 /** Frame rate while the pet only holds a resting mood (no card, no interaction). */
 // 30 divides 60 / 120 Hz refresh evenly: 24 fps gave uneven 33/50 ms frame steps (visible judder).
@@ -401,20 +401,31 @@ export class PetStage {
   resume() { if (!this.paused) return; this.paused = false; this.lastFrame = performance.now(); this.wake(1200); }
 
   /**
-   * Screen point just above-right of the pet's head (canvas CSS px), for UI that must sit NEXT to
-   * the head (unread badge) instead of on it. Follows hops, stretches and the grab camera.
-   * The procedural rig keeps animating under a GLB model (FX anchors), so it works for both.
+   * Screen rectangle (canvas CSS px) of an object as currently posed — the REAL drawn size of the pet,
+   * which differs per pet / GLB model / size and is much narrower than the canvas.
    */
-  headAnchor() {
-    const head = this.rig && this.rig.head;
-    if (!head) return null;
-    head.updateWorldMatrix(true, false);
-    _anchor.set(HEAD_R * 0.62, HEAD_R * 0.78, 0).applyMatrix4(head.matrixWorld).project(this.camera);
+  screenBox(obj) {
+    if (!obj) return null;
+    obj.updateWorldMatrix(true, true);
+    _box.setFromObject(obj);
+    if (_box.isEmpty()) return null;
     const el = this.renderer.domElement;
     const w = el.clientWidth, h = el.clientHeight;
-    if (!w || !h || !Number.isFinite(_anchor.x)) return null;
-    return { x: (_anchor.x + 1) / 2 * w, y: (1 - _anchor.y) / 2 * h };
+    if (!w || !h) return null;
+    let l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
+    for (let i = 0; i < 8; i++) {
+      _corner.set(i & 1 ? _box.max.x : _box.min.x, i & 2 ? _box.max.y : _box.min.y, i & 4 ? _box.max.z : _box.min.z).project(this.camera);
+      const x = (_corner.x + 1) / 2 * w, y = (1 - _corner.y) / 2 * h;
+      l = Math.min(l, x); r = Math.max(r, x); t = Math.min(t, y); b = Math.max(b, y);
+    }
+    return Number.isFinite(l + t + r + b) ? { l, t, r, b } : null;
   }
+
+  /** The whole pet's drawn box (GLB model when loaded, else the procedural rig). */
+  bodyBox() { return this.screenBox(this.gltfScene || (this.rig && this.rig.root)); }
+
+  /** The head's drawn box, ears included (procedural rig; it keeps animating under a GLB). */
+  headBox() { return this.screenBox(this.rig && this.rig.head); }
 
   /** Eased motions (look-at, evade) have arrived at their targets. */
   motionSettled() {
@@ -519,7 +530,13 @@ export class PetStage {
     // pass through to the card elements directly, never intercepted by the pet's body/double-tap.
     this.listen(target, 'click', (e) => {
       if (ignore(e) || (e.target && e.target.closest && (e.target.closest('.card') || e.target.closest('.card-slot')))) return;
-      if (this.suppressClick) { this.suppressClick = false; if (routed && hitTest(e).over) { e.stopPropagation(); e.preventDefault(); } return; }
+      // The click that ends a drag is not a tap. Time-limited: when no click follows the drag (released
+      // outside the window…) the flag must not swallow the user's NEXT real tap.
+      if (this.suppressClick) {
+        const at = this.suppressClick;
+        this.suppressClick = 0;
+        if (at === true || performance.now() - at < 600) { if (routed && hitTest(e).over) { e.stopPropagation(); e.preventDefault(); } return; }
+      }
       const hit = hitTest(e);
       if (!hit.over) return;
       e.stopPropagation(); if (routed) e.preventDefault();
@@ -829,7 +846,7 @@ export class PetStage {
     }
 
     if (this.gltfScene) this.updateGltf(dt, p, grab);
-    if (this.opts.onFrame) this.opts.onFrame({ t, breath, lift, head: this.headAnchor() });
+    if (this.opts.onFrame) this.opts.onFrame({ t, breath, lift });
   }
 
   updateGltf(dt, p, grab) {

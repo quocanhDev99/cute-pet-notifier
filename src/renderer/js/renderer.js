@@ -374,7 +374,7 @@ function applyConfig(payload) {
       pointerTarget: document,
       ignorePointer: (e) => !!(e.target && e.target.closest && (e.target.closest('.pet-badge') || e.target.closest('.card') || e.target.closest('.card-slot')))
     });
-    window.__cpcDiagnostics = { frameStats: () => stage.frameStats(), transitions: () => stage.anim.lastProfile };
+    window.__cpcDiagnostics = { frameStats: () => stage.frameStats(), transitions: () => stage.anim.lastProfile, bodyBox: () => stage.bodyBox(), headBox: () => stage.headBox() };
   } else if (prevPet !== s.activePet) {
     stage.setSpecies(s.activePet);
   }
@@ -421,20 +421,23 @@ let lastBreathSet = 0;
 /** Keep the unread badge beside the pet's head (it used to be pinned to a fixed corner of the pet's
  *  box and covered the ear / face whenever the head moved: hops, stretch while held, other pets). */
 let badgeXY = null;
-function placeBadge(head) {
-  if (!head || badgeEl.hidden) return;
+function placeBadge() {
+  if (badgeEl.hidden || !stage) return;
+  const hb = stage.headBox();
+  if (!hb) return;
   const sr = stageEl.getBoundingClientRect(), pr = petSlot.getBoundingClientRect();
   const bw = badgeEl.offsetWidth || 26, bh = badgeEl.offsetHeight || 26;
-  // Badge's bottom-left corner at the anchor, kept inside the pet's box.
-  const x = Math.max(0, Math.min(pr.width - bw, sr.left - pr.left + head.x - bw * 0.15));
-  const y = Math.max(0, Math.min(pr.height - bh, sr.top - pr.top + head.y - bh * 0.85));
+  // Centred on the head box's top-right corner: the head is round, so that corner lies clear of it
+  // (ears included) for every pet, model and size. Kept inside the pet's box.
+  const x = Math.max(0, Math.min(pr.width - bw, sr.left - pr.left + hb.r - bw / 2));
+  const y = Math.max(0, Math.min(pr.height - bh, sr.top - pr.top + hb.t - bh / 2));
   if (badgeXY && Math.abs(badgeXY[0] - x) < 0.5 && Math.abs(badgeXY[1] - y) < 0.5) return;
   badgeXY = [x, y];
   badgeEl.style.translate = `${x.toFixed(1)}px ${y.toFixed(1)}px`;
 }
 
-function onStageFrame({ breath, t: frameTime, head }) {
-  placeBadge(head);
+function onStageFrame({ breath, t: frameTime }) {
+  placeBadge();
   // Card "breathes" with the pet in Billboard Hugger mode (cheap: one CSS var per ~2 frames).
   if (!current || current.item.presentationMode !== 'billboard') return;
   if (frameTime - lastBreathSet < 0.03) return;
@@ -851,7 +854,7 @@ function renderBadge() {
   badgeEl.textContent = badgeCount > 99 ? '99+' : String(badgeCount);
   badgeEl.classList.toggle('wide', badgeCount > 9);
   if (on && prev !== badgeEl.textContent) { badgeEl.classList.remove('bump'); void badgeEl.offsetWidth; badgeEl.classList.add('bump'); }
-  if (on && stage) { badgeXY = null; placeBadge(stage.headAnchor()); }
+  if (on && stage) { badgeXY = null; placeBadge(); }
 }
 badgeEl.addEventListener('pointerdown', (e) => e.stopPropagation()); // not a drag of the pet
 badgeEl.addEventListener('click', (e) => { e.stopPropagation(); if (api) api.openControlCenter('inbox'); });
@@ -939,7 +942,7 @@ function endPetPress() {
   if (isDraggingPet) {
     isDraggingPet = false;
     document.body.classList.remove('is-dragging');
-    if (stage) { stage.setGrabbed(false); stage.suppressClick = true; }
+    if (stage) { stage.setGrabbed(false); stage.suppressClick = performance.now(); }
     const shaken = shakeTurns.length >= 4;
     if (shaken && stage) stage.setDizzy();
     { const line = randomQuote(shaken ? 'dizzy' : 'landed'); say(line, shaken ? 'angry' : 'happy'); speak(line); }

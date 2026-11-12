@@ -110,7 +110,8 @@ Danh sách đầy đủ các hạn chế: **[docs/reports/KNOWN_LIMITATIONS.md](
 ```bash
 npm install
 npm start            # build overlay + control center bundle rồi mở Electron
-npm test             # 107 test (Node ≥ 20): engine, pipeline, privacy, chat, người quen, mood, Composio, gateway, adapters…
+npm test             # 119 test (Node ≥ 20): engine, pipeline, privacy, chat, người quen, mood, Composio, gateway, adapters,
+                     # + khung hình 3D thật (test/pet-stage-frame) + overlay thật trong Electron (test/overlay.e2e) — ~1,5 phút
 npm run pack:mac     # app đã ký (arm64) trong dist/mac-arm64
 npm run dist:mac     # DMG arm64 + x64, ký bằng chứng chỉ cục bộ cố định
 # DMG universal (một file cho mọi Mac) — cần Node ≥ 20:
@@ -120,6 +121,12 @@ npx electron-builder --mac dir --universal -c.mac.x64ArchFiles="Contents/Resourc
 npx electron-builder --win nsis --x64   # file .exe cho Windows (build được trên máy Mac)
 npm run gateway      # (tùy chọn) Integration Gateway HTTPS cho webhook Composio/Slack — xem gateway/README.md
 ```
+
+**Chống lỗi tái diễn (bắt buộc trước mọi bản cài):** `npm run dist`, `dist:mac`, `dist:win`, `pack:mac` đều chạy `npm test` trước — **còn một test đỏ là không build được bản cài.** Đừng gọi thẳng `electron-builder` để phát hành.
+- `test/overlay.e2e.test.js` mở overlay thật (renderer + preload) trong cửa sổ Electron ẩn và kiểm: pet nằm đúng chỗ đã lưu với mọi chế độ thẻ (Billboard/Peeker/Courier), hai phía màn hình, size nhỏ/lớn, kể cả khi thẻ mới thay thẻ cũ giữa hoạt ảnh; thẻ sát thân pet; kéo thả (chậm, nhanh, rất nhanh, lắc) lưu đúng điểm thả; badge nằm cạnh đầu chứ không đè lên; bấm nút trên thẻ không mở Control Center còn chạm đôi vào pet thì có; không có lỗi script.
+- `test/pet-stage-frame.test.mjs` chạy khung hình 3D thật cho mọi pet / cảm xúc / hành động / kéo thả — lỗi trong `update()` (pet tàng hình) sẽ làm test đỏ.
+- Mỗi lỗi giao diện mới: **viết thêm một kiểm tra vào harness (`test/fixtures/overlay-harness.js`) tái hiện lỗi trước, thấy nó đỏ, rồi mới sửa.**
+- Muốn xem bằng mắt: `SNAP_DIR=/tmp/snaps npm test` lưu ảnh chụp overlay của từng trường hợp.
 
 **Ký app:** `scripts/sign-mac.sh` ký app và trợ lý `nc-bridge` bằng chứng chỉ tự ký nằm trong `build/signing/` (không đưa lên git). Nhờ đó macOS giữ quyền Trợ năng qua các lần cập nhật. Nếu chưa có chứng chỉ thì app được build nhưng không ký.
 

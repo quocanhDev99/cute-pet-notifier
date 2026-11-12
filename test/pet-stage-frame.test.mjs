@@ -65,8 +65,9 @@ test('PetStage.update runs real frames for every pet, emotion, action and drag s
     s.setGrabbed(false);
     frames(180);
     assert.ok(s.dragSettled(), `${id}: carry physics settles after landing`);
-    const head = s.headAnchor();
-    assert.ok(head && Number.isFinite(head.x) && Number.isFinite(head.y), `${id}: head anchor is a screen point`);
+    const head = s.headBox(), body = s.bodyBox();
+    assert.ok(head && body, `${id}: head and body boxes are measured`);
+    assert.ok(body.l < head.l + 1 && body.r > head.r - 1 && body.r - body.l < 220, `${id}: head inside the body box, body narrower than the canvas`);
     s.body.updateMatrixWorld(true);
     assert.ok([s.body.position.x, s.body.position.y, s.body.rotation.z].every(Number.isFinite), `${id}: body transform is finite`);
   }

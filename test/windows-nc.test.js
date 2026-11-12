@@ -92,10 +92,18 @@ test('Windows "Mở app": remembers the sender AUMID per notification; only safe
 });
 
 test('Windows listener status is honest: "Connected" only after Action Center was really read', () => {
+  const { windowsName } = require('../src/adapters/windows-nc-adapter');
+  // The settings path differs per Windows version: pin the version (the host running the test may be any OS).
+  for (const [release, hint] of [['10.0.22631', /bật "Truy cập thông báo"/], ['10.0.19045', /Cho phép truy cập thông báo trên thiết bị này/]]) {
+    const w = new WindowsNotificationAdapter(mockCtx(), 'win32');
+    w.win = windowsName(release);
+    w.handleEvent({ type: 'status', status: 'Denied' });
+    assert.equal(w.status, STATUS.LIMITED);
+    assert.match(w.detail, hint, `${w.win.name}: tells the user exactly what to switch on`);
+  }
   const a = new WindowsNotificationAdapter(mockCtx(), 'win32');
+  a.win = windowsName('10.0.22631');
   a.handleEvent({ type: 'status', status: 'Denied' });
-  assert.equal(a.status, STATUS.LIMITED);
-  assert.match(a.detail, /Truy cập thông báo/, 'tells the user exactly what to switch on');
   a.handleEvent({ type: 'status', status: 'Allowed' });
   assert.equal(a.status, STATUS.LIMITED, 'permission alone is not enough');
   a.handleEvent({ type: 'ready', initialCount: 0 });
