@@ -790,7 +790,7 @@ export class PetStage {
       llx = -Math.max(0, Math.sin(t * 11)) * 0.55 * p.stomp * I;
       lrx = -Math.max(0, Math.sin(t * 11 + Math.PI)) * 0.55 * p.stomp * I;
     }
-    const dangle = Math.sin(t * 7) * 0.4 + (gv.x || 0) * 0.0004;
+    const dangle = Math.sin(t * 7) * 0.4 + this.drag.vx * 0.0004; // legs trail the drag
     llx = llx * (1 - grab) + dangle * grab;
     lrx = lrx * (1 - grab) - dangle * grab * 0.8;
     if (kick !== null) {

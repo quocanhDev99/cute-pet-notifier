@@ -1,6 +1,6 @@
 {
   "name": "cute-pet-notifier",
-  "version": "3.5.8",
+  "version": "3.5.9",
   "description": "3D desktop pet companion that turns notifications into emotional interactions (macOS & Windows)",
   "main": "src/main/index.js",
   "scripts": {
