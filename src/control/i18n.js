@@ -113,8 +113,8 @@ const EN = {
   '⚙️ Mở Cài đặt Thông báo của Windows': '⚙️ Open Windows Notification Settings',
   '🔐 Mở Cài đặt Quyền riêng tư Thông báo': '🔐 Open Windows Notification Privacy Settings',
   '🔐 Mở Cài đặt Trợ năng (Accessibility - để tự đóng banner gốc)': '🔐 Open Accessibility Settings (to auto-dismiss native banners)',
-  'Webhook nội bộ': 'Local webhook', 'Mọi script, CI, Zapier-local, Shortcuts, n8n… có thể POST tới http://127.0.0.1:3721/notify': 'Any script, CI, Shortcuts, n8n… can POST to http://127.0.0.1:3721/notify',
-  'Webhook secret (tùy chọn)': 'Webhook secret (optional)', 'để trống = không yêu cầu': 'leave empty = not required', 'Lắng nghe 127.0.0.1:3721': 'Listening on 127.0.0.1:3721',
+  'Webhook nội bộ': 'Local webhook',
+  'Webhook secret (tùy chọn)': 'Webhook secret (optional)', 'để trống = không yêu cầu': 'leave empty = not required',
   'Payload JSON: {"title","message","app","url","priority":"critical|important|normal|low","category","sourceEventId","sourceCreatedAt"}. Nếu bật secret, gửi header "X-Pet-Secret". Người gửi chủ động đẩy (push) tới máy này.': 'JSON payload: {"title","message","app","url","priority":"critical|important|normal|low","category","sourceEventId","sourceCreatedAt"}. If a secret is set, send the "X-Pet-Secret" header. The sender pushes to this machine.',
   'macOS Notification Center (thay thế thông báo hệ thống)': 'macOS Notification Center (replace system notifications)',
   'Bắt thông báo của MỌI ứng dụng trên Mac (Zalo, Messenger, Mail, Slack, Lịch…) và để thú cưng mang tới thay cho banner mặc định.': 'Captures notifications from EVERY Mac app (Zalo, Messenger, Mail, Slack, Calendar…) and lets the pet deliver them instead of the default banners.',
@@ -328,6 +328,10 @@ Object.assign(EN, {
 });
 
 const PATTERNS = [
+  // The local server port is not fixed (3721, or a fallback when Windows reserves it).
+  [/^Mọi script, CI, Zapier-local, Shortcuts, n8n… có thể POST tới (\S+)$/, (m) => `Any script, CI, Shortcuts, n8n… can POST to ${m[1]}`],
+  [/^Lắng nghe (127\.0\.0\.1:\d+)$/, (m) => `Listening on ${m[1]}`],
+  [/^Cổng (\d+) bị Windows hoặc ứng dụng khác chặn, nên app đang dùng cổng (\d+)\. Hãy gửi webhook tới địa chỉ bên dưới\.$/, (m) => `Port ${m[1]} is blocked by Windows or another app, so the app is using port ${m[2]}. Send webhooks to the address below.`],
   [/^Khi có thông báo: (.+)$/, (m) => `On notifications: ${tr(m[1])}`],
   [/^Vừa nhận thông báo: (.+)$/, (m) => `Just received: ${tr(m[1])}`],
   [/^Lúc rảnh: (.+)$/, (m) => `When idle: ${tr(m[1])}`],

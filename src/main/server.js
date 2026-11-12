@@ -1,5 +1,6 @@
 /**
- * Local HTTP server on 127.0.0.1:3721
+ * Local HTTP server on 127.0.0.1 — port 3721 by default, or the next candidate that can be bound
+ * (Windows may reserve 3721 for Hyper-V / WSL / Docker → EACCES; another program may hold it).
  *   • POST /notify            — public local webhook (optional X-Pet-Secret)
  *   • GET  /health
  *   • GET  /                  — Desktop Control Center (also loaded by the native window)
@@ -133,16 +134,24 @@ function crossOrigin(req, allowedOrigins) {
 
 /**
  * @param {object} host  Bridge to the app:
- *   apiToken, port, userPetsDir, getState(), updateSettings(patch), resetSettings(),
+ *   apiToken, port | ports (candidates, tried in order; 0 = any free port), userPetsDir, getState(), updateSettings(patch), resetSettings(),
  *   ingest(payload, source) , previewClassify(payload), testNotify(body),
  *   adapters: AdapterHub, getWebhookSecret(), webhookEnabled(),
  *   clearHistory(), clearQueue(), onEvent(fn) → unsubscribe
  */
 function startNotificationServer(host) {
-  const { port, apiToken } = host;
+  const { apiToken } = host;
   if (!apiToken || String(apiToken).length < 16) throw new Error('startNotificationServer: apiToken must be a random string (≥16 chars)');
-  const allowedHosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
-  const allowedOrigins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`]);
+  const candidates = [...new Set((host.ports || [host.port]).map(Number))].filter(p => Number.isInteger(p) && p >= 0 && p <= 65535);
+  if (!candidates.length) throw new Error('startNotificationServer: no valid port');
+  // The real port is only known once bound; everything below reads these live bindings.
+  let port, allowedHosts, allowedOrigins;
+  const usePort = (p) => {
+    port = p;
+    allowedHosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
+    allowedOrigins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`]);
+  };
+  usePort(candidates[0]);
   const sseClients = new Set();
   // Control Center session: a single-use launch ticket (minted in-process) is exchanged for an
   // HttpOnly, SameSite=Strict cookie; only a client holding it receives the page with the token.
@@ -343,13 +352,31 @@ function startNotificationServer(host) {
   });
   server.launchUrl = launchUrl;
 
+  // Try each candidate; only "can't bind here" errors move on to the next one.
+  const tried = []; // [{ port, code }] — the candidates that could not be bound, in order
+  // (One 'listening' handler for all attempts: a listen() callback of a failed attempt would stay
+  // registered and fire again on the attempt that succeeds.)
   return new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(port, '127.0.0.1', () => {
-      server.removeListener('error', reject);
-      console.log(`[Server] Listening on http://127.0.0.1:${port}`);
+    let i = 0;
+    const onError = (err) => {
+      tried.push({ port: candidates[i], code: err.code });
+      if ((err.code === 'EACCES' || err.code === 'EADDRINUSE') && i + 1 < candidates.length) { i += 1; server.listen(candidates[i], '127.0.0.1'); return; }
+      server.removeListener('error', onError);
+      server.removeListener('listening', onListening);
+      err.tried = tried;
+      reject(err);
+    };
+    const onListening = () => {
+      server.removeListener('error', onError);
+      usePort(server.address().port);
+      server.port = port;
+      server.tried = tried;
+      console.log(`[Server] Listening on http://127.0.0.1:${port}${tried.length ? ` (unavailable: ${tried.map(t => `${t.port} ${t.code}`).join(', ')})` : ''}`);
       resolve(server);
-    });
+    };
+    server.on('error', onError);
+    server.once('listening', onListening);
+    server.listen(candidates[0], '127.0.0.1');
   });
 }
 

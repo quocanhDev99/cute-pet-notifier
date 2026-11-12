@@ -26,7 +26,25 @@ const { SAMPLE_NOTIFICATIONS } = require('../shared/sample-notifications');
 const { AdapterHub } = require('../adapters');
 const { startNotificationServer } = require('./server');
 
-const PORT = 3721;
+// The local server prefers 3721 (documented webhook address). Windows can reserve that port for
+// Hyper-V / WSL / Docker (listen → EACCES) and another program may hold it (EADDRINUSE), so the app
+// falls back to other ports, then to any free one, and remembers the port it ended up on so local
+// scripts keep working across restarts. The active port is written to userData/server-port.json.
+const PREFERRED_PORT = 3721;
+const FALLBACK_PORTS = [37210, 43721, 53721];
+let PORT = PREFERRED_PORT;
+const PORT_FILE = () => path.join(app.getPath('userData'), 'server-port.json');
+
+function rememberedPort() {
+  try {
+    const p = Number(JSON.parse(fs.readFileSync(PORT_FILE(), 'utf8')).port);
+    return Number.isInteger(p) && p > 0 && p <= 65535 ? p : null;
+  } catch { return null; }
+}
+
+function rememberPort(port) {
+  try { fs.writeFileSync(PORT_FILE(), JSON.stringify({ port, url: `http://127.0.0.1:${port}`, updatedAt: new Date().toISOString() }, null, 2)); } catch (e) { log(`[server] cannot save port: ${e.message}`); }
+}
 const ROOT = path.join(__dirname, '../..');
 
 let activateReady = false;
@@ -292,7 +310,7 @@ function showServerError() {
 }
 
 function openControlCenter(section) {
-  // Port 3721 taken by another program: never open (and trust) whatever answers there.
+  // No local server (no port could be bound): never open (and trust) whatever answers there.
   if (!httpServer) { showServerError(); return; }
   if (controlWin && !controlWin.isDestroyed()) {
     controlWin.show();
@@ -430,6 +448,7 @@ function getState() {
     version: app.getVersion(),
     platform: process.platform,
     port: PORT,
+    preferredPort: PREFERRED_PORT,
     secureStorage: secrets.available(),
     settings: s,
     presets: PERSONALITY_PRESETS,
@@ -711,7 +730,8 @@ async function boot() {
 
   try {
     httpServer = await startNotificationServer({
-      port: PORT,
+      // Last used port first (scripts already point there), then 3721, fixed fallbacks, any free port.
+      ports: [rememberedPort(), PREFERRED_PORT, ...FALLBACK_PORTS, 0].filter(p => p !== null),
       apiToken,
       userPetsDir: userPetsDir(),
       adapters: hub,
@@ -740,9 +760,16 @@ async function boot() {
       onModelChanged: (id) => { sendOverlay('model:changed', { id }); bus.emit('event', 'characters', characterList()); },
       onEvent: (fn) => bus.on('event', fn)
     });
+    PORT = httpServer.port;
+    rememberPort(PORT);
+    const webhook = hub.get('webhook');
+    if (webhook && webhook.setPort) webhook.setPort(PORT);
+    if (httpServer.tried.length) log(`[server] using port ${PORT}; unavailable: ${httpServer.tried.map(t => `${t.port} (${t.code})`).join(', ')}`);
   } catch (err) {
-    const msg = err.code === 'EADDRINUSE'
-      ? `Cổng ${PORT} đang được ứng dụng khác sử dụng. Hãy tắt ứng dụng đó (hoặc phiên bản cũ của Cute Pet) rồi mở lại.`
+    log(`[server] cannot start: ${err.code || ''} ${err.message}`);
+    const msg = err.code === 'EADDRINUSE' || err.code === 'EACCES'
+      ? L(`Không mở được máy chủ nội bộ (${err.code}): mọi cổng thử đều bị chặn hoặc đang được dùng. Hãy khởi động lại máy rồi mở lại Cute Pet Companion.`,
+        `Could not start the local server (${err.code}): every port tried is blocked or in use. Restart the computer, then open Cute Pet Companion again.`)
       : err.message;
     dialog.showErrorBox('Cute Pet Companion', msg);
     serverError = msg;

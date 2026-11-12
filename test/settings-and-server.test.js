@@ -94,3 +94,24 @@ test('server: host check, token auth, no CORS on api, webhook secret', async () 
     assert.strictEqual((await req(port, { path: '/assets/..%2f..%2fpackage.json' })).status, 404);
   } finally { server.closeAllConnections(); server.close(); }
 });
+
+test('server: falls back to the next port when the preferred one cannot be bound (Windows reserve / in use)', async () => {
+  // Hold a port, as another program (or a Windows reservation) would.
+  const blocker = http.createServer();
+  await new Promise(r => blocker.listen(0, '127.0.0.1', r));
+  const taken = blocker.address().port;
+  const host = { apiToken: TOK, userPetsDir: os.tmpdir(), getState: () => ({ ok: true }), ingest: () => ({ accepted: true, item: { id: 'n', emotion: 'happy', matchedBy: 'default' } }), webhookEnabled: () => true, getWebhookSecret: () => null, onEvent: () => {}, adapters: {} };
+  const server = await startNotificationServer({ ...host, ports: [taken, 0] });
+  try {
+    assert.notStrictEqual(server.port, taken);
+    assert.ok(server.port > 0);
+    assert.deepStrictEqual(server.tried, [{ port: taken, code: 'EADDRINUSE' }]);
+    // Host check and launch links follow the port actually bound.
+    assert.strictEqual((await req(server.port, { path: '/health' })).status, 200);
+    assert.strictEqual((await req(server.port, { path: '/health', headers: { Host: `127.0.0.1:${taken}` } })).status, 421);
+    assert.ok(server.launchUrl().startsWith(`http://127.0.0.1:${server.port}/?launch=`));
+  } finally { server.close(); }
+  // Nothing left to try → the bind error is reported, with what was tried.
+  await assert.rejects(startNotificationServer({ ...host, ports: [taken] }), (e) => e.code === 'EADDRINUSE' && e.tried.length === 1);
+  blocker.close();
+});

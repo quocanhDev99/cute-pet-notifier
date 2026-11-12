@@ -1884,7 +1884,8 @@ function adapterCard(a) {
     return '';
   }).join('');
   const on = isOn(a);
-  const webhookExtra = a.id === 'webhook' ? `
+  const webhookExtra = a.id === 'webhook' ? `${S.preferredPort && S.port !== S.preferredPort ? `
+    <p class="muted">Cổng ${S.preferredPort} bị Windows hoặc ứng dụng khác chặn, nên app đang dùng cổng ${S.port}. Hãy gửi webhook tới địa chỉ bên dưới.</p>` : ''}
     <div class="code-block"><button class="copy" data-action="copy" data-arg="curl-sample">Copy</button><pre id="curl-sample">curl -X POST http://127.0.0.1:${S.port}/notify \\
   -H "Content-Type: application/json" \\
   -d '{"title":"Build xong!","message":"CI passed ✅","app":"github"}'</pre></div>` : '';

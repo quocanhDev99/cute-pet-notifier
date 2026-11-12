@@ -137,6 +137,8 @@ curl -X POST http://127.0.0.1:3721/notify -H "Content-Type: application/json" \
 ```
 Các trường: `title`, `message`, `app`, `url` (https), `priority` (`critical`/`important`/`normal`/`low`), `mood`, `event`, `presentationMode`, `duration`, `forceEmotion`, `sourceEventId`.
 
+**Cổng nội bộ:** mặc định là `3721`. Nếu Windows giữ chỗ cổng này (Hyper-V / WSL / Docker, lỗi `EACCES`) hoặc một chương trình khác đang dùng, app tự chuyển sang `37210`, `43721`, `53721` hoặc một cổng trống bất kỳ. Cổng đang dùng được ghi vào `server-port.json` trong thư mục dữ liệu của app (Windows: `%APPDATA%\Cute Pet Companion\`) và hiện ở mục **Kết nối ứng dụng → Webhook nội bộ**. Lần sau app thử lại cổng đó trước, nên các script đã cấu hình vẫn dùng được. `npm run test:notify` tự đọc file này.
+
 **Cấu trúc thư mục**
 ```
 src/

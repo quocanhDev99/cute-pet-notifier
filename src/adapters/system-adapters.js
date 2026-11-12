@@ -130,6 +130,12 @@ class WebhookAdapter extends ApplicationAdapter {
     });
     this.port = port;
   }
+  /** The server may end up on a fallback port (3721 reserved / taken) — show the real address. */
+  setPort(port) {
+    this.port = port;
+    this.description = `Mọi script, CI, Zapier-local, Shortcuts, n8n… có thể POST tới http://127.0.0.1:${port}/notify`;
+    if (this.status === STATUS.CONNECTED) this.setStatus(STATUS.CONNECTED, `Lắng nghe 127.0.0.1:${port}`);
+  }
   async connect() { this.setStatus(STATUS.CONNECTED, `Lắng nghe 127.0.0.1:${this.port}`); return true; }
   async disconnect() { this.setStatus(STATUS.DISCONNECTED, 'Đang từ chối POST /notify'); return true; }
   get enabledForIngest() { return this.status === STATUS.CONNECTED; }
