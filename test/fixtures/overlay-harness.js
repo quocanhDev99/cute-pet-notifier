@@ -17,7 +17,7 @@ app.commandLine.appendSwitch('force-device-scale-factor', '1');
 app.whenReady().then(() => run().catch((err) => { out({ error: err.message }); app.exit(1); }));
 
 async function run() {
-  const win = new BrowserWindow({ width: 1440, height: 900, show: false, webPreferences: { preload: path.join(ROOT, 'src/preload/preload.js'), contextIsolation: true, sandbox: true, backgroundThrottling: false } });
+  const win = new BrowserWindow({ width: 1440, height: 900, useContentSize: true, show: false, webPreferences: { preload: path.join(ROOT, 'src/preload/preload.js'), contextIsolation: true, sandbox: true, backgroundThrottling: false } });
   const log = { open: 0, actions: [], errors: [], saved: null };
   for (const ch of ['overlay:hit-rects', 'overlay:dock-rect', 'overlay:interaction', 'window:set-ignore-mouse-events']) ipcMain.on(ch, () => {});
   ipcMain.on('overlay:open-control', () => { log.open++; });

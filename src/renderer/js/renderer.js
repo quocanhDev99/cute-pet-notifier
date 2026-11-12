@@ -641,12 +641,15 @@ function showNotification(item) {
 
 function startTimer() {
   if (!current) return;
-  current.startedAt = performance.now();
-  const bar = current.el.querySelector('.progress i');
+  const cur = current;
+  cur.startedAt = performance.now();
+  const bar = cur.el.querySelector('.progress i');
   bar.style.transition = 'none';
-  bar.style.transform = `scaleX(${current.remaining / current.item.duration})`;
+  bar.style.transform = `scaleX(${cur.remaining / cur.item.duration})`;
   requestAnimationFrame(() => {
-    bar.style.transition = `transform ${current.remaining}ms linear`;
+    // The card may have finished (current = null) before this frame runs.
+    if (current !== cur || !cur.timer) return;
+    bar.style.transition = `transform ${cur.remaining}ms linear`;
     bar.style.transform = 'scaleX(0)';
   });
   current.timer = setTimeout(() => finishCard('timeout'), current.remaining);

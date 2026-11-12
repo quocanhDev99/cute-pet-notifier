@@ -53,8 +53,8 @@ class MessagingApps {
 
   macPath(name) {
     if (name.startsWith('/')) return this.exists(name) ? name : null;
-    for (const dir of ['/Applications', path.join(this.home, 'Applications')]) {
-      const p = path.join(dir, name);
+    for (const dir of ['/Applications', path.posix.join(this.home, 'Applications')]) {
+      const p = path.posix.join(dir, name);
       if (this.exists(p)) return p;
     }
     return null;
