@@ -63,7 +63,10 @@ test('overlay e2e: the card hugs the pet\'s real body (no gap), Peeker card sits
     // animated (arms, breathing): judge the typical (median) overlap over several samples.
     const overlaps = r.bodies.filter(Boolean).map(b => (r.side === 'right' ? r.card.r - b.l : b.r - r.card.l)).sort((a, b) => a - b);
     const overlap = overlaps[Math.floor(overlaps.length / 2)];
-    assert.ok(overlap >= W * 0.02, `${where}: gap between card and pet (overlap ${overlap}px)`);
+    // Billboard: the paw is on the card. Courier (as designed since 3.5.6): the pet stands against the
+    // card, touching it — allow a hairline either way, never a visible gap.
+    const minOverlap = r.mode === 'billboard' ? W * 0.02 : -W * 0.05;
+    assert.ok(overlap >= minOverlap, `${where}: gap between card and pet (overlap ${overlap}px, min ${Math.round(minOverlap)}px)`);
     assert.ok(overlap <= W * 0.35, `${where}: pet covers too much of the card (overlap ${overlap}px)`);
   }
 });
