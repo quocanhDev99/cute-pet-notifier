@@ -22,6 +22,12 @@ const DEFAULT_SETTINGS = Object.freeze({
   appRules: {},
   keywordRules: [],
   notifications: {
+    // Mode A/B (Blueprint V4.1 §0/§2) — source of truth for the adapters' suppress flags:
+    //   replace   = Mode A: the pet replaces the system banners (they are switched off);
+    //   companion = Mode B: system banners stay untouched, the pet keeps them company.
+    // Not to be confused with presentationMode (the card style).
+    bannerMode: 'companion',
+    companionSound: false, // Mode B: the system banner already made a sound — the pet stays quiet
     presentationMode: 'billboard',
     theme: 'pastel',
     size: 'md',
@@ -104,8 +110,10 @@ const DEFAULT_SETTINGS = Object.freeze({
   adapters: {
     webhook: { enabled: true },
     gateway: { enabled: false, url: '' },
-    macos_nc: { enabled: true, suppressNativeBanner: true, skipConnectedSlack: true, skipAppleSystem: true }, // the app's purpose on macOS: replace system banners
-    windows_nc: { enabled: true, suppressNativeToast: true, skipSystemUpdates: false }, // same purpose on Windows: replace system toasts
+    // suppressNativeBanner / suppressNativeToast are DERIVED from notifications.bannerMode (see
+    // syncBannerMode) — kept because the adapters and older settings files use them.
+    macos_nc: { enabled: true, suppressNativeBanner: false, skipConnectedSlack: true, skipAppleSystem: true },
+    windows_nc: { enabled: true, suppressNativeToast: false, skipSystemUpdates: false },
     github: { enabled: false, pollSeconds: 60, participatingOnly: true },
     calendar: { enabled: false, leadMinutes: 5, pollMinutes: 10 },
     slack: { enabled: false, notifyOn: 'mentions' },
@@ -113,7 +121,10 @@ const DEFAULT_SETTINGS = Object.freeze({
   }
 });
 
+const BANNER_MODES = Object.freeze(['replace', 'companion']);
+
 const ENUMS = {
+  'notifications.bannerMode': BANNER_MODES,
   'notifications.presentationMode': PRESENTATION_MODES,
   'notifications.theme': ['pastel', 'minimal', 'dark', 'glass', 'acrylic'],
   'notifications.size': ['sm', 'md', 'lg'],
@@ -311,25 +322,66 @@ function mergeValidated(base, patch, defaults, prefix = '') {
   return out;
 }
 
+/**
+ * Keep notifications.bannerMode and the adapters' legacy suppress flags in agreement.
+ * `patch` tells which side the user just changed: bannerMode wins when it is in the patch; otherwise
+ * a suppress flag that was explicitly set (e.g. the adapter's own toggle) switches the mode.
+ * Returns a new settings object.
+ */
+function syncBannerMode(data, patch = null) {
+  const out = clone(data);
+  const pn = patch && patch.notifications;
+  const pa = patch && patch.adapters;
+  if (!(pn && BANNER_MODES.includes(pn.bannerMode)) && pa) {
+    const flag = [pa.windows_nc && pa.windows_nc.suppressNativeToast, pa.macos_nc && pa.macos_nc.suppressNativeBanner]
+      .find(v => typeof v === 'boolean');
+    if (flag !== undefined) out.notifications.bannerMode = flag ? 'replace' : 'companion';
+  }
+  const replace = out.notifications.bannerMode === 'replace';
+  out.adapters.windows_nc.suppressNativeToast = replace;
+  out.adapters.macos_nc.suppressNativeBanner = replace;
+  return out;
+}
+
+/**
+ * Settings files written before bannerMode existed: keep what the user had. The suppress flag of
+ * THIS platform decides (it used to default to true = Mode A), so an update never silently changes
+ * how notifications appear. Fresh installs get the new default (companion).
+ */
+function legacyBannerMode(raw, platform = process.platform) {
+  const a = (raw && raw.adapters) || {};
+  const flag = platform === 'darwin'
+    ? a.macos_nc && a.macos_nc.suppressNativeBanner
+    : a.windows_nc && a.windows_nc.suppressNativeToast;
+  return flag === false ? 'companion' : 'replace';
+}
+
 class SettingsStore extends EventEmitter {
-  constructor(dir) {
+  constructor(dir, { platform = process.platform } = {}) {
     super();
     this.file = path.join(dir, 'settings.json');
     this.data = clone(DEFAULT_SETTINGS);
     try {
       if (fs.existsSync(this.file)) {
         const raw = JSON.parse(fs.readFileSync(this.file, 'utf8'));
+        const migrate = !(raw && raw.notifications && BANNER_MODES.includes(raw.notifications.bannerMode));
         this.data = mergeValidated(DEFAULT_SETTINGS, raw, DEFAULT_SETTINGS);
+        if (migrate) {
+          this.data.notifications.bannerMode = legacyBannerMode(raw, platform);
+          this.data = syncBannerMode(this.data);
+          this.save();
+        }
       }
     } catch (err) {
       console.warn('[Settings] Could not read settings, using defaults:', err.message);
     }
+    this.data = syncBannerMode(this.data);
   }
 
   get() { return clone(this.data); }
 
   update(patch) {
-    this.data = mergeValidated(this.data, patch, DEFAULT_SETTINGS);
+    this.data = syncBannerMode(mergeValidated(this.data, patch, DEFAULT_SETTINGS), patch);
     this.save();
     this.emit('change', this.get());
     return this.get();
@@ -354,4 +406,4 @@ class SettingsStore extends EventEmitter {
   }
 }
 
-module.exports = { SettingsStore, DEFAULT_SETTINGS, mergeValidated };
+module.exports = { SettingsStore, DEFAULT_SETTINGS, mergeValidated, syncBannerMode, legacyBannerMode, BANNER_MODES };

@@ -1256,7 +1256,16 @@ const notifySubs = {
     const themes = [['pastel', 'Pastel'], ['minimal', 'Trắng tối giản'], ['dark', 'Tối'], ['glass', 'Kính mờ'], ['acrylic', 'Trong suốt']];
     const pos = ['top-left', 'top-center', 'top-right', 'middle-left', null, 'middle-right', 'bottom-left', 'bottom-center', 'bottom-right'];
     const hasCustomPos = S.settings.appearance.customPosition && Number.isFinite(S.settings.appearance.customPosition.x);
+    const companion = S.settings.notifications.bannerMode !== 'replace';
     return `
+      <section class="panel">
+        <h3>🔔 Thông báo của hệ thống</h3>
+        <div class="choice-list two-col">
+          <button class="choice" data-choice="notifications.bannerMode" data-value="companion"><b>🤝 Giữ thông báo hệ thống + thú cưng</b><small>Banner của Windows/macOS vẫn hiện như bình thường; bé mang thẻ tới bên cạnh và tránh chỗ banner hiện. App không đổi cài đặt thông báo của máy.</small></button>
+          <button class="choice" data-choice="notifications.bannerMode" data-value="replace"><b>🐾 Thú cưng thay thông báo</b><small>Tắt banner và âm thanh gốc của từng app (Windows: chỉnh Registry của bạn), chỉ bé báo. Được khôi phục khi tắt chế độ này, khi thoát và khi gỡ app.</small></button>
+        </div>
+        ${companion ? H.toggle('notifications.companionSound', 'Bé cũng kêu khi có banner hệ thống', 'Mặc định tắt vì banner của máy đã phát âm thanh. Tin từ Gmail, Jira, Slack… (không có banner) bé vẫn kêu.') : ''}
+      </section>
       <section class="panel">
         <h3>🪧 Cách bé mang thông báo tới</h3>
         <div class="mode-grid">

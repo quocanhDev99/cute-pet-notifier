@@ -65,13 +65,24 @@ class AdapterHub extends EventEmitter {
     return a.describe();
   }
 
-  async connect(id) {
+  /**
+   * (Re)connect one adapter. Calls for the same adapter run one after another: two overlapping
+   * connects (e.g. the adapter's own toggle + a banner-mode switch) could otherwise both spawn a
+   * listener process and orphan one of them.
+   */
+  connect(id) {
     const a = this.get(id);
-    if (!a) throw new Error('Unknown adapter');
-    await a.disconnect().catch(() => {});
-    const ok = await a.connect();
-    this.ctx.settings.update({ adapters: { [id]: { enabled: ok || a.status === STATUS.LIMITED } } });
-    return a.describe();
+    if (!a) return Promise.reject(new Error('Unknown adapter'));
+    if (!this.connecting) this.connecting = new Map();
+    const run = (this.connecting.get(id) || Promise.resolve()).catch(() => {}).then(async () => {
+      await a.disconnect().catch(() => {});
+      const ok = await a.connect();
+      this.ctx.settings.update({ adapters: { [id]: { enabled: ok || a.status === STATUS.LIMITED } } });
+      return a.describe();
+    });
+    this.connecting.set(id, run);
+    run.finally(() => { if (this.connecting.get(id) === run) this.connecting.delete(id); }).catch(() => {});
+    return run;
   }
 
   async disconnect(id) {

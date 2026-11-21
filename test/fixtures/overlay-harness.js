@@ -31,7 +31,8 @@ async function run() {
   await win.loadFile(path.join(ROOT, 'src/renderer/index.html'));
 
   let s;
-  const sendConfig = () => win.webContents.send('overlay:config', { settings: JSON.parse(JSON.stringify(s)), preset: PERSONALITY_PRESETS[s.personality], effective: { presence: 'full', mode: { id: 'none' }, hidden: false, reducedMotion: false }, assetBase: 'http://127.0.0.1:1/', platform: process.platform });
+  let zone = null; // Mode B: where the OS draws its banners (main sends it as bannerZone)
+  const sendConfig = () => win.webContents.send('overlay:config', { settings: JSON.parse(JSON.stringify(s)), preset: PERSONALITY_PRESETS[s.personality], effective: { presence: 'full', mode: { id: 'none' }, hidden: false, reducedMotion: false }, assetBase: 'http://127.0.0.1:1/', platform: process.platform, bannerZone: zone });
   ipcMain.on('pet:save-position', (_e, p) => { log.saved = p; s.appearance.customPosition = p; sendConfig(); });
   const setup = async (patch) => {
     step = JSON.stringify(patch);
@@ -159,6 +160,24 @@ async function run() {
   await clickAt(null, 2, 120);
   await sleep(600);
   out({ check: 'pet-double-tap', open: log.open });
+
+  // 5. Mode B: a card for an event that ALSO has a system banner moves out of the banner area
+  //    (Windows: bottom-right); other cards don't move; the pet is back in place after it closes.
+  zone = { x: 1440 - 400, y: 900 - 240, w: 400, h: 240, edge: 'bottom' };
+  await setup({ mode: 'billboard' });
+  // A hidden window paints no frames, so CSS transitions never finish here: measure end states.
+  await js(`(() => { const st = document.createElement('style'); st.id = 'no-transition'; st.textContent = '.dock { transition: none !important; }'; document.head.appendChild(st); return 1; })()`);
+  const rest = await measure();
+  await show(card('native-1', { source: 'windows_nc' }));
+  const lifted = await measure();
+  await dismiss();
+  await show(card('cloud-1', { source: 'composio', app: 'gmail' }));
+  const cloud = await measure();
+  await dismiss();
+  await sleep(500);
+  out({ check: 'banner-zone', zone, rest, lifted, cloud, after: await measure() });
+  zone = null;
+  await js(`(() => { document.getElementById('no-transition').remove(); return 1; })()`);
 
   out({ check: 'errors', errors: log.errors });
   app.quit();

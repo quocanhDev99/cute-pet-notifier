@@ -22,6 +22,18 @@ const DELIVERY_MODES = ['realtime_push', 'near_realtime_poll', 'scheduled_sync',
 /** A card on screen gives way to a newer notification after this long (it used to block for the
  *  whole card duration, ~9 s, which made bursts of chat messages feel badly delayed). */
 const MIN_VISIBLE_MS = 2500;
+/** Sources whose events were ALSO shown as a system banner by the OS (in Mode B it stays on screen). */
+const NATIVE_BANNER_SOURCES = new Set(['windows_nc', 'macos_nc']);
+
+/**
+ * Mode B sound policy (Blueprint V4.1 §2): the system banner already played its sound, so the pet
+ * stays quiet for those events unless the user turned `companionSound` on. Events without a system
+ * banner (Composio, Slack, webhooks…) keep the pet's sound — nothing else would announce them.
+ */
+function companionSilenced(item, settings) {
+  const n = (settings && settings.notifications) || {};
+  return n.bannerMode === 'companion' && !n.companionSound && NATIVE_BANNER_SOURCES.has(item.source);
+}
 
 function cleanText(v, max) {
   if (v === undefined || v === null) return '';
@@ -238,7 +250,7 @@ class NotificationPipeline extends EventEmitter {
         : this.attention.decide(item);
     item.priority = decision.priority;
     item.category = decision.category;
-    item.silent = decision.silent;
+    item.silent = decision.silent || companionSilenced(item, s);
     item.motion = decision.motion;
     item.attentionReason = decision.reason;
     delete item.contactPolicy; // names inside: never sent to the overlay / Control Center / Inbox
@@ -420,4 +432,4 @@ class NotificationPipeline extends EventEmitter {
   }
 }
 
-module.exports = { NotificationPipeline, normalize, inQuietHours, cleanText, cleanUrl, DELIVERY_MODES };
+module.exports = { NotificationPipeline, normalize, inQuietHours, cleanText, cleanUrl, DELIVERY_MODES, NATIVE_BANNER_SOURCES, companionSilenced };

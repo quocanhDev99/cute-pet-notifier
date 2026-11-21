@@ -286,6 +286,35 @@ function placeDock() {
   });
 }
 
+/**
+ * Mode B (Blueprint V4.1 §2): the OS shows its own banner for events from the system notification
+ * listeners. While such a card is up, move the dock out of the area where the OS draws banners
+ * (cfg.bannerZone, from main) so pet and card don't cover it; back in place when the card closes.
+ * Uses the layout box (offset*), which the `translate` lift itself doesn't change.
+ */
+const NATIVE_BANNER_SOURCES = new Set(['windows_nc', 'macos_nc']);
+let bannerLift = 0;
+function setBannerLift(px) {
+  px = Math.round(px);
+  if (px === bannerLift) return;
+  bannerLift = px;
+  dock.style.translate = px ? `0 ${px}px` : '';
+  refreshHitRects(900);
+}
+function avoidBannerZone(item) {
+  const z = cfg && cfg.bannerZone;
+  if (!z || !item || !NATIVE_BANNER_SOURCES.has(item.source) || dock.classList.contains('hidden')) { setBannerLift(0); return; }
+  let m = null;
+  try { m = new DOMMatrixReadOnly(getComputedStyle(dock).transform); } catch { /* 'none' */ }
+  const left = dock.offsetLeft + (m ? m.m41 : 0), top = dock.offsetTop + (m ? m.m42 : 0);
+  const w = dock.offsetWidth, h = dock.offsetHeight;
+  const overlaps = left < z.x + z.w && left + w > z.x && top < z.y + z.h && top + h > z.y;
+  if (!overlaps) { setBannerLift(0); return; }
+  const gap = 8;
+  if (z.edge === 'top') setBannerLift(Math.min(z.y + z.h + gap - top, Math.max(0, window.innerHeight - (top + h))));
+  else setBannerLift(Math.max(z.y - gap - (top + h), -top));
+}
+
 /** Nudge the bubble sideways so it never spills past the screen edge (e.g. pet parked next to the
  *  Dock). The tail keeps pointing at the pet. Uses layout width, so the scale animation doesn't matter. */
 function fitBubble() {
@@ -357,6 +386,7 @@ function applyConfig(payload) {
   dock.style.setProperty('--card-scale', Number(n.cardScale) || 1);
 
   if (!isDraggingPet) placeDock();
+  requestAnimationFrame(() => avoidBannerZone(current && current.item)); // bannerMode may have changed
 
   const prevMode = eff.mode && eff.mode.id;
   eff = payload.effective || eff;
@@ -548,6 +578,7 @@ function showNotification(item) {
   cardSlot.innerHTML = '';
   cardSlot.appendChild(el);
   placeDock();
+  requestAnimationFrame(() => { if (current && current.el === el) avoidBannerZone(item); }); // after placeDock's own frame
   stage.hold('card');
   stage.setAnnoying(item.annoying);
   const wantPet = item.pet && item.pet !== cfg.settings.activePet ? item.pet : null;
@@ -695,6 +726,7 @@ function finishCard(how) {
     }
     dock.classList.remove('has-card');
     dock.className = dock.className.replace(/mode-\S+/, 'mode-resident');
+    setBannerLift(0);
     placeDock();
     if (eff.hidden) applyPresence();
     stage.setHold(null);

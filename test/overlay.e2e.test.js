@@ -106,6 +106,16 @@ test('overlay e2e: card buttons never open the Control Center; a double tap on t
   assert.strictEqual(tap.open, 1, 'a real double tap on the pet opens the Control Center');
 });
 
+test('overlay e2e: Mode B — a card for a system-banner event keeps clear of the banner area', opts, () => {
+  const [z] = of('banner-zone');
+  const inZone = (r) => r && r.l < z.zone.x + z.zone.w && r.r > z.zone.x && r.t < z.zone.y + z.zone.h && r.b > z.zone.y;
+  assert.ok(inZone(z.rest.pet), 'precondition: the resting pet sits in the banner area (bottom-right)');
+  assert.ok(!inZone(z.lifted.pet) && !inZone(z.lifted.card), `pet/card still cover the banner area: ${JSON.stringify(z.lifted)}`);
+  assert.ok(z.lifted.pet.t >= 0, 'lifted dock stays on screen');
+  assert.ok(near(z.cloud.pet.b, z.rest.pet.b, 2), 'a card without a system banner does not move the pet');
+  assert.ok(near(z.after.pet.b, z.rest.pet.b, 2) && near(z.after.pet.l, z.rest.pet.l, 2), 'the pet is back in place after the card closes');
+});
+
 test('overlay e2e: no script errors while doing all of the above', opts, () => {
   const [e] = of('errors');
   assert.deepStrictEqual(e.errors, []);

@@ -162,8 +162,26 @@ function overlayPayload() {
     preset: PERSONALITY_PRESETS[s.personality],
     effective: effectiveState(),
     assetBase: `http://127.0.0.1:${PORT}/assets/`,
-    platform: process.platform
+    platform: process.platform,
+    bannerZone: bannerZone(s)
   };
+}
+
+/**
+ * Mode B: where the OS draws its own banners, in overlay (work-area) CSS pixels, so a card for the
+ * same event can step out of their way. Windows toasts: bottom-right of the primary display, up to
+ * ~2 stacked; macOS banners: top-right under the menu bar. Only the primary display shows them.
+ * An approximation (no OS API gives banner geometry) — see Blueprint V4.1 §2/§3.
+ */
+function bannerZone(s) {
+  if (!s || s.notifications.bannerMode !== 'companion') return null;
+  const d = targetDisplay();
+  if (d.id !== screen.getPrimaryDisplay().id) return null;
+  const { width, height } = d.workArea;
+  const w = Math.min(400, width);
+  if (process.platform === 'win32') { const h = Math.min(240, height); return { x: width - w, y: height - h, w, h, edge: 'bottom' }; }
+  if (process.platform === 'darwin') return { x: width - w, y: 0, w, h: Math.min(110, height), edge: 'top' };
+  return null;
 }
 
 /** Re-evaluate presence/focus (quiet hours can start on their own) and propagate changes. */
@@ -605,6 +623,8 @@ function registerIpc() {
 const dismissedBanners = new Set();
 function dismissNativeBanner(item) {
   if (!item || !item.source || !item.externalId || !hub) return;
+  // Mode B never touches the system banner: it belongs to the OS (Blueprint V4.1 §2).
+  if (settings.get().notifications.bannerMode !== 'replace') return;
   const key = `${item.source}:${item.externalId}`;
   if (dismissedBanners.has(key)) return;
   dismissedBanners.add(key);
@@ -717,7 +737,22 @@ async function boot() {
   pipeline.on('history', (h) => bus.emit('event', 'history', h));
   pipeline.on('preempted', (prev) => dismissNativeBanner(prev)); // replaced card: its banner too
 
+  let lastBannerMode = settings.get().notifications.bannerMode;
   settings.on('change', (s) => {
+    if (s.notifications.bannerMode !== lastBannerMode) {
+      lastBannerMode = s.notifications.bannerMode;
+      // The listeners read the suppress flag when they start: restart the running one so the switch
+      // applies now (Windows restores the saved banners itself when suppress turns off). Cards in the
+      // queue and the Inbox are untouched; a system notification arriving during the ~1-2 s restart
+      // may be missed (the listener skips what is already in Action Center when it starts).
+      for (const id of ['windows_nc', 'macos_nc']) {
+        const a = hub && hub.get(id);
+        if (a && s.adapters[id] && s.adapters[id].enabled && a.platform === process.platform) {
+          hub.connect(id).catch(err => log(`[${id}] reconnect after banner mode change failed: ${err.message}`));
+        }
+      }
+      log(`[settings] banner mode → ${lastBannerMode}`);
+    }
     pushBadge(); // switching the chat mode changes what the badge counts
     refreshEffectiveState(true);
     fitOverlayToDisplay();

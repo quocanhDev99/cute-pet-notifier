@@ -1,6 +1,8 @@
 # IMPLEMENTATION_STATUS — Trạng thái từng tính năng
 
-*Cập nhật: 04/11/2026 · Phiên bản 3.5.0 · Quy ước: ✅ Hoàn thành · 🟡 Một phần · ⏳ Chưa làm · ⛔ Không hỗ trợ · 🧪 Chưa kiểm thử thật*
+*Cập nhật: 21/11/2026 · Phiên bản 3.6.0 · Quy ước: ✅ Hoàn thành · 🟡 Một phần · ⏳ Chưa làm · ⛔ Không hỗ trợ · 🧪 Chưa kiểm thử thật*
+
+*Tương ứng nhãn của Blueprint V4.1 §5 Phase 0: ✅ = `Implemented` (kèm `Verified` khi ghi chú nêu bằng chứng trên máy thật) · 🟡 = `Partial` · 🧪 = `Not tested` · ⛔ = `Unsupported` · ⏳ = `Planned`. Các mục chưa ghi bằng chứng thiết bị thật là `Implemented`, chưa phải `Verified`.*
 
 ## Lõi
 | Tính năng | Trạng thái | Ghi chú |
@@ -13,12 +15,14 @@
 | Tin mới thay thẻ cũ sau 2,5 s (không chờ hết 9 s), thẻ bị thay vào Inbox | ✅ | Tin kém ưu tiên không chen tin quan trọng; thẻ đã ghim không bị chen |
 | 🎭 Bé đọc cảm xúc từ nội dung (emoji, VI có/không dấu, EN, phủ định, cường độ) | ✅ | Ngay trên máy; có 3 mức nhạy và ô gõ thử |
 | Pipeline: lọc, bỏ trùng, ưu tiên, gộp, hàng đợi | ✅ | |
+| 🤝 Mode B — Giữ thông báo hệ thống + thú cưng (`notifications.bannerMode = companion`, mặc định cho bản cài mới) | ✅ / 🧪 | v3.6.0. Không đổi registry/ncprefs, không đóng banner gốc; bé im lặng với tin có banner hệ thống (tùy chọn `companionSound`); dock tránh vùng banner ước lượng. Unit test + e2e overlay đã qua; chưa kiểm trên máy thật |
+| 🐾 Mode A — Thú cưng thay thông báo (`bannerMode = replace`) | ✅ | Người dùng cũ giữ nguyên chế độ đang dùng khi cập nhật (migration theo cờ suppress của nền tảng) |
 | Attention: 4 mức ưu tiên, cooldown, tắt tiếng app, 7 chế độ tập trung, giờ yên tĩnh, Hộp thư | ✅ | |
 | 💬 Chat: báo tất cả / chỉ tin dành cho tôi (nhắn riêng 1-1, nhắc tên, @all) | ✅ | Với thông báo của máy, tin 1-1 được nhận ra theo dạng tin (tiêu đề nhóm/#kênh, "Người gửi: …"); Slack biết chính xác |
 | 🙈 Privacy Display Mode (4 mức, ẩn theo app, bật nhanh từ menu) | ✅ | Không tự phát hiện chia sẻ màn hình ⏳ |
 | 💆 Nhắc nghỉ mắt (tính theo thời gian dùng máy thật, hoãn khi đang họp hoặc tập trung) | ✅ | |
 | 🗣️ Giọng nói (nhắc nghỉ, nhấc bổng, thả xuống) | ✅ | Giọng của hệ thống; chỉ nói câu cố định |
-| Control Center: 6 tab + Theo dõi, 6 màu giao diện (thẻ thông báo đổi theo), VI/EN | ✅ | |
+| Control Center: 6 tab + Theo dõi, 6 màu giao diện (thẻ thông báo đổi theo), VI/EN | ✅ | Chọn Mode A/B ở *Thông báo → 🎨 Hiển thị* |
 | Click-through overlay (main process đọc vị trí con trỏ và so với vùng thẻ) | ✅ | |
 | Ký app bằng chứng chỉ cục bộ cố định | ✅ | Chưa có chứng chỉ Apple Developer, nên chưa notarize ⏳ |
 
@@ -36,6 +40,7 @@
 | Windows Toast Listener (WinRT, đọc ~150–350 ms sau khi Windows nhận) | ✅ | Kiểm trên Windows 11 thật 04/11/2026; chữ tiếng Việt đúng (stdout UTF-8) |
 | Windows: bấm "Mở app" đưa đúng ứng dụng lên trên cùng (theo AUMID) | ✅ | Không mở được đúng cuộc chat (giới hạn của Windows) |
 | Windows: thay thế hoàn toàn — tắt banner (`ShowBanner=0`) + âm thanh (`SoundFile=''`, công tắc âm thanh chung) | ✅ / 🧪 | Sao lưu & khôi phục đúng 71/71 giá trị đã kiểm; banner không còn hiện đã kiểm bằng ảnh chụp; **âm thanh chưa nghe thử bằng tai** |
+| Windows: khôi phục banner/âm thanh khi gỡ cài đặt (hook NSIS `customUnInit`) | ✅ / 🧪 | v3.6.0. Lệnh khôi phục đã kiểm trên khóa registry thử; hook có trong installer 3.6.0; chưa chạy gỡ cài đặt thật |
 | Teams Graph / Zalo cá nhân | ⛔ | Thông báo của Teams/Zalo vẫn được bé mang tới qua Notification Center của macOS |
 
 ## Đã gỡ bỏ

@@ -501,6 +501,11 @@ class MacNotificationCenterAdapter extends ApplicationAdapter {
       return { ok: true, trusted: !!r.ok };
     }
     if (id === 'replace-all') {
+      // Mode B keeps system banners untouched (Blueprint V4.1 §2): switching them off is Mode A only.
+      const s = this.ctx.settings && this.ctx.settings.get();
+      if (s && s.notifications && s.notifications.bannerMode !== 'replace') {
+        return { ok: false, error: 'Đang ở chế độ "Giữ thông báo hệ thống + thú cưng". Chuyển sang "Thú cưng thay thông báo" để tắt banner gốc.' };
+      }
       const r = await this.ncprefs.replaceAll();
       this.setStatus(this.status, `${this.statusLine()} · 🤫 Đã tắt banner gốc của ${r.changed} app`);
       return { ok: true, ...r };
