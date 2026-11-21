@@ -24,7 +24,7 @@
 
 ## Bản V3.2 (03/11/2026)
 
-*Ngày: 03/11/2026 · Phạm vi: nâng cấp ứng dụng hiện có theo `docs/BLUEPRINT.md` (V3.2), `docs/ANIMATION_AND_REALTIME_NOTIFICATION_GUIDE.md`, `docs/BLENDER_GUIDE.md`*
+*Ngày: 03/11/2026 · Phạm vi: nâng cấp ứng dụng hiện có theo `docs/BLUEPRINT.md` (V3.2), `docs/guides/character/ANIMATION_AND_REALTIME_NOTIFICATION_GUIDE.md`, `docs/guides/character/BLENDER_GUIDE.md`*
 
 ## 1. Kiến trúc trước / sau
 

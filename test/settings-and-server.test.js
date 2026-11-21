@@ -115,3 +115,21 @@ test('server: falls back to the next port when the preferred one cannot be bound
   await assert.rejects(startNotificationServer({ ...host, ports: [taken] }), (e) => e.code === 'EADDRINUSE' && e.tried.length === 1);
   blocker.close();
 });
+
+test('server: /api/pomodoro needs the token and passes action + preset to the app', async () => {
+  const calls = [];
+  const server = await startNotificationServer({
+    ports: [0], apiToken: TOK, userPetsDir: os.tmpdir(), getState: () => ({}), onEvent: () => {}, adapters: {},
+    webhookEnabled: () => false, getWebhookSecret: () => null,
+    pomodoro: (action, preset) => { calls.push([action, preset]); return action === 'start' ? { phase: 'focus', preset } : { phase: 'idle' }; }
+  });
+  const port = server.address().port;
+  try {
+    const body = JSON.stringify({ action: 'start', preset: 'study' });
+    assert.strictEqual((await req(port, { method: 'POST', path: '/api/pomodoro', headers: { 'Content-Type': 'application/json' }, body })).status, 401);
+    const ok = await req(port, { method: 'POST', path: '/api/pomodoro', headers: { 'X-Pet-Token': TOK, 'Content-Type': 'application/json' }, body });
+    assert.strictEqual(ok.status, 200);
+    assert.deepStrictEqual(JSON.parse(ok.body), { phase: 'focus', preset: 'study' });
+    assert.deepStrictEqual(calls, [['start', 'study']]);
+  } finally { await new Promise(r => server.close(r)); }
+});

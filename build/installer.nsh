@@ -20,3 +20,13 @@
     ${endIf}
   ${endIf}
 !macroend
+
+; After a successful install / reinstall / update: leave a one-shot marker in the user's data folder.
+; The app (launched by the installer's "run after finish") sees it, opens the Control Center once and
+; deletes it — so every finished install shows the app's window, not only the very first one.
+!macro customInstall
+  CreateDirectory "$APPDATA\${PRODUCT_NAME}"
+  FileOpen $0 "$APPDATA\${PRODUCT_NAME}\.just-installed" w
+  FileWrite $0 "${VERSION}"
+  FileClose $0
+!macroend

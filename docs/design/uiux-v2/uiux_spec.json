@@ -1,0 +1,516 @@
+{
+  "meta": {
+    "product": "Cute Pet Companion",
+    "version": "2.0",
+    "specVersion": "1.0.0",
+    "locale": "vi-VN",
+    "platform": [
+      "Windows",
+      "macOS"
+    ],
+    "purpose": "UI/UX implementation reference; adapt to existing app architecture without removing features"
+  },
+  "designTokens": {
+    "colors": {
+      "brandPrimary": "#8B5CF6",
+      "brandSecondary": "#60A5FA",
+      "accentPeach": "#FDBA74",
+      "accentMint": "#6EE7B7",
+      "accentPink": "#F9A8D4",
+      "surface": "#FFFFFF",
+      "surfaceSoft": "#F6F4FF",
+      "surfaceGlass": "rgba(255,255,255,0.76)",
+      "textPrimary": "#242044",
+      "textSecondary": "#777493",
+      "border": "#DFD9FF",
+      "success": "#22C55E",
+      "warning": "#F59E0B",
+      "danger": "#F87171"
+    },
+    "radius": {
+      "sm": 10,
+      "md": 16,
+      "lg": 22,
+      "xl": 28,
+      "pill": 999
+    },
+    "spacing": {
+      "xs": 4,
+      "sm": 8,
+      "md": 12,
+      "lg": 16,
+      "xl": 24,
+      "2xl": 32,
+      "3xl": 40
+    },
+    "typography": {
+      "fontFamily": "system-ui, Inter, SF Pro Display, Segoe UI",
+      "h1": {
+        "size": 28,
+        "weight": 750
+      },
+      "h2": {
+        "size": 20,
+        "weight": 700
+      },
+      "body": {
+        "size": 14,
+        "weight": 500
+      },
+      "caption": {
+        "size": 12,
+        "weight": 500
+      }
+    },
+    "effects": {
+      "cardShadow": "soft layered shadow",
+      "glassBlur": 18,
+      "motionDurationMs": {
+        "fast": 140,
+        "normal": 220,
+        "slow": 360
+      }
+    },
+    "layout": {
+      "windowMinWidth": 1080,
+      "windowMinHeight": 720,
+      "sidebarWidth": 244,
+      "contentPadding": 24,
+      "compactNotificationWidth": 340
+    }
+  },
+  "navigation": {
+    "sidebar": [
+      {
+        "id": "home",
+        "label": "Trang chủ",
+        "icon": "home"
+      },
+      {
+        "id": "pets",
+        "label": "Thú cưng",
+        "icon": "cat"
+      },
+      {
+        "id": "notifications",
+        "label": "Thông báo",
+        "icon": "bell"
+      },
+      {
+        "id": "modes",
+        "label": "Chế độ",
+        "icon": "layers"
+      },
+      {
+        "id": "mailbox",
+        "label": "Hộp thư",
+        "icon": "mail"
+      },
+      {
+        "id": "connections",
+        "label": "Kết nối",
+        "icon": "link"
+      },
+      {
+        "id": "settings",
+        "label": "Cài đặt",
+        "icon": "settings"
+      }
+    ],
+    "footer": [
+      {
+        "id": "runtimeStatus",
+        "type": "status"
+      },
+      {
+        "id": "activePet",
+        "type": "petMiniCard"
+      },
+      {
+        "id": "currentMode",
+        "type": "modeChip"
+      },
+      {
+        "id": "doNotDisturb",
+        "type": "toggle"
+      }
+    ]
+  },
+  "screens": {
+    "home": {
+      "title": "Trang chủ",
+      "layout": "dashboard-grid",
+      "sections": [
+        "welcomeHeader",
+        "dateTimeCard",
+        "petShowcase",
+        "quickModes",
+        "notificationModeSelector",
+        "attachmentStyleSelector",
+        "activitySummary",
+        "connectedAppsStrip",
+        "compactNotificationPreview",
+        "quickSettings",
+        "suggestionCard"
+      ],
+      "petShowcase": {
+        "size": "large",
+        "actions": [
+          "pet",
+          "pet",
+          "play",
+          "more"
+        ],
+        "showEmotion": true,
+        "showTemperament": true
+      },
+      "quickModes": [
+        "focus",
+        "pomodoro",
+        "break",
+        "study",
+        "work",
+        "sleep"
+      ],
+      "activitySummary": [
+        "notificationCount",
+        "taskCount",
+        "focusDuration"
+      ]
+    },
+    "pets": {
+      "title": "Thú cưng",
+      "layout": "pet-gallery-and-detail",
+      "petIds": [
+        "cat_mochi",
+        "dog_boba",
+        "bunny_cloud",
+        "penguin_pip"
+      ],
+      "sections": [
+        "petGallery",
+        "selectedPetPreview",
+        "temperament",
+        "emotionPreview",
+        "interactionButtons",
+        "sizeControl",
+        "animationSpeed",
+        "audioPreview"
+      ]
+    },
+    "notifications": {
+      "title": "Thông báo",
+      "layout": "settings-sections",
+      "sections": [
+        "notificationSourceMode",
+        "attachmentStyles",
+        "compactLayout",
+        "placement",
+        "preview",
+        "contentPrivacy",
+        "interactionPolicy"
+      ],
+      "sourceModes": [
+        "systemPlusPet",
+        "petOnly"
+      ],
+      "attachmentStyles": [
+        "cling",
+        "peek",
+        "resting",
+        "deliver"
+      ],
+      "compactLayout": {
+        "default": true,
+        "targetWidthPx": 340,
+        "contentLines": {
+          "title": 1,
+          "body": 2
+        },
+        "actionsMax": 2
+      }
+    },
+    "modes": {
+      "title": "Chế độ",
+      "layout": "mode-grid-and-detail",
+      "modeIds": [
+        "focus",
+        "pomodoro",
+        "break",
+        "study",
+        "work",
+        "sleep"
+      ],
+      "modeConfig": {
+        "focus": [
+          "duration",
+          "notificationPolicy",
+          "petBehavior"
+        ],
+        "pomodoro": [
+          "workMinutes",
+          "breakMinutes",
+          "cycles",
+          "longBreakMinutes"
+        ],
+        "break": [
+          "duration",
+          "activitySuggestion",
+          "petBehavior"
+        ],
+        "study": [
+          "duration",
+          "notificationPolicy",
+          "petBehavior"
+        ],
+        "work": [
+          "duration",
+          "notificationPolicy",
+          "petBehavior"
+        ],
+        "sleep": [
+          "schedule",
+          "soundPolicy",
+          "animationPolicy"
+        ]
+      }
+    },
+    "mailbox": {
+      "title": "Hộp thư",
+      "layout": "inbox",
+      "filters": [
+        "all",
+        "messages",
+        "tasks",
+        "important",
+        "unread"
+      ],
+      "actions": [
+        "markRead",
+        "archive",
+        "delete",
+        "openSource"
+      ],
+      "privacyNote": "Respect content privacy settings; do not store hidden content."
+    },
+    "connections": {
+      "title": "Kết nối",
+      "layout": "connected-apps-grid",
+      "categories": [
+        "system",
+        "email",
+        "calendar",
+        "task",
+        "chat",
+        "developer"
+      ],
+      "appCatalog": [
+        "Gmail",
+        "Outlook",
+        "Google Calendar",
+        "GitHub",
+        "Jira",
+        "Notion",
+        "Slack",
+        "Microsoft Teams",
+        "Discord",
+        "Trello",
+        "Linear",
+        "Asana"
+      ],
+      "actions": [
+        "connect",
+        "disconnect",
+        "configure",
+        "test"
+      ]
+    },
+    "settings": {
+      "title": "Cài đặt",
+      "layout": "settings-category-grid",
+      "categories": [
+        "appearance",
+        "notificationPrivacy",
+        "audio",
+        "animation",
+        "general",
+        "privacy",
+        "advanced",
+        "about"
+      ],
+      "appearance": [
+        "theme",
+        "accentColor",
+        "language",
+        "windowBehavior"
+      ],
+      "audio": [
+        "masterVolume",
+        "petVoiceVolume",
+        "interactionVolume",
+        "notificationVolume",
+        "ambientVolume",
+        "mutePet",
+        "previewAudio"
+      ],
+      "animation": [
+        "animationIntensity",
+        "reducedMotion",
+        "petScale",
+        "notificationPetScale"
+      ],
+      "privacy": [
+        "notificationContentMode",
+        "appAllowlist",
+        "localRetention",
+        "clearHistory"
+      ]
+    }
+  },
+  "components": {
+    "notificationCard": {
+      "variants": [
+        "compact",
+        "expanded"
+      ],
+      "defaultVariant": "compact",
+      "compact": {
+        "widthPx": 340,
+        "padding": 14,
+        "header": "appIcon+appName+emotion+timestamp",
+        "titleMaxLines": 1,
+        "bodyMaxLines": 2,
+        "actionsMax": 2,
+        "footerOptional": true,
+        "petAnchor": "topCorner",
+        "petMustNotOccludeText": true
+      },
+      "lifecycle": [
+        "approach",
+        "attach",
+        "peek",
+        "react",
+        "rest",
+        "release"
+      ],
+      "dismiss": {
+        "allowSwipe": true,
+        "allowCloseButton": true
+      }
+    },
+    "petAttachment": {
+      "styles": {
+        "cling": {
+          "pose": "two-paws-over-top-edge",
+          "default": true
+        },
+        "peek": {
+          "pose": "head-peek"
+        },
+        "resting": {
+          "pose": "chin-rest"
+        },
+        "deliver": {
+          "pose": "small-delivery-motion"
+        }
+      },
+      "animationPolicy": {
+        "shortEntrance": true,
+        "cooldownSeconds": 20,
+        "noImmediateRepeat": true,
+        "respectReducedMotion": true
+      }
+    },
+    "quickModeTile": {
+      "fields": [
+        "icon",
+        "label",
+        "description",
+        "activeState",
+        "configAction"
+      ],
+      "compact": true
+    },
+    "petCard": {
+      "fields": [
+        "render",
+        "petName",
+        "emotion",
+        "temperament",
+        "interactionButtons",
+        "carouselControls"
+      ]
+    },
+    "connectedAppChip": {
+      "fields": [
+        "appIcon",
+        "appName",
+        "status",
+        "quickAction"
+      ]
+    }
+  },
+  "behavior": {
+    "globalPolicies": [
+      "RespectDoNotDisturb",
+      "RespectFocusMode",
+      "RespectReducedMotion",
+      "RespectMute",
+      "RespectPrivacySettings",
+      "NoNotificationAudioDuplication"
+    ],
+    "notificationRules": {
+      "preferCompact": true,
+      "truncateContent": true,
+      "hiddenContentNeverStored": true,
+      "petAnimationDoesNotBlockActions": true,
+      "fallbackWithoutPetAnimation": true
+    },
+    "modeSwitch": {
+      "confirmOnlyWhenRiskOfLosingState": true,
+      "persistModeSettings": true
+    },
+    "petInteraction": {
+      "actions": [
+        "pet",
+        "wave",
+        "play",
+        "dragIfSupported"
+      ],
+      "feedback": "short animation and optional sound",
+      "cooldownPolicy": "avoid repetitive spam"
+    }
+  },
+  "accessibility": {
+    "keyboardNavigation": true,
+    "visibleFocus": true,
+    "minimumContrastTarget": "WCAG AA",
+    "reducedMotionToggle": true,
+    "scaleWithWindow": true,
+    "labelsForIconOnlyControls": true
+  },
+  "implementationNotes": {
+    "priority": [
+      "audit current components and stores",
+      "preserve existing feature behavior and integrations",
+      "implement shared design tokens",
+      "redesign Home",
+      "compact notification",
+      "refactor screens incrementally"
+    ],
+    "doNot": [
+      "duplicate existing controllers",
+      "hardcode application state into UI components",
+      "replace native notification integration without audit",
+      "claim OS-native styling when rendered by app"
+    ],
+    "acceptanceCriteria": [
+      "All existing functions remain accessible",
+      "Compact notification defaults to approx 340px width and content remains readable",
+      "Pet attachment never occludes notification title/body/actions",
+      "Responsive scaling for supported window sizes",
+      "Settings persist and are applied",
+      "Reduced motion and privacy rules are respected"
+    ]
+  }
+}

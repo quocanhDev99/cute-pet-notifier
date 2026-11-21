@@ -72,3 +72,27 @@ test('PetStage.update runs real frames for every pet, emotion, action and drag s
     assert.ok([s.body.position.x, s.body.position.y, s.body.rotation.z].every(Number.isFinite), `${id}: body transform is finite`);
   }
 });
+
+test('CP-13 look-at-mouse: soft glance (≈ 0.04 per 60 fps frame, any frame rate), quick when the cursor is on the pet', async () => {
+  const { AnimationController } = await import('../src/renderer/js/pet/animation-controller.js');
+  const s = headlessStage('cat_mochi');
+  s.anim = new AnimationController({ onEvent: () => {} });
+  s.useProcedural('cat_mochi');
+  s.lookSlow = true;
+  s.lookTarget.set(1, 0);
+  s.update(1 / 60);
+  assert.ok(Math.abs(s.look.x - 0.04) < 0.002, `one 60 fps frame moves ${s.look.x.toFixed(4)} (expected 0.04)`);
+  // Same second at 30 fps lands at the same place as at 60 fps (frame-rate independent).
+  const a = headlessStage('cat_mochi'); a.anim = new AnimationController({ onEvent: () => {} }); a.useProcedural('cat_mochi');
+  const b = headlessStage('cat_mochi'); b.anim = new AnimationController({ onEvent: () => {} }); b.useProcedural('cat_mochi');
+  for (const st of [a, b]) { st.lookSlow = true; st.lookTarget.set(1, 0); }
+  for (let i = 0; i < 60; i++) a.update(1 / 60);
+  for (let i = 0; i < 30; i++) b.update(1 / 30);
+  assert.ok(Math.abs(a.look.x - b.look.x) < 0.01, `60 fps ${a.look.x.toFixed(3)} vs 30 fps ${b.look.x.toFixed(3)}`);
+  assert.ok(a.look.x > 0.85 && a.look.x < 0.95, `after 1 s the glance is nearly there (${a.look.x.toFixed(3)})`);
+  // Cursor on the pet (pointer reactions): the old quick follow.
+  const c = headlessStage('cat_mochi'); c.anim = new AnimationController({ onEvent: () => {} }); c.useProcedural('cat_mochi');
+  c.lookSlow = false; c.lookTarget.set(1, 0);
+  c.update(1 / 60);
+  assert.ok(c.look.x > 0.1, `direct reaction moves ${c.look.x.toFixed(3)} in one frame`);
+});

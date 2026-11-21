@@ -1,0 +1,79 @@
+﻿<div id="ios-pet-near-notification" aria-label="Concept pet gắn sát notification trên iOS">
+  <style>
+    #ios-pet-near-notification{color-scheme:light dark;--ink:light-dark(#302832,#f5eef3);--muted:light-dark(#827781,#b6abb6);--surface:light-dark(#fffdfd,#28252d);--line:light-dark(#eee6eb,#433c47);--wash:light-dark(#f7eef1,#352d36);--pink:light-dark(#e69aad,#f2a9bd);--green:light-dark(#e3efe4,#2d4036);--shadow:0 20px 50px color-mix(in srgb,var(--ink) 13%,transparent);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink)}
+    #ios-pet-near-notification *{box-sizing:border-box}
+    #ios-pet-near-notification .stage{display:flex;justify-content:center;align-items:flex-start;gap:clamp(18px,5vw,54px);flex-wrap:wrap;padding:14px 0}
+    #ios-pet-near-notification figure{margin:0;width:min(42%,290px);min-width:230px;text-align:center}
+    #ios-pet-near-notification .phone{height:490px;padding:9px;border:1px solid var(--line);border-radius:36px;background:var(--surface);box-shadow:var(--shadow);text-align:left}
+    #ios-pet-near-notification .screen{height:100%;border-radius:27px;padding:13px 12px;background:var(--surface);display:flex;flex-direction:column;overflow:hidden;position:relative}
+    #ios-pet-near-notification .status{display:flex;justify-content:space-between;padding:0 5px;font-size:10px;font-weight:700}
+    #ios-pet-near-notification .heading{display:flex;justify-content:space-between;align-items:center;margin:19px 2px 13px}
+    #ios-pet-near-notification .heading b{font-size:19px;letter-spacing:-.45px}.heading small{display:block;color:var(--muted);font-size:9px;margin-top:4px}
+    #ios-pet-near-notification .paw{width:30px;height:30px;border-radius:10px;background:var(--wash);display:grid;place-items:center;font-size:16px}
+    #ios-pet-near-notification .scene{height:180px;border-radius:23px;background:linear-gradient(145deg,light-dark(#f7e8e9,#46343d),light-dark(#e6efdf,#2d4036));display:flex;align-items:center;justify-content:center;position:relative;margin-bottom:12px}
+    #ios-pet-near-notification .cat{width:82px;height:78px;border-radius:47% 47% 43% 43%;background:linear-gradient(135deg,#ffe2c1,#eaa97e);border:2px solid #946553;position:relative;box-shadow:inset -8px -6px 0 #e7a174}
+    #ios-pet-near-notification .cat:before,.cat:after{content:"";position:absolute;top:-19px;width:28px;height:35px;background:#f4c79f;border:2px solid #946553;z-index:0}.cat:before{left:2px;border-radius:8px 25px 5px 5px;transform:rotate(-18deg)}.cat:after{right:2px;border-radius:25px 8px 5px 5px;transform:rotate(18deg)}
+    #ios-pet-near-notification .eyes{position:absolute;z-index:1;top:29px;left:19px;width:6px;height:9px;border-radius:50%;background:#49363a;box-shadow:28px 0 #49363a}
+    #ios-pet-near-notification .nose{position:absolute;z-index:1;top:43px;left:35px;width:9px;height:6px;border-radius:50%;background:#bd7580}
+    #ios-pet-near-notification .mouth{position:absolute;z-index:1;top:48px;left:28px;width:23px;height:12px;border-bottom:2px solid #8d6260;border-radius:50%}
+    #ios-pet-near-notification .bow{position:absolute;z-index:2;top:4px;left:1px;color:#ac5369;font-size:18px}
+    #ios-pet-near-notification .scene-note{position:absolute;bottom:10px;left:12px;font-size:9px;color:var(--muted)}
+    #ios-pet-near-notification .attached{position:relative;border:1px solid color-mix(in srgb,var(--pink) 70%,var(--line));border-radius:18px;background:var(--surface);padding:17px 11px 11px;margin-top:25px;box-shadow:0 7px 20px #362b3310}
+    #ios-pet-near-notification .attached:before{content:"";position:absolute;top:-7px;left:37px;width:12px;height:12px;background:var(--surface);border-left:1px solid color-mix(in srgb,var(--pink) 70%,var(--line));border-top:1px solid color-mix(in srgb,var(--pink) 70%,var(--line));transform:rotate(45deg)}
+    #ios-pet-near-notification .perch{position:absolute;z-index:3;right:25px;top:-44px;font-size:39px;line-height:1;filter:drop-shadow(0 3px 2px #32273125);transform:rotate(7deg)}
+    #ios-pet-near-notification .perch-paws{position:absolute;z-index:4;right:31px;top:-10px;font-size:17px;letter-spacing:-7px;color:#946553}
+    #ios-pet-near-notification .nhead{display:flex;align-items:center;gap:6px;font-size:8px;color:var(--muted)}
+    #ios-pet-near-notification .appicon{width:19px;height:19px;border-radius:6px;background:#df91a8;display:grid;place-items:center;color:white;font-size:11px}
+    #ios-pet-near-notification .nhead time{margin-left:auto}
+    #ios-pet-near-notification .nbody{display:flex;align-items:center;gap:9px;margin-top:9px}
+    #ios-pet-near-notification .pet-chip{width:44px;height:44px;border-radius:15px;background:linear-gradient(140deg,#f5dfd3,#f1e8d9);display:grid;place-items:center;font-size:28px;flex:0 0 44px}
+    #ios-pet-near-notification .ncopy b{font-size:10px}.ncopy p{font-size:9px;line-height:1.4;color:var(--muted);margin:4px 0 0}
+    #ios-pet-near-notification .buttons{display:flex;gap:7px;margin:10px 0 0 53px}.buttons span{background:var(--wash);border-radius:9px;padding:6px 9px;font-size:8px}
+    #ios-pet-near-notification .nav{display:flex;justify-content:space-around;margin-top:auto;padding-top:10px;border-top:1px solid var(--line);font-size:8px;color:var(--muted)}.nav b{display:block;text-align:center;font-size:14px;margin-bottom:3px;font-weight:500}.nav .selected{color:var(--pink)}
+    #ios-pet-near-notification figcaption{font-size:12px;font-weight:700;margin-top:10px}.caption{display:block;font-size:9px;font-weight:400;color:var(--muted);margin-top:4px;line-height:1.4}
+    #ios-pet-near-notification .lock{background:linear-gradient(155deg,#d8d3eb,#dce9e7 60%,#efe1e1);color:#302b3a}
+    #ios-pet-near-notification .lock .status{color:#302b3a}
+    #ios-pet-near-notification .clock{text-align:center;font-size:58px;font-weight:250;letter-spacing:-2px;line-height:1;margin-top:68px}
+    #ios-pet-near-notification .date{text-align:center;font-size:10px;margin-top:7px;color:#514b5a}
+    #ios-pet-near-notification .small-label{font-size:9px;font-weight:700;letter-spacing:.5px;margin:39px 2px 8px;color:#5c5664}
+    #ios-pet-near-notification .compact{border:1px solid #fff9;border-radius:16px;padding:10px;background:#ffffffdf;box-shadow:0 6px 18px #30283a15;color:#342e38}
+    #ios-pet-near-notification .compact-body{display:flex;align-items:center;gap:8px;margin-top:7px}
+    #ios-pet-near-notification .compact .ncopy{margin:0;flex:1;font-size:9px;line-height:1.4;color:#625b67}
+    #ios-pet-near-notification .compact-pet{width:38px;height:38px;flex:0 0 38px;display:grid;place-items:center;border-radius:12px;background:linear-gradient(145deg,#f8e2d5,#eadff3);font-size:24px;box-shadow:inset 0 0 0 1px #fff}
+    #ios-pet-near-notification .lock-hint{margin-top:auto;text-align:center;font-size:8px;color:#605968;padding-bottom:4px}
+    #ios-pet-near-notification .expanded-label{font-size:9px;font-weight:700;letter-spacing:.5px;margin:32px 2px 8px;color:var(--muted)}
+    #ios-pet-near-notification .expanded{position:relative;border:1px solid #fff9;border-radius:19px;padding:11px;background:#ffffffeb;color:#302b34;box-shadow:0 8px 20px #30283a14;margin-top:23px}
+    #ios-pet-near-notification .expanded .perch{right:18px;top:-39px}
+    #ios-pet-near-notification .expanded .perch-paws{right:24px;top:-6px}
+    #ios-pet-near-notification .expanded .pet-chip{width:62px;height:62px;flex-basis:62px;font-size:39px;border-radius:18px}
+    #ios-pet-near-notification .expanded .nbody{gap:11px;margin-top:12px}
+    #ios-pet-near-notification .expanded .ncopy b{font-size:11px;color:#302b34}
+    #ios-pet-near-notification .expanded .ncopy p{font-size:9px;color:#6c636d}
+    #ios-pet-near-notification .expanded .buttons{margin-left:73px}
+    #ios-pet-near-notification .note{max-width:670px;margin:10px auto 0;text-align:center;color:var(--muted);font-size:10px;line-height:1.5;padding:10px 12px;border-radius:13px;background:var(--wash)}
+    @media(max-width:530px){#ios-pet-near-notification figure{width:min(100%,285px)}#ios-pet-near-notification .phone{height:470px}}
+  </style>
+  <div class="stage">
+    <figure aria-label="Pet và thông báo trong ứng dụng">
+      <div class="phone"><div class="screen">
+        <div class="status"><span>9:41</span><span>●●● ▰</span></div>
+        <div class="heading"><div><b>Chào Linh</b><small>Mochi đang ở đây cùng bạn</small></div><span class="paw">🐾</span></div>
+        <div class="scene"><div class="cat"><i class="eyes"></i><i class="nose"></i><i class="mouth"></i><span class="bow">✿</span></div><span class="scene-note">Mochi · đang vui vẻ</span></div>
+        <div class="attached"><span class="perch" aria-label="Mochi tựa lên thẻ notification">🐱</span><span class="perch-paws" aria-hidden="true">🐾</span><div class="nhead"><span class="appicon">🐾</span><b>CUTE PET COMPANION</b><time>vừa xong</time></div><div class="nbody"><span class="pet-chip">🐾</span><span class="ncopy"><b>Mochi có tin mới</b><p>Có một cập nhật từ Slack bạn đã kết nối.</p></span></div><div class="buttons"><span>Mở Hộp thư</span><span>Để sau</span></div></div>
+        <div class="nav"><span class="selected"><b>⌂</b>Trang chủ</span><span><b>▤</b>Hộp thư</span><span><b>⚙</b>Cài đặt</span></div>
+      </div></div><figcaption>Trong ứng dụng<span class="caption">Pet ngồi ngay trên thẻ và hình pet nằm cùng nội dung notification.</span></figcaption>
+    </figure>
+    <figure aria-label="Banner iOS thu gọn và notification mở rộng">
+      <div class="phone"><div class="screen lock">
+        <div class="status"><span>9:41</span><span>●●● ▰</span></div><div class="clock">9:41</div><div class="date">Thứ Ba, 21 tháng 11</div>
+        <div class="small-label">BANNER THU GỌN · GIAO DIỆN iOS</div>
+        <div class="compact"><div class="nhead"><span class="appicon">🐾</span><b>CUTE PET COMPANION</b><time>vừa xong</time></div><div class="compact-body"><span class="ncopy">Mochi có một cập nhật mới cho bạn.</span><span class="compact-pet" aria-label="Thumbnail pet Mochi">🐱</span></div></div>
+        <div class="expanded-label">CHẠM ĐỂ MỞ RỘNG</div>
+        <div class="expanded"><span class="perch" aria-label="Mochi bám lên mép notification">🐱</span><span class="perch-paws" aria-hidden="true">🐾</span><div class="nhead"><span class="appicon">🐾</span><b>CUTE PET COMPANION</b><time>vừa xong</time></div><div class="nbody"><span class="pet-chip">🐾</span><span class="ncopy"><b>Mochi muốn báo bạn</b><p>Một sự kiện mới từ nguồn bạn đã kết nối. Mở Hộp thư để xem chi tiết.</p></span></div><div class="buttons"><span>Mở Hộp thư</span><span>Để sau</span></div></div>
+        <div class="lock-hint">Thumbnail do iOS sắp xếp · Vuốt lên để mở khóa</div>
+      </div></div><figcaption>Trên màn hình khóa<span class="caption">Cùng pet ở dạng thumbnail trong banner thu gọn và tựa mép thẻ khi mở rộng.</span></figcaption>
+    </figure>
+  </div>
+  <div class="note">Luồng này áp dụng cho notification do Cute Pet Companion gửi. Banner thu gọn dùng ảnh pet đính kèm làm thumbnail nếu iOS hiển thị; vị trí/kích thước do iOS quyết định và có thể thay đổi, nên nội dung vẫn phải rõ khi thumbnail không xuất hiện. Khi mở rộng, cùng pet hiện lớn và tựa vào mép thẻ. iOS không cho app đọc notification gốc của Slack/Zalo/Gmail rồi gắn pet lên đó.</div>
+</div>
+

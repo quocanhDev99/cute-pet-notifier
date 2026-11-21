@@ -1,0 +1,8 @@
+{
+  "keyboardNavigation": true,
+  "visibleFocus": true,
+  "minimumContrastTarget": "WCAG AA",
+  "reducedMotionToggle": true,
+  "scaleWithWindow": true,
+  "labelsForIconOnlyControls": true
+}

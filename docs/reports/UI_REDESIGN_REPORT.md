@@ -1,6 +1,6 @@
 # UI Redesign Report — V4 polish ("A Cozy Desktop Companion Studio")
 
-_Ngày: 05/11/2026 · Áp dụng chọn lọc từ "MASTER UI/UX REDESIGN PROMPT V4.0" · Đặc tả đã cập nhật: `docs/UI_UX_SPEC.md`_
+_Ngày: 05/11/2026 · Áp dụng chọn lọc từ "MASTER UI/UX REDESIGN PROMPT V4.0" · Đặc tả đã cập nhật: `docs/design/UI_UX_SPEC.md`_
 
 ## 1. Phạm vi đã chọn
 
@@ -50,7 +50,7 @@ Prompt V4 rất rộng. Lượt này tập trung vào hai việc người dùng 
 * `src/control/control.css` — khối "V4 polish pass" ở cuối file (token, bóng, chữ, sidebar, transition, live-dot, minh hoạ, modal, focus, thẻ trạng thái, bộ lọc Hộp thư, Reduced Motion).
 * `src/control/control.js` — `statusCardsHtml()`, lời chào Trang chủ, bộ lọc Hộp thư (`INBOX_FILTERS`, deep link `#inbox/<filter>`), dòng ticket + Copy Key, chỉ báo bé, class Reduced Motion.
 * `src/control/index.html` — thêm `#pet-pill` ở chân sidebar.
-* `docs/UI_UX_SPEC.md` — cập nhật §1, §2, §3.1, §4, §6.1, §6.2, §6.5, §8.2, §9, §10.
+* `docs/design/UI_UX_SPEC.md` — cập nhật §1, §2, §3.1, §4, §6.1, §6.2, §6.5, §8.2, §9, §10.
 
 ## 5. Kiểm tra
 

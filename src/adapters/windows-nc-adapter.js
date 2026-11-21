@@ -218,6 +218,8 @@ class WindowsNotificationAdapter extends ApplicationAdapter {
       this.diag.lastAt = Date.now();
 
       if (this.config.skipSystemUpdates && /windows update|security/i.test(`${ev.appName} ${ev.title}`)) return;
+      // Never re-capture this app's own toast (mode 1 preview): it already has its companion event.
+      if (/cutepet|cute ?pet companion/i.test(`${ev.aumid || ''} ${ev.appName || ''}`)) return;
 
       if (process.env.CPC_TRACE) this.ctx.log(`[windows_nc] capture→node +${Date.now() - (ev.timestamp || Date.now())}ms`);
       // Remember which app sent it, so "Mở app" on the card can bring that app to the front.

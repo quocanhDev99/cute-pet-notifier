@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert';
-import { AnimationController } from '../src/renderer/js/pet/animation-controller.js';
+import { AnimationController, IDLE_BEHAVIOURS } from '../src/renderer/js/pet/animation-controller.js';
 import { TRANSITION_PROFILES } from '../src/renderer/js/pet/emotion-poses.js';
 import { resolveClip, morphWeightsFor, normalizeName } from '../src/renderer/js/pet/semantic-map.js';
 
@@ -90,6 +90,15 @@ test('reduced motion: longer transitions, damped oscillations, no jolt', () => {
   assert.strictEqual(c.trigger('jolt'), false);
 });
 
+test('semantic map: production clip names from docs/character-production play without overrides', () => {
+  const names = ['idle_breathing', 'emotion_happy', 'emotion_excited', 'emotion_love', 'emotion_surprised', 'emotion_angry', 'emotion_sad', 'emotion_thinking', 'sleep_loop', 'interaction_pet', 'interaction_pickup', 'interaction_release'];
+  const clips = names.map(name => ({ name }));
+  const expect = { idle: 'idle_breathing', happy: 'emotion_happy', excited: 'emotion_excited', love: 'emotion_love', surprised: 'emotion_surprised', angry: 'emotion_angry', sad: 'emotion_sad', thinking: 'emotion_thinking', sleeping: 'sleep_loop', pet: 'interaction_pet', grabbed: 'interaction_pickup', land: 'interaction_release' };
+  for (const [state, clip] of Object.entries(expect)) assert.strictEqual(resolveClip(clips, state).name, clip, state);
+  // The legacy names still win when both exist (no change for existing GLBs).
+  assert.strictEqual(resolveClip([{ name: 'emotion_happy' }, { name: 'happy' }], 'happy').name, 'happy');
+});
+
 test('semantic map: clip aliases, morph fallback, name normalization', () => {
   const clips = [{ name: 'Idle' }, { name: '01_happy' }, { name: 'mixamorig:Grab' }];
   assert.strictEqual(resolveClip(clips, 'happy').name, '01_happy');
@@ -98,4 +107,69 @@ test('semantic map: clip aliases, morph fallback, name normalization', () => {
   assert.strictEqual(resolveClip(clips, 'grabbed', { grabbed: ['grab'] }).name, 'mixamorig:Grab');
   assert.deepStrictEqual(Object.keys(morphWeightsFor('angry')).sort(), ['05_angry', 'angry', 'cheek_puff', 'eye_squint', 'mouth_pout']);
   assert.strictEqual(normalizeName('DEF-Ear_L.001'), 'ear_l');
+});
+
+test('idle micro-behaviours (CP-06): only when resting, weighted, cooldowns, no back-to-back repeat', () => {
+  const a = new AnimationController();
+  let seed = 3;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  const seen = [];
+  for (let i = 0; i < 40; i++) {
+    const name = a.pickIdle(rnd);
+    if (name) {
+      assert.notStrictEqual(name, seen[seen.length - 1], 'same idle behaviour twice in a row');
+      const d = a.startIdle(name, rnd);
+      assert.ok(d > 0);
+      seen.push(name);
+      for (let t = 0; t < d + 0.1; t += 1 / 30) a.update(1 / 30);
+      assert.strictEqual(a.idle, null, 'behaviour did not finish');
+    }
+    for (let t = 0; t < 4; t += 0.05) a.update(0.05); // a few seconds pass between ticks
+  }
+  assert.ok(new Set(seen).size >= 4, `only ${[...new Set(seen)]} played`);
+  // Cooldown: the same behaviour never restarts before its cooldown.
+  const starts = {};
+  // (re-run with a fresh controller and fake time)
+  const b = new AnimationController();
+  for (let i = 0; i < 200; i++) {
+    const n = b.pickIdle(rnd);
+    if (n) { if (starts[n] !== undefined) assert.ok(b.time - starts[n] >= IDLE_BEHAVIOURS[n].cooldown); starts[n] = b.time; b.startIdle(n, rnd); }
+    b.update(0.05);
+  }
+});
+
+test('idle micro-behaviours: blocked by cards, holding, actions; reduced motion keeps only blinks', () => {
+  const a = new AnimationController();
+  a.setReaction('happy');
+  assert.strictEqual(a.pickIdle(), null);
+  a.setReaction(null);
+  for (let i = 0; i < 40; i++) a.update(0.05); // let the transition finish
+  a.setGrabbed(true);
+  assert.strictEqual(a.pickIdle(), null);
+  a.setGrabbed(false);
+  for (let i = 0; i < 40; i++) a.update(0.05);
+  a.setReducedMotion(true);
+  for (let i = 0; i < 30; i++) {
+    const n = a.pickIdle();
+    if (n) { assert.ok(IDLE_BEHAVIOURS[n].gentle, `${n} plays with reduced motion`); a.startIdle(n); }
+    for (let t = 0; t < 12; t += 0.05) a.update(0.05);
+  }
+});
+
+test('idle micro-behaviours: a card arriving mid-behaviour fades it out (no pop) and the pose stays continuous', () => {
+  const a = new AnimationController();
+  a.startIdle('headTilt', () => 0.9);
+  let prev = null;
+  for (let t = 0; t < 0.9; t += 1 / 60) prev = a.update(1 / 60).pose.tilt;
+  a.setReaction('surprised');
+  let maxJump = 0;
+  for (let t = 0; t < 1; t += 1 / 60) { const v = a.update(1 / 60).pose.tilt; maxJump = Math.max(maxJump, Math.abs(v - prev)); prev = v; }
+  assert.strictEqual(a.idle, null);
+  assert.ok(maxJump < 0.05, `tilt jumped ${maxJump.toFixed(3)} rad in one frame`);
+  // Slow blink closes the eyelids only — it must not drive the face-swap blink (mouth).
+  const c = new AnimationController();
+  c.startIdle('slowBlink');
+  let minLid = 1, minFace = 1;
+  for (let t = 0; t < 1.3; t += 1 / 60) { const f = c.update(1 / 60); minLid = Math.min(minLid, f.idleBlink); minFace = Math.min(minFace, f.faceBlink); }
+  assert.ok(minLid < 0.2 && minFace === 1);
 });

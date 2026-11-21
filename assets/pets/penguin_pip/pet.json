@@ -15,7 +15,46 @@
     "thinking",
     "sleeping"
   ],
-  "sounds": {},
+  "sounds": {
+    "happy": [
+      "squeak_01.ogg",
+      "chirp_01.ogg"
+    ],
+    "excited": [
+      "chirp_run.ogg",
+      "squeak_double.ogg"
+    ],
+    "love": [
+      "chirp_02.ogg",
+      "chirp_01.ogg"
+    ],
+    "surprised": [
+      "squeak_02.ogg"
+    ],
+    "angry": [
+      {
+        "file": "squeak_01.ogg",
+        "rate": 0.85
+      }
+    ],
+    "sad": [
+      {
+        "file": "chirp_02.ogg",
+        "rate": 0.85
+      }
+    ],
+    "thinking": [
+      "chirp_01.ogg"
+    ],
+    "pet": [
+      "chirp_02.ogg",
+      "chirp_01.ogg"
+    ],
+    "grab": [
+      "squeak_double.ogg",
+      "squeak_02.ogg"
+    ]
+  },
   "scale": 1.0,
   "runtime": "procedural_rig",
   "semanticMap": {
@@ -67,5 +106,6 @@
     ]
   },
   "morphMap": {},
-  "notes": "semanticMap / clipAliases / morphMap are optional overrides for the production model.glb; empty morphMap uses the defaults from BLENDER_GUIDE §6 (eye_happy, eye_blink, eye_wide, eye_squint, mouth_smile, mouth_open, mouth_pout, cheek_puff)."
+  "notes": "semanticMap / clipAliases / morphMap are optional overrides for the production model.glb; empty morphMap uses the defaults from BLENDER_GUIDE §6 (eye_happy, eye_blink, eye_wide, eye_squint, mouth_smile, mouth_open, mouth_pout, cheek_puff).",
+  "soundCredits": "Recorded CC0 sounds from Freesound — sources, authors and processing in art/penguin_pip/audio/SOURCES.json"
 }

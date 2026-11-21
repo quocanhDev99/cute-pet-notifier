@@ -15,7 +15,56 @@
     "thinking",
     "sleeping"
   ],
-  "sounds": {},
+  "sounds": {
+    "happy": [
+      "meow_01.ogg",
+      "meow_02.ogg"
+    ],
+    "excited": [
+      "meow_02.ogg",
+      {
+        "file": "meow_01.ogg",
+        "rate": 1.08
+      },
+      "trill_01.ogg"
+    ],
+    "love": [
+      "trill_01.ogg",
+      "purr_01.ogg"
+    ],
+    "surprised": [
+      {
+        "file": "meow_02.ogg",
+        "rate": 1.12
+      }
+    ],
+    "angry": [
+      {
+        "file": "meow_low.ogg",
+        "rate": 0.9
+      }
+    ],
+    "sad": [
+      "meow_low.ogg"
+    ],
+    "thinking": [
+      {
+        "file": "trill_01.ogg",
+        "gain": 0.8
+      }
+    ],
+    "pet": [
+      "purr_01.ogg",
+      "purr_02.ogg"
+    ],
+    "grab": [
+      "meow_02.ogg",
+      {
+        "file": "meow_01.ogg",
+        "rate": 1.1
+      }
+    ]
+  },
   "scale": 1.0,
   "runtime": "procedural_rig",
   "semanticMap": {
@@ -74,5 +123,6 @@
     ]
   },
   "morphMap": {},
-  "notes": "semanticMap / clipAliases / morphMap are optional overrides for the production model.glb; empty morphMap uses the defaults from BLENDER_GUIDE §6 (eye_happy, eye_blink, eye_wide, eye_squint, mouth_smile, mouth_open, mouth_pout, cheek_puff)."
+  "notes": "semanticMap / clipAliases / morphMap are optional overrides for the production model.glb; empty morphMap uses the defaults from BLENDER_GUIDE §6 (eye_happy, eye_blink, eye_wide, eye_squint, mouth_smile, mouth_open, mouth_pout, cheek_puff).",
+  "soundCredits": "Recorded CC0 sounds from Freesound — sources, authors and processing in art/cat_mochi/audio/SOURCES.json"
 }

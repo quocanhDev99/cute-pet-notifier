@@ -1,6 +1,6 @@
 # Character Asset Manifest (Schema Guidance)
 
-The production manifest is a machine-readable registry. Validate it against a formal JSON schema in implementation.
+Extend the two existing files — `assets/pet-manifest.json` (registry/status) and `assets/pets/{id}/pet.json` (per-character runtime config) — rather than adding a third manifest (CP-10). The production manifest is a machine-readable registry. Validate it against a formal JSON schema in implementation.
 
 ## Suggested fields
 - characterId

@@ -1,0 +1,57 @@
+{
+  "sidebar": [
+    {
+      "id": "home",
+      "label": "Trang chủ",
+      "icon": "home"
+    },
+    {
+      "id": "pets",
+      "label": "Thú cưng",
+      "icon": "cat"
+    },
+    {
+      "id": "notifications",
+      "label": "Thông báo",
+      "icon": "bell"
+    },
+    {
+      "id": "modes",
+      "label": "Chế độ",
+      "icon": "layers"
+    },
+    {
+      "id": "mailbox",
+      "label": "Hộp thư",
+      "icon": "mail"
+    },
+    {
+      "id": "connections",
+      "label": "Kết nối",
+      "icon": "link"
+    },
+    {
+      "id": "settings",
+      "label": "Cài đặt",
+      "icon": "settings"
+    }
+  ],
+  "footer": [
+    {
+      "id": "runtimeStatus",
+      "type": "status"
+    },
+    {
+      "id": "activePet",
+      "type": "petMiniCard"
+    },
+    {
+      "id": "currentMode",
+      "type": "modeChip"
+    },
+    {
+      "id": "doNotDisturb",
+      "type": "toggle"
+    }
+  ]
+}

@@ -1,0 +1,107 @@
+﻿<div id="ios-pet-concept" aria-label="Concept giao diện iOS của Cute Pet Companion">
+  <style>
+    #ios-pet-concept { color-scheme: light dark; --ink: light-dark(#342b31,#f5edf2); --muted: light-dark(#817680,#b8aeb7); --canvas: light-dark(#f5f0f1,#17151a); --phone: light-dark(#fffdfc,#242128); --surface: light-dark(#f7f2f4,#302c34); --line: light-dark(#eee5ea,#403943); --pink: light-dark(#ef9fb2,#f3a9bb); --pink-deep: light-dark(#a74f6d,#ffc1d0); --mint: light-dark(#dceddf,#314b40); --gold: light-dark(#f4dfb1,#56442a); --shadow: 0 22px 55px color-mix(in srgb,var(--ink) 14%,transparent); color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    #ios-pet-concept * { box-sizing:border-box; }
+    #ios-pet-concept .stage { display:flex; align-items:flex-start; justify-content:center; gap:clamp(12px,3vw,30px); flex-wrap:wrap; padding:20px 4px 8px; }
+    #ios-pet-concept figure { margin:0; width:min(30%,230px); min-width:190px; }
+    #ios-pet-concept .phone { height:470px; padding:9px; border:1px solid var(--line); border-radius:34px; background:var(--phone); box-shadow:var(--shadow); position:relative; overflow:hidden; }
+    #ios-pet-concept .screen { height:100%; border-radius:26px; background:var(--phone); padding:14px 13px 10px; display:flex; flex-direction:column; overflow:hidden; }
+    #ios-pet-concept .status { height:17px; display:flex; align-items:center; justify-content:space-between; font-size:10px; font-weight:700; padding:0 4px; }
+    #ios-pet-concept .sys { color:var(--ink); font-size:10px; letter-spacing:1px; }
+    #ios-pet-concept .topline { display:flex; align-items:center; justify-content:space-between; margin:13px 1px 8px; }
+    #ios-pet-concept .greeting { font-size:17px; font-weight:700; letter-spacing:-.4px; }
+    #ios-pet-concept .sub { color:var(--muted); font-size:10px; margin-top:3px; }
+    #ios-pet-concept .avatar { width:31px;height:31px;border-radius:50%;background:var(--mint);display:grid;place-items:center;font-size:17px; }
+    #ios-pet-concept .pet-scene { height:184px; border-radius:22px; background:linear-gradient(145deg,light-dark(#f7e8e9,#403039),light-dark(#e7efdf,#2e3c35)); position:relative; display:grid;place-items:center; overflow:hidden; }
+    #ios-pet-concept .sun { position:absolute; width:112px;height:112px;border-radius:50%;background:color-mix(in srgb,var(--gold) 48%,transparent);right:-20px;top:-27px; }
+    #ios-pet-concept .cloud { position:absolute; font-size:29px; opacity:.55; left:17px;top:20px; }
+    #ios-pet-concept .cat { position:relative; width:112px;height:116px; margin-top:15px; }
+    #ios-pet-concept .ear { position:absolute;top:2px;width:38px;height:48px;background:#f4c79f;border:2px solid #9a6b5c; z-index:0; }
+    #ios-pet-concept .ear.left { left:12px; transform:rotate(-17deg); border-radius:10px 29px 8px 8px; }
+    #ios-pet-concept .ear.right { right:12px; transform:rotate(17deg); border-radius:29px 10px 8px 8px; }
+    #ios-pet-concept .head { position:absolute;z-index:1;left:5px;top:23px;width:102px;height:83px;background:linear-gradient(145deg,#ffe5c9,#eeb78d);border:2px solid #9a6b5c;border-radius:48% 48% 45% 45%;box-shadow:inset -9px -7px 0 #e7a97d; }
+    #ios-pet-concept .patch { position:absolute;right:5px;top:1px;width:38px;height:48px;background:#d98d64;border-radius:50% 50% 45% 45%;transform:rotate(18deg); }
+    #ios-pet-concept .eye { position:absolute;top:35px;width:7px;height:10px;border-radius:50%;background:#49363a;z-index:2; }
+    #ios-pet-concept .eye.l {left:27px}.eye.r {right:27px}
+    #ios-pet-concept .nose { position:absolute;z-index:2;top:49px;left:46px;width:10px;height:7px;border-radius:60% 60% 65% 65%;background:#bd7580; }
+    #ios-pet-concept .muzzle { position:absolute;z-index:2;top:54px;left:35px;width:32px;height:17px;border-bottom:2px solid #8d6260;border-radius:50%; }
+    #ios-pet-concept .blush {position:absolute;z-index:2;top:55px;width:16px;height:8px;border-radius:50%;background:#e9a0a0;opacity:.68}.blush.l{left:9px}.blush.r{right:9px}
+    #ios-pet-concept .bow { position:absolute;z-index:3;top:24px;left:6px;color:#b85870;font-size:20px;transform:rotate(-18deg); }
+    #ios-pet-concept .pet-caption { position:absolute;bottom:10px;left:13px;color:light-dark(#6c5b61,#e0ced6);font-size:10px;font-weight:600; }
+    #ios-pet-concept .bubble { position:absolute;top:13px;right:10px;background:var(--phone);border-radius:14px 14px 4px 14px;padding:7px 9px;font-size:9px;box-shadow:0 4px 12px #342b311b; }
+    #ios-pet-concept .bubble b {color:var(--pink-deep)}
+    #ios-pet-concept .mode { display:flex;align-items:center;justify-content:space-between;padding:10px 2px 7px; }
+    #ios-pet-concept .mode strong {font-size:11px}.mode small {display:block;color:var(--muted);font-size:9px;margin-top:2px}
+    #ios-pet-concept .toggle {width:34px;height:20px;border-radius:20px;background:#72aa7b;padding:2px;display:flex;justify-content:flex-end}.toggle i{width:16px;height:16px;border-radius:50%;background:#fff}
+    #ios-pet-concept .notice { border:1px solid var(--line);background:var(--phone);border-radius:16px;padding:10px;margin-top:4px;box-shadow:0 4px 14px #342b310b; }
+    #ios-pet-concept .notice-head {display:flex;align-items:center;gap:6px;font-size:9px;color:var(--muted)}
+    #ios-pet-concept .appicon {width:18px;height:18px;border-radius:6px;background:#6e5bd2;color:white;display:grid;place-items:center;font-size:10px;font-weight:700}
+    #ios-pet-concept .notice-title {font-size:10px;font-weight:700;margin:7px 0 3px}.notice-copy{font-size:9px;line-height:1.35;color:var(--muted)}
+    #ios-pet-concept .quick {display:flex;gap:6px;margin-top:8px}.quick span{padding:5px 8px;border-radius:9px;background:var(--surface);font-size:8px;color:var(--ink)}
+    #ios-pet-concept .nav {margin-top:auto;border-top:1px solid var(--line);padding:9px 3px 1px;display:flex;justify-content:space-around;color:var(--muted);font-size:8px;text-align:center}
+    #ios-pet-concept .nav span{display:grid;gap:3px;justify-items:center}.nav b{font-size:15px;font-weight:500}.nav .active{color:var(--pink-deep)}
+    #ios-pet-concept figcaption {text-align:center;padding-top:10px;font-size:12px;font-weight:650}
+    #ios-pet-concept .cap {display:block;color:var(--muted);font-size:10px;font-weight:400;margin-top:3px}
+    #ios-pet-concept .inbox-title {font-size:21px;font-weight:750;letter-spacing:-.5px;margin:19px 2px 4px}
+    #ios-pet-concept .inbox-sub {color:var(--muted);font-size:10px;margin:0 2px 15px}
+    #ios-pet-concept .summary {display:flex;align-items:center;justify-content:space-between;background:var(--surface);padding:10px 11px;border-radius:15px;font-size:9px;margin-bottom:13px}
+    #ios-pet-concept .summary b{font-size:11px}.badge{background:var(--pink);color:#56313d;border-radius:10px;padding:4px 7px;font-weight:700}
+    #ios-pet-concept .day {font-size:9px;font-weight:700;color:var(--muted);margin:0 2px 8px;text-transform:uppercase;letter-spacing:.7px}
+    #ios-pet-concept .inbox-card {padding:10px;border:1px solid var(--line);border-radius:15px;margin-bottom:8px}
+    #ios-pet-concept .inbox-card.priority {border-color:color-mix(in srgb,var(--pink) 60%,var(--line));background:color-mix(in srgb,var(--pink) 9%,var(--phone))}
+    #ios-pet-concept .inbox-row {display:flex;align-items:center;gap:7px}.inbox-card .appicon{flex:0 0 19px}
+    #ios-pet-concept .inbox-card strong {font-size:9px}.inbox-card time{margin-left:auto;color:var(--muted);font-size:8px}
+    #ios-pet-concept .inbox-card p {font-size:9px;color:var(--muted);line-height:1.4;margin:7px 0 0}
+    #ios-pet-concept .pet-reaction {display:flex;align-items:center;gap:8px;background:var(--mint);border-radius:13px;padding:8px;margin:3px 0 10px}
+    #ios-pet-concept .mini-pet{font-size:21px}.pet-reaction span:last-child{font-size:9px;line-height:1.3}
+    #ios-pet-concept .section-title {font-size:10px;font-weight:700;margin:13px 2px 7px}
+    #ios-pet-concept .setting {display:flex;align-items:center;gap:9px;padding:11px 9px;border-bottom:1px solid var(--line);font-size:10px}
+    #ios-pet-concept .setting .ico{width:23px;height:23px;border-radius:8px;background:var(--surface);display:grid;place-items:center;font-size:12px}
+    #ios-pet-concept .setting small{display:block;color:var(--muted);font-size:8px;margin-top:3px}.setting .chev{margin-left:auto;color:var(--muted);font-size:14px}
+    #ios-pet-concept .privacy-note {font-size:8px;line-height:1.4;color:var(--muted);background:var(--surface);border-radius:12px;padding:9px;margin-top:12px}
+    @media(max-width:680px){#ios-pet-concept .stage{gap:16px}#ios-pet-concept figure{width:min(46%,230px);min-width:160px}#ios-pet-concept .phone{height:450px}#ios-pet-concept .screen{padding:12px 10px 8px}#ios-pet-concept .pet-scene{height:170px}}
+    @media(max-width:390px){#ios-pet-concept figure{width:min(100%,240px)}#ios-pet-concept .stage{gap:18px}}
+  </style>
+  <div class="stage">
+    <figure aria-label="Màn hình Trang chủ với pet Mochi và notification companion">
+      <div class="phone"><div class="screen">
+        <div class="status"><span>9:41</span><span class="sys">●●●  ▰</span></div>
+        <div class="topline"><div><div class="greeting">Chào Linh 👋</div><div class="sub">Đồng hành với các sự kiện bạn kết nối</div></div><div class="avatar">🐾</div></div>
+        <div class="pet-scene"><div class="sun"></div><div class="cloud">☁</div><div class="bubble"><b>Mochi</b> · Có tin mới nè!</div><div class="cat"><div class="ear left"></div><div class="ear right"></div><div class="head"><div class="patch"></div><div class="eye l"></div><div class="eye r"></div><div class="nose"></div><div class="muzzle"></div><div class="blush l"></div><div class="blush r"></div></div><div class="bow">✿</div></div><div class="pet-caption">Mochi · đang vui vẻ</div></div>
+        <div class="mode"><div><strong>Pet trong Cute Pet Companion</strong><small>Không phủ lên banner app khác</small></div><div class="toggle"><i></i></div></div>
+        <div class="notice"><div class="notice-head"><span class="appicon">S</span><b>Slack · Qua kết nối</b><span>· 2 phút trước</span></div><div class="notice-title">Bạn được nhắc đến</div><div class="notice-copy">Sự kiện mới từ tài khoản Slack bạn đã kết nối.</div><div class="quick"><span>Mở Slack ↗</span><span>Để sau</span></div></div>
+        <div class="nav"><span class="active"><b>⌂</b>Trang chủ</span><span><b>▤</b>Hộp thư</span><span><b>◷</b>Tập trung</span><span><b>⚙</b>Cài đặt</span></div>
+      </div></div><figcaption>Trang chủ<span class="cap">Pet, trạng thái và thông báo đồng hành</span></figcaption>
+    </figure>
+    <figure aria-label="Màn hình Hộp thư với thông báo ưu tiên">
+      <div class="phone"><div class="screen">
+        <div class="status"><span>9:41</span><span class="sys">●●●  ▰</span></div>
+        <div class="inbox-title">Hộp thư</div><div class="inbox-sub">Những gì bạn muốn xem lại</div>
+        <div class="summary"><span><b>3 tin mới</b><br><span style="color:var(--muted)">Đã lọc trùng và xếp ưu tiên</span></span><span class="badge">Hôm nay</span></div>
+        <div class="day">Ưu tiên cao</div>
+        <div class="inbox-card priority"><div class="inbox-row"><span class="appicon">S</span><strong>Slack · Nhắc tên bạn</strong><time>09:38</time></div><p>Có cập nhật mới trong nhóm thiết kế.</p></div>
+        <div class="pet-reaction"><span class="mini-pet">🐱</span><span>Mochi đã để dành tin này cho bạn.<br><b>Được ưu tiên vì: Nhắc tên</b></span></div>
+        <div class="day">Các tin khác</div>
+        <div class="inbox-card"><div class="inbox-row"><span class="appicon" style="background:#4285f4">G</span><strong>Google Calendar</strong><time>09:12</time></div><p>Cuộc họp thiết kế bắt đầu lúc 10:00.</p></div>
+        <div class="inbox-card"><div class="inbox-row"><span class="appicon" style="background:#2478ce">M</span><strong>Mail · Bản tin</strong><time>08:54</time></div><p>Đã gom vào nhóm “Bản tin”.</p></div>
+        <div class="nav"><span><b>⌂</b>Trang chủ</span><span class="active"><b>▤</b>Hộp thư</span><span><b>◷</b>Tập trung</span><span><b>⚙</b>Cài đặt</span></div>
+      </div></div><figcaption>Hộp thư<span class="cap">Lý do ưu tiên và nhóm tin rõ ràng</span></figcaption>
+    </figure>
+    <figure aria-label="Màn hình Cài đặt thông báo và quyền riêng tư">
+      <div class="phone"><div class="screen">
+        <div class="status"><span>9:41</span><span class="sys">●●●  ▰</span></div>
+        <div class="inbox-title">Cài đặt</div><div class="inbox-sub">Mọi thứ luôn có thể đổi lại</div>
+        <div class="section-title">THÔNG BÁO</div>
+        <div class="setting"><span class="ico">🐾</span><span><b>Pet đồng hành</b><small>Thông báo của app + pet trong app</small></span><span class="toggle"><i></i></span></div>
+        <div class="setting"><span class="ico">🔔</span><span><b>Thông báo của app</b><small>Cho phép nhắc lịch và cập nhật</small></span><span class="chev">›</span></div>
+        <div class="setting"><span class="ico">🌙</span><span><b>Tập trung</b><small>Đang tắt</small></span><span class="chev">›</span></div>
+        <div class="section-title">QUYỀN RIÊNG TƯ</div>
+        <div class="setting"><span class="ico">◉</span><span><b>Hiển thị nội dung</b><small>Ẩn nội dung nhạy cảm</small></span><span class="chev">›</span></div>
+        <div class="setting"><span class="ico">☁</span><span><b>Đồng bộ Hộp thư</b><small>Chỉ thiết lập và metadata</small></span><span class="chev">›</span></div>
+        <div class="privacy-note">Cute Pet Companion không đọc thông báo của ứng dụng khác trên iPhone. Bạn có thể tiếp tục dùng pet và Hộp thư nếu không bật thông báo.</div>
+        <div class="nav"><span><b>⌂</b>Trang chủ</span><span><b>▤</b>Hộp thư</span><span><b>◷</b>Tập trung</span><span class="active"><b>⚙</b>Cài đặt</span></div>
+      </div></div><figcaption>Cài đặt<span class="cap">Quyền rõ ràng, đồng bộ tùy chọn</span></figcaption>
+    </figure>
+  </div>
+</div>
+

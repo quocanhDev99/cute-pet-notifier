@@ -7,6 +7,7 @@
 export const SPECIES = {
   cat_mochi: {
     id: 'cat_mochi',
+    iris: 0x7A4A1E, // eye iris (warm amber-brown); the pupil stays near-black
     name: 'Mèo Mochi',
     sound: 'meow',
     colors: {
@@ -30,6 +31,7 @@ export const SPECIES = {
   },
   dog_boba: {
     id: 'dog_boba',
+    iris: 0x4A2C1A, // eye iris (dark chocolate); the pupil stays near-black
     name: 'Chó Boba',
     sound: 'woof',
     colors: {
@@ -53,6 +55,7 @@ export const SPECIES = {
   },
   bunny_cloud: {
     id: 'bunny_cloud',
+    iris: 0x6E2C3E, // eye iris (soft ruby-brown); the pupil stays near-black
     name: 'Thỏ Cloud',
     sound: 'squeak',
     colors: {
@@ -76,6 +79,7 @@ export const SPECIES = {
   },
   penguin_pip: {
     id: 'penguin_pip',
+    iris: 0x22314F, // eye iris (deep navy); the pupil stays near-black
     name: 'Penguin Pip',
     sound: 'chirp',
     colors: {

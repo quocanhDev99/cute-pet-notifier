@@ -110,7 +110,10 @@ export class PetStage {
     rimWarm.position.set(3.4, 1.2, -2.6);
     const fill = new THREE.PointLight(0xFFE7D1, 0.6, 9);
     fill.position.set(-1.4, 0.4, 3.2);
-    this.scene.add(key, rim, rimWarm, fill);
+    // CP-14 studio rim: a warm golden back light that outlines the silhouette on any wallpaper.
+    const rimStudio = new THREE.DirectionalLight(0xFFD7A0, 1.5);
+    rimStudio.position.set(0.6, 3.4, -4.6);
+    this.scene.add(key, rim, rimWarm, fill, rimStudio);
 
     const c = document.createElement('canvas');
     c.width = c.height = 128;
@@ -189,6 +192,42 @@ export class PetStage {
     this.body.add(this.rig.root);
     this.fx = new EffectsSystem(this.rig);
     this.source = 'procedural';
+    this.warmUp();
+  }
+
+  /**
+   * Compile every shader and upload every texture of the character while the pet is idle. The
+   * effects (sparkles, hearts, puffs, tears…) are hidden until an emotion needs them, so three.js
+   * used to compile their programs in the very frame they first appeared: a 50–100 ms freeze right
+   * when a notification arrived. compileAsync uses KHR_parallel_shader_compile (off the main thread).
+   */
+  warmUp() {
+    const token = this.loadToken;
+    const idle = globalThis.requestIdleCallback || ((fn) => setTimeout(fn, 300));
+    idle(async () => {
+      const r = this.renderer;
+      if (this.disposed || token !== this.loadToken || !r || !this.scene || !this.camera) return;
+      try {
+        await (r.compileAsync ? r.compileAsync(this.scene, this.camera) : r.compile(this.scene, this.camera));
+        if (this.disposed || token !== this.loadToken) return;
+        // Tears are transmissive: when they first show, three.js adds a transmission pass that renders
+        // the whole character again with other program variants (4 more shaders = a freeze on the
+        // first "sad" event). One render with every hidden part shown compiles those too; the normal
+        // render right after it, in the same task, is the only one that ever reaches the screen.
+        const shown = [];
+        this.scene.traverse((o) => { if (!o.visible) { shown.push(o); o.visible = true; } });
+        try { r.render(this.scene, this.camera); } finally { for (const o of shown) o.visible = false; }
+        r.render(this.scene, this.camera);
+        const seen = new Set();
+        this.scene.traverse((o) => {
+          const mats = !o.material ? [] : Array.isArray(o.material) ? o.material : [o.material];
+          for (const m of mats) for (const k of ['map', 'alphaMap', 'emissiveMap', 'normalMap', 'roughnessMap', 'bumpMap']) {
+            const t = m[k];
+            if (t && t.isTexture && !seen.has(t)) { seen.add(t); r.initTexture(t); }
+          }
+        });
+      } catch { /* warm-up is an optimisation only */ }
+    }, { timeout: 2500 });
   }
 
   useGltf(gltf) {
@@ -221,6 +260,7 @@ export class PetStage {
     this.mixer = this.gltf.clips.length ? new THREE.AnimationMixer(sceneObj) : null;
     this.currentClip = null;
     this.source = 'glb';
+    this.warmUp();
     this.syncClip();
     this.onEvent('glb-info', { bones: Object.fromEntries(Object.entries(bones).map(([k, v]) => [k, v ? v.name : null])), clips: this.gltf.clips.map(c => c.name), morphs: [...new Set(morphMeshes.flatMap(m => Object.keys(m.morphTargetDictionary)))], triangles: this.gltf.triangles });
     this.wake(1500);
@@ -502,6 +542,7 @@ export class PetStage {
       const hit = hitTest(e);
       cursorEl.style.cursor = hit.over ? (this.annoying ? 'not-allowed' : 'grab') : (routed ? '' : 'default');
       this.pointerInside = true;
+      this.lookSlow = false; // cursor ON the pet: quick, direct reactions
 
       if (this.annoying) {
         const sens = 0.4 + this.preset.evasionSensitivity;
@@ -562,15 +603,32 @@ export class PetStage {
     }, routed ? { capture: true } : false);
   }
 
+  /**
+   * CP-13 look-at-mouse: head and pupils glance toward a nearby cursor with a soft lerp (≈ 0.04 per
+   * 60 fps frame, frame-rate independent) and drift back to centre after 3 s without movement.
+   * Called by the overlay only when the cursor is close; lookCenter() when it goes away.
+   */
   lookAtScreenPoint(clientX, clientY) {
     if (this.pointerInside || this.paused) return;
+    this.lookSlow = true;
+    clearTimeout(this.lookIdleTimer);
+    this.lookIdleTimer = setTimeout(() => this.lookCenter(), 3000);
     const r = this.renderer.domElement.getBoundingClientRect();
     const cx = r.left + r.width / 2, cy = r.top + r.height * 0.35;
     const dx = (clientX - cx) / (window.innerWidth * 0.5);
     const dy = -(clientY - cy) / (window.innerHeight * 0.5);
     if (this.annoying) this.lookTarget.set(-Math.sign(dx) * 0.8, -0.2);
     else this.lookTarget.set(Math.max(-1, Math.min(1, dx * 1.6)), Math.max(-1, Math.min(1, dy * 1.6)));
-    this.wake(600);
+    this.wake(1800); // the soft lerp needs a little longer to arrive
+  }
+
+  /** Back to looking straight ahead, softly (cursor far away, idle, a card took over, dragging). */
+  lookCenter() {
+    clearTimeout(this.lookIdleTimer);
+    if (this.pointerInside || this.lookTarget.lengthSq() < 1e-6) return;
+    this.lookSlow = true;
+    this.lookTarget.set(0, 0);
+    this.wake(1800);
   }
 
   touch() {
@@ -579,17 +637,30 @@ export class PetStage {
     else { this.play('pet'); this.onEvent('petted', {}); }
   }
 
+  /**
+   * Life while resting (CP-06): every few seconds the AnimationController may start a small idle
+   * behaviour (look around, head tilt, weight shift, slow/double blink); now and then a wave. The
+   * render loop only runs while one plays (at the gentle frame rate), so a resting pet still costs
+   * almost nothing. "Độ sinh động" (animation intensity) scales how often it happens.
+   */
   scheduleAmbient() {
     clearTimeout(this.ambientTimer);
+    const lively = Math.max(0.3, Math.min(2, this.intensity || 1));
     this.ambientTimer = setTimeout(() => {
       if (this.disposed) return;
-      if (!this.running && !this.paused && this.opts.ambient) {
-        if (Math.random() < 0.35 && this.anim.base === 'idle' && !this.anim.reaction && !this.anim.reducedMotion) this.play('wave');
-        this.blink.next = 0.2;
-        this.wake(1400);
+      if (!this.paused && this.opts.ambient && !this.pointerInside) {
+        this.ambientTicks = (this.ambientTicks || 0) + 1;
+        if (this.ambientTicks % 5 === 0 && Math.random() < 0.4 && this.anim.idleAllowed() && !this.anim.reducedMotion && !this.running) {
+          this.play('wave');
+          this.wake(1600);
+        } else {
+          const name = this.anim.pickIdle();
+          const d = name ? this.anim.startIdle(name) : 0;
+          if (d) this.wake(d * 1000 + 200);
+        }
       }
       this.scheduleAmbient();
-    }, 25000 + Math.random() * 20000);
+    }, (7000 + Math.random() * 7000) / lively);
   }
 
   /* ------------------------------------------------------------ frame */
@@ -600,7 +671,9 @@ export class PetStage {
     // pet that just sits there doesn't cost a full-speed render loop. Skipped frames don't advance
     // lastFrame, so the animation keeps real-time speed.
     // Half a refresh of tolerance so frames land on every 2nd vsync instead of drifting.
-    if (this.holds.size === 1 && this.holds.has('mood') && now - this.lastFrame < 1000 / MOOD_FPS - 4 && now > this.awakeUntil && !this.anim.busy && this.motionSettled()) {
+    const gentle = (this.holds.size === 1 && this.holds.has('mood') && now > this.awakeUntil && !this.anim.busy && this.motionSettled())
+      || (this.anim.idleOnly && !this.holds.size && !this.pointerInside);
+    if (gentle && now - this.lastFrame < 1000 / MOOD_FPS - 4) {
       requestAnimationFrame(this.loop);
       return;
     }
@@ -682,7 +755,8 @@ export class PetStage {
       this.camera.lookAt(0, 0.95 + 0.8 * grab, 0);
     }
 
-    this.look.lerp(this.lookTarget, 1 - Math.exp(-dt * 8));
+    // Mouse-follow glances are soft (CP-13: 0.04 per 60 fps frame); direct pointer reactions stay quick.
+    this.look.lerp(this.lookTarget, this.lookSlow ? 1 - Math.pow(0.96, dt * 60) : 1 - Math.exp(-dt * 8));
     this.evade.lerp(this.evadeTarget, 1 - Math.exp(-dt * 6));
 
     // Natural blink
@@ -694,7 +768,7 @@ export class PetStage {
       blinkScale = Math.max(0.08, Math.abs(Math.cos(this.blink.t / 0.14 * Math.PI)));
       if (this.blink.t > 0.14) { this.blink.t = -1; this.blink.next = 2.5 + Math.random() * 3.5; blinkScale = 1; }
     }
-    blinkScale = Math.min(blinkScale, F.faceBlink);
+    blinkScale = Math.min(blinkScale, F.faceBlink, F.idleBlink ?? 1);
     this.applyFace(face, F.faceBlink);
 
     const rig = this.rig;
@@ -710,8 +784,8 @@ export class PetStage {
     squashY *= 1 - land * 0.18; squashX *= 1 + land * 0.15;
 
     // Framing per hold mode (peeker shows head + paws over the card edge)
-    const peek = this.holdMode === 'peeker';
-    this.pivot.position.y += ((peek ? -0.52 : 0) - this.pivot.position.y) * (1 - Math.exp(-dt * 6));
+    const peek = this.holdMode === 'peeker' || this.holdMode === 'cling' || this.holdMode === 'resting';
+    this.pivot.position.y += ((peek ? (this.holdMode === 'resting' ? -0.6 : this.holdMode === 'cling' ? -0.44 : -0.52) : 0) - this.pivot.position.y) * (1 - Math.exp(-dt * 6));
 
     // Grab: the swing itself is the body's pendulum (stepDrag); the spine only adds a little lag.
     this.stepDrag(dt);
@@ -749,7 +823,7 @@ export class PetStage {
     // Eyes
     for (const key of ['L', 'R']) {
       const e = rig.eyes[key];
-      e.open.position.set(this.look.x * 0.018 * (1 - grab), p.lookY + this.look.y * 0.014, 0);
+      e.open.position.set((this.look.x + (F.look ? F.look.x : 0)) * 0.018 * (1 - grab), p.lookY + this.look.y * 0.014, 0);
       e.open.scale.set(p.eyeScale, p.eyeScale * p.eyeSquint * blinkScale, 1);
       const arcS = 0.2 + 0.8 * F.faceBlink;
       e.arcHappy.scale.set(1, arcS, 1); e.arcClosed.scale.set(1, arcS, 1);
@@ -886,6 +960,7 @@ export class PetStage {
   dispose() {
     this.disposed = true;
     clearTimeout(this.ambientTimer);
+    clearTimeout(this.lookIdleTimer);
     clearTimeout(this.bodyTapTimer);
     document.removeEventListener('visibilitychange', this.onVisibility);
     for (const [target, type, fn, opts] of this.listeners || []) target.removeEventListener(type, fn, opts);

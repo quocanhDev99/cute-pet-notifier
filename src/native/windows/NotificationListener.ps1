@@ -75,7 +75,8 @@ function Set-NotifValue([string]$subkey, [string]$name, $value, [string]$type) {
 }
 
 function Skip-Aumid([string]$aumid) {
-    return (-not $aumid) -or $aumid -match 'cutepet|Windows\.ActionCenter'
+    # Our own toasts (any build / older AUMID like "electron.app.Cute Pet Companion") are never re-captured.
+    return (-not $aumid) -or $aumid -match 'cutepet|Cute ?Pet Companion|Windows\.ActionCenter'
 }
 
 $handledApps = New-Object 'System.Collections.Generic.HashSet[string]'

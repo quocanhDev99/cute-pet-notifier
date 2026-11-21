@@ -1,0 +1,231 @@
+{
+  "home": {
+    "title": "Trang chủ",
+    "layout": "dashboard-grid",
+    "sections": [
+      "welcomeHeader",
+      "dateTimeCard",
+      "petShowcase",
+      "quickModes",
+      "notificationModeSelector",
+      "attachmentStyleSelector",
+      "activitySummary",
+      "connectedAppsStrip",
+      "compactNotificationPreview",
+      "quickSettings",
+      "suggestionCard"
+    ],
+    "petShowcase": {
+      "size": "large",
+      "actions": [
+        "pet",
+        "pet",
+        "play",
+        "more"
+      ],
+      "showEmotion": true,
+      "showTemperament": true
+    },
+    "quickModes": [
+      "focus",
+      "pomodoro",
+      "break",
+      "study",
+      "work",
+      "sleep"
+    ],
+    "activitySummary": [
+      "notificationCount",
+      "taskCount",
+      "focusDuration"
+    ]
+  },
+  "pets": {
+    "title": "Thú cưng",
+    "layout": "pet-gallery-and-detail",
+    "petIds": [
+      "cat_mochi",
+      "dog_boba",
+      "bunny_cloud",
+      "penguin_pip"
+    ],
+    "sections": [
+      "petGallery",
+      "selectedPetPreview",
+      "temperament",
+      "emotionPreview",
+      "interactionButtons",
+      "sizeControl",
+      "animationSpeed",
+      "audioPreview"
+    ]
+  },
+  "notifications": {
+    "title": "Thông báo",
+    "layout": "settings-sections",
+    "sections": [
+      "notificationSourceMode",
+      "attachmentStyles",
+      "compactLayout",
+      "placement",
+      "preview",
+      "contentPrivacy",
+      "interactionPolicy"
+    ],
+    "sourceModes": [
+      "systemPlusPet",
+      "petOnly"
+    ],
+    "attachmentStyles": [
+      "cling",
+      "peek",
+      "resting",
+      "deliver"
+    ],
+    "compactLayout": {
+      "default": true,
+      "targetWidthPx": 340,
+      "contentLines": {
+        "title": 1,
+        "body": 2
+      },
+      "actionsMax": 2
+    }
+  },
+  "modes": {
+    "title": "Chế độ",
+    "layout": "mode-grid-and-detail",
+    "modeIds": [
+      "focus",
+      "pomodoro",
+      "break",
+      "study",
+      "work",
+      "sleep"
+    ],
+    "modeConfig": {
+      "focus": [
+        "duration",
+        "notificationPolicy",
+        "petBehavior"
+      ],
+      "pomodoro": [
+        "workMinutes",
+        "breakMinutes",
+        "cycles",
+        "longBreakMinutes"
+      ],
+      "break": [
+        "duration",
+        "activitySuggestion",
+        "petBehavior"
+      ],
+      "study": [
+        "duration",
+        "notificationPolicy",
+        "petBehavior"
+      ],
+      "work": [
+        "duration",
+        "notificationPolicy",
+        "petBehavior"
+      ],
+      "sleep": [
+        "schedule",
+        "soundPolicy",
+        "animationPolicy"
+      ]
+    }
+  },
+  "mailbox": {
+    "title": "Hộp thư",
+    "layout": "inbox",
+    "filters": [
+      "all",
+      "messages",
+      "tasks",
+      "important",
+      "unread"
+    ],
+    "actions": [
+      "markRead",
+      "archive",
+      "delete",
+      "openSource"
+    ],
+    "privacyNote": "Respect content privacy settings; do not store hidden content."
+  },
+  "connections": {
+    "title": "Kết nối",
+    "layout": "connected-apps-grid",
+    "categories": [
+      "system",
+      "email",
+      "calendar",
+      "task",
+      "chat",
+      "developer"
+    ],
+    "appCatalog": [
+      "Gmail",
+      "Outlook",
+      "Google Calendar",
+      "GitHub",
+      "Jira",
+      "Notion",
+      "Slack",
+      "Microsoft Teams",
+      "Discord",
+      "Trello",
+      "Linear",
+      "Asana"
+    ],
+    "actions": [
+      "connect",
+      "disconnect",
+      "configure",
+      "test"
+    ]
+  },
+  "settings": {
+    "title": "Cài đặt",
+    "layout": "settings-category-grid",
+    "categories": [
+      "appearance",
+      "notificationPrivacy",
+      "audio",
+      "animation",
+      "general",
+      "privacy",
+      "advanced",
+      "about"
+    ],
+    "appearance": [
+      "theme",
+      "accentColor",
+      "language",
+      "windowBehavior"
+    ],
+    "audio": [
+      "masterVolume",
+      "petVoiceVolume",
+      "interactionVolume",
+      "notificationVolume",
+      "ambientVolume",
+      "mutePet",
+      "previewAudio"
+    ],
+    "animation": [
+      "animationIntensity",
+      "reducedMotion",
+      "petScale",
+      "notificationPetScale"
+    ],
+    "privacy": [
+      "notificationContentMode",
+      "appAllowlist",
+      "localRetention",
+      "clearHistory"
+    ]
+  }
+}

@@ -269,6 +269,12 @@ function startNotificationServer(host) {
         if (p === '/api/settings/reset' && req.method === 'POST') { sendJson(res, 200, host.resetSettings()); return; }
         if (p === '/api/classify' && req.method === 'POST') { sendJson(res, 200, host.previewClassify(await readJson(req))); return; }
         if (p === '/api/test-notification' && req.method === 'POST') { sendJson(res, 200, host.testNotify(await readJson(req))); return; }
+        if (p === '/api/pomodoro' && req.method === 'POST' && host.pomodoro) {
+          const b = await readJson(req);
+          const st = host.pomodoro(String(b.action || ''), String(b.preset || ''));
+          sendJson(res, st ? 200 : 400, st || { error: 'Pomodoro unavailable' });
+          return;
+        }
         if (p === '/api/history' && req.method === 'DELETE') { host.clearHistory(); sendJson(res, 200, { ok: true }); return; }
         if (p === '/api/queue/clear' && req.method === 'POST') { host.clearQueue(); sendJson(res, 200, { ok: true }); return; }
         if (p === '/api/app/quit' && req.method === 'POST') { sendJson(res, 200, host.quit ? host.quit() : { ok: false }); return; }

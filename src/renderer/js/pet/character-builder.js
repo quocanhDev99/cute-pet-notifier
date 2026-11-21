@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 
 /**
- * Parametric chibi "art toy" character builder.
+ * Parametric chibi character builder — stylized-realism finish (Blueprint V4.1 §8.1,
+ * docs/character-production/02): velvety fur (sheen + a fine fur normal map) and eyes with an iris,
+ * pupil and highlights. Silhouettes, palettes and accessories are the locked identities in species.js.
  * Conventions match the Blender export standard: origin at the feet (0,0,0),
  * facing +Z, ≈1.85 units tall. L = character's left (+X).
  */
@@ -10,16 +12,58 @@ const HEAD_R = 0.58;
 const HEAD_Y = 0.42; // head mesh centre relative to the neck pivot
 const NECK_Y = 0.88;
 
+/**
+ * Fine fur: a tileable normal map of short, mostly downward strands (drawn once per character on a
+ * canvas — no image asset, disposed with the character). Subtle on purpose: at 72–400 px it reads as
+ * a soft, slightly broken-up surface instead of smooth plastic; the sheen does the velvety rim.
+ */
+function furNormalMap() {
+  const N = 256;
+  const c = document.createElement('canvas');
+  c.width = c.height = N;
+  const g = c.getContext('2d');
+  // Height field of strands, then converted to a normal map.
+  const h = new Float32Array(N * N);
+  let seed = 1234567;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  for (let i = 0; i < 2600; i++) {
+    const x0 = rnd() * N, y0 = rnd() * N, len = 6 + rnd() * 10, ang = Math.PI / 2 + (rnd() - 0.5) * 0.9, amp = 0.4 + rnd() * 0.6;
+    for (let k = 0; k < len; k++) {
+      const x = Math.floor(x0 + Math.cos(ang) * k + N) % N, y = Math.floor(y0 + Math.sin(ang) * k + N) % N;
+      h[y * N + x] += amp * (1 - k / len);
+    }
+  }
+  const img = g && g.createImageData ? g.createImageData(N, N) : null;
+  if (!img || !img.data) return null; // no 2D canvas (headless): plain fur, never a broken character
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const at = (xx, yy) => h[((yy + N) % N) * N + ((xx + N) % N)];
+    let nx = (at(x - 1, y) - at(x + 1, y)) * 0.9, ny = (at(x, y - 1) - at(x, y + 1)) * 0.9, nz = 1;
+    const l = Math.hypot(nx, ny, nz); nx /= l; ny /= l; nz /= l;
+    const o = (y * N + x) * 4;
+    img.data[o] = (nx * 0.5 + 0.5) * 255; img.data[o + 1] = (ny * 0.5 + 0.5) * 255; img.data[o + 2] = (nz * 0.5 + 0.5) * 255; img.data[o + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(3, 3);
+  t.anisotropy = 4;
+  return t;
+}
+
+let furNormal = null; // the current character's fur normal map (set by buildCharacter)
+
 function furMat(color, opts = {}) {
+  const base = new THREE.Color(color);
+  // Sheen tinted toward a lighter version of the fur: light catching the tips of the hair.
+  const sheenColor = base.clone().lerp(new THREE.Color(0xffffff), 0.55);
   return new THREE.MeshPhysicalMaterial({
     color,
-    roughness: 0.62,
+    roughness: 0.72,
     metalness: 0,
-    sheen: 0.3,
-    sheenRoughness: 0.6,
-    sheenColor: new THREE.Color(0xffffff),
-    clearcoat: 0.06,
-    clearcoatRoughness: 0.7,
+    sheen: 0.6,
+    sheenRoughness: 0.42,
+    sheenColor,
+    ...(furNormal ? { normalMap: furNormal, normalScale: new THREE.Vector2(0.18, 0.18) } : {}),
     ...opts
   });
 }
@@ -68,6 +112,7 @@ function starShape(outer, inner, points = 5) {
 
 export function buildCharacter(sp) {
   const C = sp.colors;
+  try { furNormal = typeof document !== 'undefined' ? furNormalMap() : null; } catch { furNormal = null; }
   const M = {
     fur: furMat(C.fur),
     furDark: furMat(C.furDark),
@@ -75,6 +120,7 @@ export function buildCharacter(sp) {
     pink: furMat(C.pink, { roughness: 0.5 }),
     nose: glossMat(C.nose, { roughness: 0.25 }),
     eye: glossMat(0x1B1420),
+    iris: glossMat(sp.iris || 0x4A2E1E, { roughness: 0.18, clearcoat: 1, clearcoatRoughness: 0.04 }),
     white: new THREE.MeshBasicMaterial({ color: 0xffffff }),
     blush: new THREE.MeshBasicMaterial({ color: C.blush, transparent: true, opacity: 0.5, depthWrite: false }),
     mouth: new THREE.MeshStandardMaterial({ color: 0x7A3442, roughness: 0.5 }),
@@ -211,6 +257,8 @@ export function buildCharacter(sp) {
   const eyeX = 0.215 * hw, eyeY = -0.03;
   const openGeo = new THREE.SphereGeometry(0.092, 28, 22);
   openGeo.scale(0.88, 1.12, 0.5);
+  const pupilGeo = new THREE.SphereGeometry(0.068, 24, 18);
+  pupilGeo.scale(0.86, 1.1, 0.42);
   const hl1 = new THREE.SphereGeometry(0.03, 12, 10);
   const hl2 = new THREE.SphereGeometry(0.015, 10, 8);
   const arcGeo = new THREE.TorusGeometry(0.06, 0.017, 10, 24, Math.PI);
@@ -229,11 +277,13 @@ export function buildCharacter(sp) {
     rig.eyeSockets.push(socket);
 
     const open = new THREE.Group();
-    const ball = new THREE.Mesh(openGeo, M.eye);
+    // Iris (species colour) with the pupil in front: depth instead of a flat black bead.
+    const ball = new THREE.Mesh(openGeo, M.iris);
+    const pupil = new THREE.Mesh(pupilGeo, M.eye); pupil.position.set(0, -0.004, 0.021);
     const a = new THREE.Mesh(hl1, M.white); a.position.set(-0.026, 0.04, 0.045);
     const b = new THREE.Mesh(hl2, M.white); b.position.set(0.026, -0.04, 0.042);
     const c = new THREE.Mesh(hl2, M.white); c.position.set(-0.03, -0.01, 0.044); c.visible = false;
-    open.add(ball, a, b, c);
+    open.add(ball, pupil, a, b, c);
     open.userData.extraHighlight = c;
 
     const arcHappy = new THREE.Mesh(arcGeo, M.eye); arcHappy.position.z = 0.012; arcHappy.position.y = -0.02;

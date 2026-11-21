@@ -1,0 +1,24 @@
+{
+  "priority": [
+    "audit current components and stores",
+    "preserve existing feature behavior and integrations",
+    "implement shared design tokens",
+    "redesign Home",
+    "compact notification",
+    "refactor screens incrementally"
+  ],
+  "doNot": [
+    "duplicate existing controllers",
+    "hardcode application state into UI components",
+    "replace native notification integration without audit",
+    "claim OS-native styling when rendered by app"
+  ],
+  "acceptanceCriteria": [
+    "All existing functions remain accessible",
+    "Compact notification defaults to approx 340px width and content remains readable",
+    "Pet attachment never occludes notification title/body/actions",
+    "Responsive scaling for supported window sizes",
+    "Settings persist and are applied",
+    "Reduced motion and privacy rules are respected"
+  ]
+}

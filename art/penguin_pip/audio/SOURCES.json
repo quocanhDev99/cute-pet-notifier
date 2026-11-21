@@ -1,0 +1,205 @@
+{
+  "character": "penguin_pip",
+  "generatedBy": "process_audio.py (Cute Pet Companion asset pipeline, 21/11/2026)",
+  "note": "All sources are CC0 (no attribution required); credits kept anyway. Not yet reviewed by ear — see humanListened.",
+  "files": [
+    {
+      "file": "sounds/squeak_01.ogg",
+      "name": "squeak_01",
+      "source": {
+        "site": "Freesound",
+        "id": 705839,
+        "title": "Penguin Squeak",
+        "author": "Breviceps",
+        "url": "https://freesound.org/people/Breviceps/sounds/705839/",
+        "license": "CC0 1.0 (Creative Commons 0)",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "retrieved": "2026-11-21",
+        "retrievedFile": "source/705839.mp3 (Freesound HQ preview, 128 kbps MP3)"
+      },
+      "processing": {
+        "window_s": [
+          0.02,
+          0.3
+        ],
+        "bandpass_hz": [
+          300,
+          11000
+        ],
+        "gainOffset_db": -2,
+        "target_active_rms_dbfs": -20.0,
+        "encode": "Opus 64 kb/s, 48 kHz mono"
+      },
+      "duration_s": 0.272,
+      "peak_dbfs": -8.2,
+      "active_rms_dbfs": -20.0,
+      "bytes": 3281,
+      "humanListened": false
+    },
+    {
+      "file": "sounds/squeak_02.ogg",
+      "name": "squeak_02",
+      "source": {
+        "site": "Freesound",
+        "id": 705839,
+        "title": "Penguin Squeak",
+        "author": "Breviceps",
+        "url": "https://freesound.org/people/Breviceps/sounds/705839/",
+        "license": "CC0 1.0 (Creative Commons 0)",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "retrieved": "2026-11-21",
+        "retrievedFile": "source/705839.mp3 (Freesound HQ preview, 128 kbps MP3)"
+      },
+      "processing": {
+        "window_s": [
+          0.29,
+          0.58
+        ],
+        "bandpass_hz": [
+          300,
+          11000
+        ],
+        "gainOffset_db": -2,
+        "target_active_rms_dbfs": -20.0,
+        "encode": "Opus 64 kb/s, 48 kHz mono"
+      },
+      "duration_s": 0.272,
+      "peak_dbfs": -7.8,
+      "active_rms_dbfs": -20.0,
+      "bytes": 3131,
+      "humanListened": false
+    },
+    {
+      "file": "sounds/squeak_double.ogg",
+      "name": "squeak_double",
+      "source": {
+        "site": "Freesound",
+        "id": 705839,
+        "title": "Penguin Squeak",
+        "author": "Breviceps",
+        "url": "https://freesound.org/people/Breviceps/sounds/705839/",
+        "license": "CC0 1.0 (Creative Commons 0)",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "retrieved": "2026-11-21",
+        "retrievedFile": "source/705839.mp3 (Freesound HQ preview, 128 kbps MP3)"
+      },
+      "processing": {
+        "window_s": [
+          0.0,
+          0.6
+        ],
+        "bandpass_hz": [
+          300,
+          11000
+        ],
+        "gainOffset_db": -3,
+        "target_active_rms_dbfs": -21.0,
+        "encode": "Opus 64 kb/s, 48 kHz mono"
+      },
+      "duration_s": 0.572,
+      "peak_dbfs": -8.9,
+      "active_rms_dbfs": -21.0,
+      "bytes": 6332,
+      "humanListened": false
+    },
+    {
+      "file": "sounds/chirp_01.ogg",
+      "name": "chirp_01",
+      "source": {
+        "site": "Freesound",
+        "id": 519193,
+        "title": "Baby Chicks Chirp.boaay",
+        "author": "BOAAY",
+        "url": "https://freesound.org/people/BOAAY/sounds/519193/",
+        "license": "CC0 1.0 (Creative Commons 0)",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "retrieved": "2026-11-21",
+        "retrievedFile": "source/519193.mp3 (Freesound HQ preview, 128 kbps MP3)"
+      },
+      "processing": {
+        "window_s": [
+          0.0,
+          0.2
+        ],
+        "bandpass_hz": [
+          800,
+          12000
+        ],
+        "gainOffset_db": -3,
+        "target_active_rms_dbfs": -21.0,
+        "encode": "Opus 64 kb/s, 48 kHz mono"
+      },
+      "duration_s": 0.2,
+      "peak_dbfs": -8.2,
+      "active_rms_dbfs": -21.0,
+      "bytes": 2452,
+      "humanListened": false
+    },
+    {
+      "file": "sounds/chirp_02.ogg",
+      "name": "chirp_02",
+      "source": {
+        "site": "Freesound",
+        "id": 519193,
+        "title": "Baby Chicks Chirp.boaay",
+        "author": "BOAAY",
+        "url": "https://freesound.org/people/BOAAY/sounds/519193/",
+        "license": "CC0 1.0 (Creative Commons 0)",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "retrieved": "2026-11-21",
+        "retrievedFile": "source/519193.mp3 (Freesound HQ preview, 128 kbps MP3)"
+      },
+      "processing": {
+        "window_s": [
+          0.4,
+          0.66
+        ],
+        "bandpass_hz": [
+          800,
+          12000
+        ],
+        "gainOffset_db": -3,
+        "target_active_rms_dbfs": -21.0,
+        "encode": "Opus 64 kb/s, 48 kHz mono"
+      },
+      "duration_s": 0.26,
+      "peak_dbfs": -10.4,
+      "active_rms_dbfs": -21.0,
+      "bytes": 3039,
+      "humanListened": false
+    },
+    {
+      "file": "sounds/chirp_run.ogg",
+      "name": "chirp_run",
+      "source": {
+        "site": "Freesound",
+        "id": 519193,
+        "title": "Baby Chicks Chirp.boaay",
+        "author": "BOAAY",
+        "url": "https://freesound.org/people/BOAAY/sounds/519193/",
+        "license": "CC0 1.0 (Creative Commons 0)",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "retrieved": "2026-11-21",
+        "retrievedFile": "source/519193.mp3 (Freesound HQ preview, 128 kbps MP3)"
+      },
+      "processing": {
+        "window_s": [
+          0.0,
+          1.75
+        ],
+        "bandpass_hz": [
+          800,
+          12000
+        ],
+        "gainOffset_db": -5,
+        "target_active_rms_dbfs": -23.0,
+        "encode": "Opus 64 kb/s, 48 kHz mono"
+      },
+      "duration_s": 1.75,
+      "peak_dbfs": -8.6,
+      "active_rms_dbfs": -23.0,
+      "bytes": 19819,
+      "humanListened": false
+    }
+  ]
+}

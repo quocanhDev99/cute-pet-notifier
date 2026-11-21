@@ -6,6 +6,8 @@ You are a senior desktop application engineer, 3D character pipeline technical d
 Improve the four pet characters—Cat Mochi, Dog Boba, Bunny Cloud and Penguin Pip—through production-quality visual assets, expressive animation, character-specific audio, interaction and runtime integration. Prioritize Mochi as the production pilot. Do not expand unrelated notification features.
 
 ## Source of truth and audit
+The first audit is done: start from `00_AUDIT_AND_TASKS.md` (module map, decisions, task IDs) and update it instead of producing a new one. Characters keep their current identity (`species.js`). Sizes: 72/126/210/400 px. Speech is the OS voice and opt-in, not Google TTS.
+
 Read and reconcile the current repository docs, especially README, BLUEPRINT V4.1, Blender Guide, Animation and Realtime Notification Guide, architecture notes and existing implementation. Inspect actual code, GLB, rig, morph targets, animation, audio, manifest, controllers, renderer, notification integration, tests and asset status. Do not assume documentation reflects code.
 
 Produce an audit report with:

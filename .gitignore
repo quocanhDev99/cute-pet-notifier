@@ -4,3 +4,7 @@ src/renderer/js/bundle.js
 src/control/control.bundle.js
 .DS_Store
 build/signing/
+
+# character audio tool downloads
+art/_tools/raw/
+art/_tools/*.json

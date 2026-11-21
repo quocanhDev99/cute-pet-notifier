@@ -1,7 +1,7 @@
 # Character Runtime Integration
 
 ## Audit first
-Inspect character manager, AnimationController, emotion/morph systems, audio controller, GLB loader, renderer, overlay, notification engine, Focus/Hidden/Reduced Motion, switching, resource cleanup and tests.
+Done — `00_AUDIT_AND_TASKS.md` §1 maps every role below to the real module. Re-inspect character manager, AnimationController, emotion/morph systems, audio controller, GLB loader, renderer, overlay, notification engine, Focus/Hidden/Reduced Motion, switching, resource cleanup and tests.
 
 ## Principle
 Extend existing modules. No duplicate controllers, event routers or renderers.

@@ -1,6 +1,6 @@
 # KNOWN_LIMITATIONS — Hạn chế còn tồn tại
 
-*Cập nhật: 21/11/2026 · v3.6.0. Danh sách công khai để người dùng và đội ngũ nắm rõ. Lộ trình xử lý: `docs/BLUEPRINT.md` §12.*
+*Cập nhật: 21/11/2026 · v3.7.0. Danh sách công khai để người dùng và đội ngũ nắm rõ. Lộ trình xử lý: `docs/BLUEPRINT.md` §12.*
 
 ## Nhân vật & hoạt họa
 1. **Chưa có `model.glb` production cho nhân vật nào.** Cả 4 nhân vật đang chạy bằng rig procedural. Đường nạp GLB đã có, nhưng chưa thử với một file GLB thật.
@@ -16,6 +16,11 @@
 7. **Cài nhầm bản Intel (`-x64`) trên máy chip Apple** làm hoạt họa rất chậm, giật (Rosetta; đo được khựng 2–5 giây). App cảnh báo khi mở và trên Trang chủ. Trên Apple M2, bản `-arm64` chạy ổn định ~73 khung hình/giây (màn hình 75 Hz), không có khung khựng khi thẻ hiện.
 8. **Thẻ hiện lần lượt từng cái.** Thẻ mới thay thẻ đang hiện sau tối thiểu 2,5 giây (thẻ bị thay vào Hộp thư); tin kém ưu tiên hơn thì chờ thẻ trước đóng.
 9. **Độ trễ theo nguồn:** chưa cấp quyền Trợ năng thì thông báo của máy trễ khoảng 5 giây; Gmail/Jira/Bitbucket qua Composio là kiểm tra định kỳ (mặc định 2 phút).
+
+## Âm thanh của bé
+- **25 tiếng thật (CC0, Freesound) mới được chọn bằng phân tích phổ và độ ồn, chưa ai nghe duyệt bằng tai.** Nếu tiếng nào nghe không hợp, tắt *🎙️ Tiếng thật của bé* để quay về tiếng tổng hợp; nguồn từng file ở `art/{bé}/audio/SOURCES.json`.
+- Nguồn là bản preview 128 kb/s của Freesound (bản gốc cần đăng nhập), đủ cho tiếng kêu ngắn nhưng chưa phải master 48 kHz/24-bit như Blueprint §8.5.
+- Thỏ và cánh cụt thật ít kêu: tiếng của Cloud lấy từ chuột lang (guinea pig), của Pip từ đồ chơi chim cánh cụt kêu chít và gà con.
 
 ## Chat & cảm xúc
 10. **Tin nhắn riêng 1-1 với thông báo của máy là đoán** theo dạng tin: tiêu đề là tên nhóm/#kênh, hoặc nội dung "Người gửi: …" thì là tin nhóm. Nhóm chỉ có tên thường (vd "Ban A, Ban B") mà app không ghi người gửi có thể bị coi là 1-1. Slack thì biết chính xác.
@@ -40,9 +45,14 @@
 
 23. **Windows: "Mở app" mở đúng ứng dụng nhưng không mở đúng cuộc chat.** App lấy ID ứng dụng (AUMID) của thông báo rồi đưa app đó lên trên cùng, ví dụ Zalo hiện ở cuộc chat bạn đang mở dở. Windows không có API cho app khác kích hoạt thông báo của Zalo/Teams, nên không làm được như macOS (bấm hộ vào banner thật). Thông báo từ web (Chrome/Edge) không mở đúng trang.
 
-## Chế độ "Giữ thông báo hệ thống + thú cưng" (Mode B, mặc định cho bản cài mới từ v3.6.0)
+## Chế độ "Giữ thông báo hệ thống + thú cưng" (Mode 1) — tạm tắt từ v3.8.2, "Sắp ra mắt"
+- Đang tắt bằng một cờ trong code; người dùng đang ở Mode 1 được chuyển sang Mode 2 (thay banner gốc, có sao lưu + khôi phục). Các mục dưới đây mô tả Mode 1 khi được bật lại.
 - **Vị trí banner hệ thống là ước lượng.** Không hệ điều hành nào cho app khác biết banner đang ở đâu. App coi vùng banner là góc dưới phải (Windows) / góc trên phải (macOS) của màn hình chính và dời bé + thẻ ra khỏi đó khi thẻ là của chính thông báo hệ thống. Banner xếp chồng nhiều hơn 2 cái hoặc thanh tác vụ đặt bên cạnh có thể vẫn bị che một phần.
 - **Bé về chỗ cũ khi thẻ đóng**, trong khi banner gốc có thể còn hiện thêm vài giây.
+- **Chế độ 1 bám mép toast theo kích thước toast mặc định của Windows 11** (rộng 364, cao ≈ 150). Toast cao hơn (nhiều dòng, có nút), hai toast chồng nhau, hay thanh tác vụ đặt bên cạnh/trên thì bé có thể không trùng đúng mép trên.
+- **Chế độ 1 "chỉ có bé"**: bé ở cạnh vùng banner khoảng 6 giây (không biết chính xác banner còn hay đã tắt). Bấm vào bé là vuốt ve, không mở được banner — bấm vào chính banner của máy để mở tin.
+- **Xem thử chế độ 1** dùng thông báo hệ thống của chính app; trên Windows bản chưa cài (chạy dev) thông báo có thể không hiện, khi đó chỉ thấy bé.
+- **Pomodoro không lưu khi thoát app** (chủ ý); nhãn trong menu khay cập nhật theo phút.
 - **macOS:** mới chặn nút "Thay thế tất cả" khi ở Mode B; chưa tự khôi phục banner đã tắt từ trước bằng nút đó và chưa kiểm trên máy Mac thật.
 - **Chưa kiểm trên máy thật:** chuyển chế độ khi đang chạy (unit test + e2e overlay đã qua).
 

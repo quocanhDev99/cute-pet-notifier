@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const { EventEmitter } = require('events');
-const { POSITIONS, PRESENTATION_MODES, isEmotion } = require('../shared/emotion-constants');
+const { POSITIONS, PRESENTATION_MODES, COMPANION_MODE_AVAILABLE, isEmotion } = require('../shared/emotion-constants');
 const { PERSONALITY_PRESETS } = require('./emotion-engine');
 
 const DEFAULT_SETTINGS = Object.freeze({
@@ -26,9 +26,13 @@ const DEFAULT_SETTINGS = Object.freeze({
     //   replace   = Mode A: the pet replaces the system banners (they are switched off);
     //   companion = Mode B: system banners stay untouched, the pet keeps them company.
     // Not to be confused with presentationMode (the card style).
-    bannerMode: 'companion',
+    bannerMode: COMPANION_MODE_AVAILABLE ? 'companion' : 'replace', // Mode 1 is "coming soon" while the flag is off
     companionSound: false, // Mode B: the system banner already made a sound — the pet stays quiet
-    presentationMode: 'billboard',
+    // Mode B: an event that already has a system banner gets the pet only (no duplicate card).
+    // true = also show the pet's card (the 3.6.0 behaviour). docs/product/notifications/NOTIFICATION_MODE_REDESIGN_SPEC.md
+    companionCard: false,
+    presentationMode: 'cling', // "Ôm bảng (Cling)" — Concept v2 default (existing settings files keep theirs)
+    cardLayout: 'compact',     // compact (≈340 px, 1-line title, 2-line body, ≤ 2 actions) | expanded
     theme: 'pastel',
     size: 'md',
     cardScale: 1,
@@ -46,17 +50,26 @@ const DEFAULT_SETTINGS = Object.freeze({
     dragEnabled: true,
     customPosition: { x: null, y: null },
     language: 'vi',
-    uiTheme: 'peach',
+    uiTheme: 'lavender', // UI/UX v2.0 pastel-glass default (existing settings files keep their colour)
     cardFollowsTheme: true,
-    showBadge: true  // unread counter bubble on the pet
+    showBadge: true, // unread counter bubble on the pet
+    petOpacity: 1,          // the pet only — cards always stay fully opaque
+    petClickThrough: false  // the pet ignores the mouse (no petting / dragging); cards stay clickable
   },
   sounds: {
     enabled: true,
-    volume: 0.45,
+    volume: 0.7, // MASTER_UIUX_SPEC_V2 §4.5 (existing settings files keep theirs)
     petSensitivity: 1,
     animationIntensity: 1,
     reducedMotion: 'system',
-    voice: true
+    // Fixed spoken lines (break reminder, pick-up/drop) through the OS speech voice. Opt-in
+    // (Blueprint V4.1 §8.5): the pet's identity is its own non-verbal sounds, not a TTS voice.
+    // Settings files that already saved `true` keep it.
+    voice: false,
+    // The pet's recorded voice (assets/pets/{id}/sounds, CC0) instead of the synthesized one.
+    recordedVoices: true,
+    // Per-channel volume on top of `volume` (docs/character-production/08).
+    channels: { vocal: 1, interaction: 1, notification: 1 }
   },
   attention: {
     criticalBypass: true,
@@ -102,6 +115,15 @@ const DEFAULT_SETTINGS = Object.freeze({
     breakEveryMinutes: 60,
     breakMinutes: 5
   },
+  // Opt-in Pomodoro timer (src/core/pomodoro.js). Runtime state is not persisted.
+  pomodoro: {
+    focusMinutes: 25,
+    breakMinutes: 5,
+    longBreakMinutes: 15,
+    cyclesBeforeLong: 4,
+    quietDuringFocus: true, // focus phase = "Tập trung sâu" attention (critical only)
+    autoContinue: true      // start the next phase by itself
+  },
   integrations: {
     composioUserId: '',
     pollSeconds: 120,
@@ -126,6 +148,7 @@ const BANNER_MODES = Object.freeze(['replace', 'companion']);
 const ENUMS = {
   'notifications.bannerMode': BANNER_MODES,
   'notifications.presentationMode': PRESENTATION_MODES,
+  'notifications.cardLayout': ['compact', 'expanded'],
   'notifications.theme': ['pastel', 'minimal', 'dark', 'glass', 'acrylic'],
   'notifications.size': ['sm', 'md', 'lg'],
   'appearance.position': POSITIONS,
@@ -148,6 +171,11 @@ const RANGES = {
   'integrations.pollSeconds': [60, 900],
   'wellbeing.breakEveryMinutes': [20, 240],
   'wellbeing.breakMinutes': [1, 30],
+  'appearance.petOpacity': [0.3, 1],
+  'pomodoro.focusMinutes': [5, 120],
+  'pomodoro.breakMinutes': [1, 60],
+  'pomodoro.longBreakMinutes': [5, 90],
+  'pomodoro.cyclesBeforeLong': [2, 8],
   'notifications.maxQueue': [1, 100],
   'notifications.dedupeSeconds': [0, 600],
   'notifications.groupThreshold': [2, 50],
@@ -155,6 +183,9 @@ const RANGES = {
   'appearance.displayId': [0, Number.MAX_SAFE_INTEGER],
   'appearance.petScale': [0.6, 1.6],
   'sounds.volume': [0, 1],
+  'sounds.channels.vocal': [0, 1],
+  'sounds.channels.interaction': [0, 1],
+  'sounds.channels.notification': [0, 1],
   'sounds.petSensitivity': [0.3, 3],
   'sounds.animationIntensity': [0.3, 2],
   'privacy.historyLimit': [0, 1000],
@@ -328,7 +359,7 @@ function mergeValidated(base, patch, defaults, prefix = '') {
  * a suppress flag that was explicitly set (e.g. the adapter's own toggle) switches the mode.
  * Returns a new settings object.
  */
-function syncBannerMode(data, patch = null) {
+function syncBannerMode(data, patch = null, companionAvailable = COMPANION_MODE_AVAILABLE) {
   const out = clone(data);
   const pn = patch && patch.notifications;
   const pa = patch && patch.adapters;
@@ -337,6 +368,8 @@ function syncBannerMode(data, patch = null) {
       .find(v => typeof v === 'boolean');
     if (flag !== undefined) out.notifications.bannerMode = flag ? 'replace' : 'companion';
   }
+  // Mode 1 switched off ("Sắp ra mắt"): only Mode 2 can be stored or applied.
+  if (!companionAvailable && out.notifications.bannerMode === 'companion') out.notifications.bannerMode = 'replace';
   const replace = out.notifications.bannerMode === 'replace';
   out.adapters.windows_nc.suppressNativeToast = replace;
   out.adapters.macos_nc.suppressNativeBanner = replace;
@@ -357,8 +390,9 @@ function legacyBannerMode(raw, platform = process.platform) {
 }
 
 class SettingsStore extends EventEmitter {
-  constructor(dir, { platform = process.platform } = {}) {
+  constructor(dir, { platform = process.platform, companionAvailable = COMPANION_MODE_AVAILABLE } = {}) {
     super();
+    this.companionAvailable = companionAvailable;
     this.file = path.join(dir, 'settings.json');
     this.data = clone(DEFAULT_SETTINGS);
     try {
@@ -368,20 +402,21 @@ class SettingsStore extends EventEmitter {
         this.data = mergeValidated(DEFAULT_SETTINGS, raw, DEFAULT_SETTINGS);
         if (migrate) {
           this.data.notifications.bannerMode = legacyBannerMode(raw, platform);
-          this.data = syncBannerMode(this.data);
+          this.data = syncBannerMode(this.data, null, companionAvailable);
           this.save();
         }
       }
     } catch (err) {
       console.warn('[Settings] Could not read settings, using defaults:', err.message);
     }
-    this.data = syncBannerMode(this.data);
+    if (companionAvailable && !(fs.existsSync(this.file))) this.data.notifications.bannerMode = 'companion';
+    this.data = syncBannerMode(this.data, null, companionAvailable);
   }
 
   get() { return clone(this.data); }
 
   update(patch) {
-    this.data = syncBannerMode(mergeValidated(this.data, patch, DEFAULT_SETTINGS), patch);
+    this.data = syncBannerMode(mergeValidated(this.data, patch, DEFAULT_SETTINGS), patch, this.companionAvailable);
     this.save();
     this.emit('change', this.get());
     return this.get();

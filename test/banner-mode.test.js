@@ -21,8 +21,20 @@ const writeLegacy = (dir, adapters) => {
   fs.writeFileSync(path.join(dir, 'settings.json'), JSON.stringify(legacy));
 };
 
+test('Mode 1 switched off (COMPANION_MODE_AVAILABLE = false): stored/applied as Mode 2, also from the adapter toggle and old files', () => {
+  const s = new SettingsStore(tmp(), { companionAvailable: false });
+  assert.strictEqual(s.get().notifications.bannerMode, 'replace');
+  assert.strictEqual(s.update({ notifications: { bannerMode: 'companion' } }).notifications.bannerMode, 'replace');
+  assert.strictEqual(s.update({ adapters: { windows_nc: { suppressNativeToast: false } } }).adapters.windows_nc.suppressNativeToast, true);
+  const dir = tmp();
+  writeLegacy(dir, { windows_nc: { enabled: true, suppressNativeToast: false, skipSystemUpdates: false } });
+  assert.strictEqual(new SettingsStore(dir, { platform: 'win32', companionAvailable: false }).get().notifications.bannerMode, 'replace');
+});
+
+const ON = { companionAvailable: true }; // Mode 1 logic stays tested for when it comes back
+
 test('fresh install: Mode B (companion) and the adapters do not suppress banners', () => {
-  const v = new SettingsStore(tmp()).get();
+  const v = new SettingsStore(tmp(), ON).get();
   assert.strictEqual(v.notifications.bannerMode, 'companion');
   assert.strictEqual(v.notifications.companionSound, false);
   assert.strictEqual(v.adapters.windows_nc.suppressNativeToast, false);
@@ -32,7 +44,7 @@ test('fresh install: Mode B (companion) and the adapters do not suppress banners
 test('migration: an existing Windows user who replaced toasts stays in Mode A, and it is saved', () => {
   const dir = tmp();
   writeLegacy(dir, { windows_nc: { enabled: true, suppressNativeToast: true, skipSystemUpdates: false } });
-  const v = new SettingsStore(dir, { platform: 'win32' }).get();
+  const v = new SettingsStore(dir, { platform: 'win32', ...ON }).get();
   assert.strictEqual(v.notifications.bannerMode, 'replace');
   assert.strictEqual(v.adapters.windows_nc.suppressNativeToast, true);
   const saved = JSON.parse(fs.readFileSync(path.join(dir, 'settings.json'), 'utf8'));
@@ -45,17 +57,17 @@ test('migration: a user who had turned suppression off becomes Mode B; the platf
     windows_nc: { enabled: true, suppressNativeToast: false, skipSystemUpdates: false },
     macos_nc: { enabled: true, suppressNativeBanner: true, skipConnectedSlack: true, skipAppleSystem: true }
   });
-  assert.strictEqual(new SettingsStore(dir, { platform: 'win32' }).get().notifications.bannerMode, 'companion');
+  assert.strictEqual(new SettingsStore(dir, { platform: 'win32', ...ON }).get().notifications.bannerMode, 'companion');
   const dir2 = tmp();
   writeLegacy(dir2, {
     windows_nc: { enabled: true, suppressNativeToast: false, skipSystemUpdates: false },
     macos_nc: { enabled: true, suppressNativeBanner: true, skipConnectedSlack: true, skipAppleSystem: true }
   });
-  assert.strictEqual(new SettingsStore(dir2, { platform: 'darwin' }).get().notifications.bannerMode, 'replace');
+  assert.strictEqual(new SettingsStore(dir2, { platform: 'darwin', ...ON }).get().notifications.bannerMode, 'replace');
 });
 
 test('bannerMode and the legacy suppress flags stay in agreement, whichever side changes', () => {
-  const s = new SettingsStore(tmp());
+  const s = new SettingsStore(tmp(), ON);
   let v = s.update({ notifications: { bannerMode: 'replace' } });
   assert.strictEqual(v.adapters.windows_nc.suppressNativeToast, true);
   assert.strictEqual(v.adapters.macos_nc.suppressNativeBanner, true);
@@ -113,4 +125,25 @@ test('switching A ↔ B mid-stream loses and duplicates nothing', () => {
   assert.strictEqual(seen.size, 6);
   assert.strictEqual(p.stats.received, 7);
   assert.strictEqual(p.stats.deduped, 1);
+});
+
+test('Mode 1 presentation: system-banner events get the pet only; others and Mode 2 get a card', () => {
+  const b = mkPipeline({ bannerMode: 'companion', companionCard: false });
+  assert.strictEqual(b.p.ingest({ title: 'Toast', app: 'zalo' }, 'windows_nc').item.companion, true);
+  b.p.finished(b.shown[0].id);
+  assert.strictEqual(b.p.ingest({ title: 'Mail', app: 'gmail' }, 'composio').item.companion, false);
+  const withCard = mkPipeline({ bannerMode: 'companion', companionCard: true });
+  assert.strictEqual(withCard.p.ingest({ title: 'Toast', app: 'zalo' }, 'macos_nc').item.companion, false);
+  const a = mkPipeline({ bannerMode: 'replace' });
+  assert.strictEqual(a.p.ingest({ title: 'Toast', app: 'zalo' }, 'windows_nc').item.companion, false);
+});
+
+test('Mode 1 preview: only the test source may pretend to have a system banner', () => {
+  const b = mkPipeline({ bannerMode: 'companion' });
+  const t = b.p.ingest({ title: 'Preview', previewCompanion: true }, 'test', { bypassDedupe: true });
+  assert.strictEqual(t.item.companion, true);
+  assert.strictEqual(t.item.silent, true, 'the real system toast already made the sound');
+  b.p.finished(t.item.id);
+  const spoof = b.p.ingest({ title: 'Webhook', previewCompanion: true }, 'webhook');
+  assert.strictEqual(spoof.item.companion, false);
 });

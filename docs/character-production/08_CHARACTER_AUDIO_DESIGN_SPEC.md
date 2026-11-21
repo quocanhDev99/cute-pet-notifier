@@ -1,7 +1,12 @@
 # Character Audio Design Specification
 
+## Current state (v3.6.0)
+- `src/renderer/js/sound.js` `SoundKit`: procedural Web Audio only (species voice meow/woof/squeak/chirp, emotion chimes, purr, bell, pop, whoosh, hmph). No audio files, channels, variants or cooldown.
+- Spoken lines: `speechSynthesis` with the **OS voice** (Windows SAPI / macOS), fixed lines only (break reminder, pick-up, drop). Not Google TTS; never notification content. Opt-in for new installs since v3.6.0 (`sounds.voice=false`).
+- Policy already in place: `sounds.enabled`, volume, Focus modes without sound, Hidden, attention `silent`, Mode B `notifications.companionSound` (pet quiet for events that have a system banner).
+
 ## Direction
-Remove Google TTS from default pet-character identity. Do not read notification content aloud or make pets generic voice assistants. Use short, non-verbal character vocalizations and sound effects. Fixed AI-produced audio may be considered only after quality and license review; it is not runtime TTS.
+Keep OS-voice speech out of the default pet identity (opt-in only). Do not read notification content aloud or make pets generic voice assistants. Use short, non-verbal character vocalizations and sound effects. Fixed AI-produced audio may be considered only after quality and license review; it is not runtime TTS.
 
 ## Audio categories
 1. Vocalization.
@@ -19,13 +24,15 @@ Planning target ~30-35 assets including variants and interaction sounds: happy, 
 - Pip: quirky chirp/trill; distinctive but short.
 
 ## Production pipeline
+Masters: WAV 48 kHz / 24-bit in `art/{id}/audio/` (not shipped). Runtime: OGG/Opus in `assets/pets/{id}/sounds/` (Blueprint §8.5).
+
 Audio brief -> original/licensed recording or suitable fixed generated asset -> edit/clean -> loudness and peak QA -> export -> metadata/license -> manifest -> runtime validation.
 
 ## Metadata
 ID, character, event, emotion, category/channel, filename, duration, source, license, loudness, cooldown, variation group, priority, status and fallback.
 
-## Controller
-Extend existing controller. Context inputs: character, event, emotion, interaction, presence, Focus, Quiet Hours, priority, cooldown, variation, volume, channel, concurrency, expiry, suspend/resume.
+## Controller (CP-05)
+There is no AudioController yet: evolve `SoundKit` into it (one module), route every playback call in `renderer.js` through it, and keep the procedural sounds as the per-event fallback when no file exists. Context inputs: character, event, emotion, interaction, presence, Focus, Quiet Hours, priority, cooldown, variation, volume, channel, concurrency, expiry, suspend/resume.
 Responsibilities: policy gate, event priority, variant selection, cooldown, concurrency, playback, fade, sync, cancellation and cleanup.
 
 ## Channels

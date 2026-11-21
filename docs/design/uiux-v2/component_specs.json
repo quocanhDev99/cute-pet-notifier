@@ -1,0 +1,83 @@
+{
+  "notificationCard": {
+    "variants": [
+      "compact",
+      "expanded"
+    ],
+    "defaultVariant": "compact",
+    "compact": {
+      "widthPx": 340,
+      "padding": 14,
+      "header": "appIcon+appName+emotion+timestamp",
+      "titleMaxLines": 1,
+      "bodyMaxLines": 2,
+      "actionsMax": 2,
+      "footerOptional": true,
+      "petAnchor": "topCorner",
+      "petMustNotOccludeText": true
+    },
+    "lifecycle": [
+      "approach",
+      "attach",
+      "peek",
+      "react",
+      "rest",
+      "release"
+    ],
+    "dismiss": {
+      "allowSwipe": true,
+      "allowCloseButton": true
+    }
+  },
+  "petAttachment": {
+    "styles": {
+      "cling": {
+        "pose": "two-paws-over-top-edge",
+        "default": true
+      },
+      "peek": {
+        "pose": "head-peek"
+      },
+      "resting": {
+        "pose": "chin-rest"
+      },
+      "deliver": {
+        "pose": "small-delivery-motion"
+      }
+    },
+    "animationPolicy": {
+      "shortEntrance": true,
+      "cooldownSeconds": 20,
+      "noImmediateRepeat": true,
+      "respectReducedMotion": true
+    }
+  },
+  "quickModeTile": {
+    "fields": [
+      "icon",
+      "label",
+      "description",
+      "activeState",
+      "configAction"
+    ],
+    "compact": true
+  },
+  "petCard": {
+    "fields": [
+      "render",
+      "petName",
+      "emotion",
+      "temperament",
+      "interactionButtons",
+      "carouselControls"
+    ]
+  },
+  "connectedAppChip": {
+    "fields": [
+      "appIcon",
+      "appName",
+      "status",
+      "quickAction"
+    ]
+  }
+}

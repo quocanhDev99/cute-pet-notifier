@@ -32,7 +32,13 @@ const NATIVE_BANNER_SOURCES = new Set(['windows_nc', 'macos_nc']);
  */
 function companionSilenced(item, settings) {
   const n = (settings && settings.notifications) || {};
-  return n.bannerMode === 'companion' && !n.companionSound && NATIVE_BANNER_SOURCES.has(item.source);
+  return n.bannerMode === 'companion' && !n.companionSound && (NATIVE_BANNER_SOURCES.has(item.source) || item.previewCompanion === true);
+}
+
+/** Mode B, event with a system banner, card not wanted → the pet alone (no card). */
+function companionOnly(item, settings) {
+  const n = (settings && settings.notifications) || {};
+  return n.bannerMode === 'companion' && !n.companionCard && (NATIVE_BANNER_SOURCES.has(item.source) || item.previewCompanion === true);
 }
 
 function cleanText(v, max) {
@@ -133,6 +139,8 @@ function normalize(raw = {}, source = 'webhook', defaults = {}) {
     event: cleanText(r.event, 30) || null,
     pet: cleanKey(r.pet, '') || null,
     presentationMode: PRESENTATION_MODES.includes(r.presentationMode) ? r.presentationMode : null,
+    // "▶ Xem thử" of Mode 1: the app's own test toast stands in for a system banner (test source only).
+    previewCompanion: source === 'test' && r.previewCompanion === true,
     duration: r.duration !== undefined && r.duration !== null && r.duration !== '' && Number.isFinite(Number(r.duration))
       ? Math.min(60000, Math.max(3000, Number(r.duration))) : null,
     deliveryMode,
@@ -147,12 +155,12 @@ function normalize(raw = {}, source = 'webhook', defaults = {}) {
 
 class NotificationPipeline extends EventEmitter {
   /** @param {{getSettings: () => object, inbox?: import('./inbox-store').InboxStore, directory?: import('./contact-directory').ContactDirectory}} opts */
-  constructor({ getSettings, inbox = null, directory = null }) {
+  constructor({ getSettings, inbox = null, directory = null, getRuntime = () => ({}) }) {
     super();
     this.getSettings = getSettings;
     this.inbox = inbox;
     this.directory = directory; // ContactDirectory — learns chat/sender names for the "Người quen" picker
-    this.attention = new AttentionEngine({ getSettings });
+    this.attention = new AttentionEngine({ getSettings, getRuntime });
     this.latency = new LatencyRecorder();
     this.queue = [];
     this.history = [];
@@ -251,6 +259,9 @@ class NotificationPipeline extends EventEmitter {
     item.priority = decision.priority;
     item.category = decision.category;
     item.silent = decision.silent || companionSilenced(item, s);
+    // Mode B presentation: the OS already shows this event as a banner → the pet keeps it company
+    // without a duplicate card (unless the user wants the card too). docs/product/notifications/NOTIFICATION_MODE_REDESIGN_SPEC.md §2
+    item.companion = companionOnly(item, s);
     item.motion = decision.motion;
     item.attentionReason = decision.reason;
     delete item.contactPolicy; // names inside: never sent to the overlay / Control Center / Inbox
@@ -432,4 +443,4 @@ class NotificationPipeline extends EventEmitter {
   }
 }
 
-module.exports = { NotificationPipeline, normalize, inQuietHours, cleanText, cleanUrl, DELIVERY_MODES, NATIVE_BANNER_SOURCES, companionSilenced };
+module.exports = { NotificationPipeline, normalize, inQuietHours, cleanText, cleanUrl, DELIVERY_MODES, NATIVE_BANNER_SOURCES, companionSilenced, companionOnly };

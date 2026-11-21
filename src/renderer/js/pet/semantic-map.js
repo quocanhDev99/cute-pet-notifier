@@ -16,26 +16,35 @@ export const DEFAULT_SEMANTIC_MAP = {
   accessories: ['accessory_bell', 'bell', 'bow', 'beanie', 'hat', 'bandana', 'pompom']
 };
 
+/**
+ * Runtime state → accepted clip names. Includes the production clip names of
+ * docs/character-production/07 + 03 (`idle_breathing`, `emotion_happy`, `interaction_pet`,
+ * `sleep_loop`…), so a GLB authored to that spec plays without a per-character clipAliases.
+ * Spec clips with no runtime state yet (idle_look_around, idle_slow_blink, idle_head_tilt,
+ * idle_weight_shift, sleep_enter, sleep_wakeup) are listed in 00_AUDIT_AND_TASKS.md (CP-06/CP-07).
+ */
 export const DEFAULT_CLIP_ALIASES = {
-  idle: ['idle', 'Idle', 'breathe', 'stand'],
-  sleeping: ['sleeping', '08_sleeping', 'sleep'],
-  happy: ['happy', '01_happy'],
-  excited: ['excited', '02_excited'],
-  love: ['love', '03_love'],
-  surprised: ['surprised', '04_surprised', 'startle'],
-  angry: ['angry', '05_angry'],
-  sad: ['sad', '06_sad'],
-  thinking: ['thinking', '07_thinking', 'think'],
+  idle: ['idle', 'Idle', 'idle_breathing', 'idle_breathe', 'breathe', 'stand'],
+  sleeping: ['sleeping', '08_sleeping', 'emotion_sleeping', 'sleep_loop', 'sleep'],
+  happy: ['happy', '01_happy', 'emotion_happy'],
+  excited: ['excited', '02_excited', 'emotion_excited'],
+  love: ['love', '03_love', 'emotion_love'],
+  surprised: ['surprised', '04_surprised', 'emotion_surprised', 'startle'],
+  angry: ['angry', '05_angry', 'emotion_angry'],
+  sad: ['sad', '06_sad', 'emotion_sad'],
+  thinking: ['thinking', '07_thinking', 'emotion_thinking', 'think'],
   hold_card: ['hold_card', 'holdcard', 'billboard', 'hug'],
   peeker: ['peeker', 'peek'],
+  cling: ['cling', 'notification_attach', 'peeker', 'peek'],
+  resting: ['resting', 'chin_rest', 'notification_rest', 'peeker', 'peek'],
   courierRun: ['courier', 'run'],
   courierPresent: ['courier_present', 'present', 'hold_card'],
-  pet: ['pet', 'petted', 'purr'],
+  pet: ['pet', 'interaction_pet', 'interaction_head_rub', 'petted', 'purr'],
   reject: ['reject', 'dodge'],
   kick: ['kick'],
   wave: ['wave'],
-  grabbed: ['grabbed', 'grab', 'held', 'dangle'],
-  land: ['land', 'landing'],
+  grabbed: ['grabbed', 'interaction_pickup', 'grab', 'held', 'dangle'],
+  land: ['land', 'interaction_release', 'landing'],
   feed: ['feed'],
   transition: ['transition']
 };

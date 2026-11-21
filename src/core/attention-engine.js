@@ -78,23 +78,28 @@ function inQuietHours(dnd, date = new Date()) {
   return s <= e ? (now >= s && now < e) : (now >= s || now < e);
 }
 
-/** The effective operating mode: explicit focus mode > DND toggle > quiet hours > none. */
-function effectiveMode(settings, date = new Date()) {
+/**
+ * The effective operating mode: explicit focus mode > DND toggle > Pomodoro focus phase > quiet hours
+ * > none. `runtime` carries state that is not a setting (the running Pomodoro).
+ */
+function effectiveMode(settings, date = new Date(), runtime = {}) {
   const sys = settings.system || {};
   if (sys.focusMode && sys.focusMode !== 'none' && FOCUS_MODES[sys.focusMode]) return { ...FOCUS_MODES[sys.focusMode], source: 'manual' };
   if (settings.dnd && settings.dnd.enabled) return { ...FOCUS_MODES.sleep, source: 'dnd' };
+  if (runtime && runtime.pomodoroQuiet) return { ...FOCUS_MODES.focus, source: 'pomodoro' };
   if (inQuietHours(settings.dnd, date)) return { ...FOCUS_MODES.sleep, source: 'quiet_hours' };
   return { ...FOCUS_MODES.none, source: 'default' };
 }
 
 class AttentionEngine {
-  constructor({ getSettings, now = () => Date.now() }) {
+  constructor({ getSettings, now = () => Date.now(), getRuntime = () => ({}) }) {
     this.getSettings = getSettings;
     this.now = now;
+    this.getRuntime = getRuntime;
     this.recentByApp = new Map(); // app -> [timestamps shown]
   }
 
-  mode() { return effectiveMode(this.getSettings(), new Date(this.now())); }
+  mode() { return effectiveMode(this.getSettings(), new Date(this.now()), this.getRuntime()); }
 
   /**
    * @param {object} n  normalized + classified item ({app, priority, emotion, title, ...})

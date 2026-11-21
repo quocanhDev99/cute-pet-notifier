@@ -39,7 +39,7 @@
 4. **Chọn cách bé báo tin chat:** vào **🔔 Thông báo → 💬 Tin nhắn**.
 5. **Chỉ cho bé ai là ai (tùy chọn):** **🐱 Thú cưng → 👥 Người quen**. Muốn thấy **đủ danh sách chat Teams**, bấm **Kết nối** ở đó và đăng nhập tài khoản công ty (Microsoft Graph, chỉ đọc tên chat). Zalo, Messenger, Telegram, iMessage không có API danh sách chat cho tài khoản cá nhân — bé tự nhớ tên từ thông báo, hoặc bạn tự nhập.
 
-Hướng dẫn chi tiết, kể cả Windows: **[docs/INSTALL.md](docs/INSTALL.md)** · Build & chia sẻ file cài đặt: **[docs/DISTRIBUTION.md](docs/DISTRIBUTION.md)**
+Hướng dẫn chi tiết, kể cả Windows: **[docs/guides/release/INSTALL.md](docs/guides/release/INSTALL.md)** · Build & chia sẻ file cài đặt: **[docs/guides/release/DISTRIBUTION.md](docs/guides/release/DISTRIBUTION.md)**
 
 ---
 
@@ -157,4 +157,4 @@ native/macos/      nc-bridge.swift (Accessibility helper)   gateway/   Integrati
 scripts/           build-native · sign-mac · dist-mac         test/      node --test
 ```
 
-**Tài liệu:** [Cài đặt](docs/INSTALL.md) · [Phát hành & chia sẻ](docs/DISTRIBUTION.md) · [Blueprint](docs/BLUEPRINT.md) · [Đặc tả UI/UX](docs/UI_UX_SPEC.md) · [Hướng dẫn animation & realtime](docs/ANIMATION_AND_REALTIME_NOTIFICATION_GUIDE.md) · [Blender](docs/BLENDER_GUIDE.md) · [Trạng thái tính năng](docs/reports/IMPLEMENTATION_STATUS.md) · [Kết quả kiểm thử](docs/reports/TEST_RESULTS.md) · [Bảo mật & riêng tư](docs/reports/SECURITY_AND_PRIVACY_REPORT.md) · [Jira](docs/reports/JIRA_INTEGRATION_REPORT.md) · [Bitbucket](docs/reports/BITBUCKET_PR_WORKFLOW_REPORT.md) · [Privacy mode](docs/reports/NOTIFICATION_PRIVACY_REPORT.md) · [Composio](docs/reports/COMPOSIO_INTEGRATION_REPORT.md) · [Người quen](docs/reports/FAMILIAR_CONTACTS_REPORT.md)
+**Tài liệu:** [Mục lục docs](docs/README.md) · [Cài đặt](docs/guides/release/INSTALL.md) · [Phát hành & chia sẻ](docs/guides/release/DISTRIBUTION.md) · [Blueprint](docs/BLUEPRINT.md) · [Đặc tả UI/UX](docs/design/UI_UX_SPEC.md) · [Hướng dẫn animation & realtime](docs/guides/character/ANIMATION_AND_REALTIME_NOTIFICATION_GUIDE.md) · [Blender](docs/guides/character/BLENDER_GUIDE.md) · [Trạng thái tính năng](docs/reports/IMPLEMENTATION_STATUS.md) · [Kết quả kiểm thử](docs/reports/TEST_RESULTS.md) · [Bảo mật & riêng tư](docs/reports/SECURITY_AND_PRIVACY_REPORT.md) · [Jira](docs/reports/JIRA_INTEGRATION_REPORT.md) · [Bitbucket](docs/reports/BITBUCKET_PR_WORKFLOW_REPORT.md) · [Privacy mode](docs/reports/NOTIFICATION_PRIVACY_REPORT.md) · [Composio](docs/reports/COMPOSIO_INTEGRATION_REPORT.md) · [Người quen](docs/reports/FAMILIAR_CONTACTS_REPORT.md)

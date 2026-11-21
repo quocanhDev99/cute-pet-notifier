@@ -15,7 +15,51 @@
     "thinking",
     "sleeping"
   ],
-  "sounds": {},
+  "sounds": {
+    "happy": [
+      "bark_01.ogg",
+      "bark_03.ogg"
+    ],
+    "excited": [
+      "bark_triple.ogg",
+      "bark_02.ogg"
+    ],
+    "love": [
+      {
+        "file": "whine_01.ogg",
+        "rate": 1.1,
+        "gain": 0.8
+      },
+      "sniff_01.ogg"
+    ],
+    "surprised": [
+      "bark_04.ogg"
+    ],
+    "angry": [
+      {
+        "file": "bark_04.ogg",
+        "rate": 0.88
+      }
+    ],
+    "sad": [
+      "whine_01.ogg"
+    ],
+    "thinking": [
+      "sniff_01.ogg"
+    ],
+    "pet": [
+      "sniff_01.ogg",
+      {
+        "file": "whine_01.ogg",
+        "rate": 1.12,
+        "gain": 0.7
+      }
+    ],
+    "grab": [
+      "bark_02.ogg",
+      "whine_01.ogg"
+    ]
+  },
   "scale": 1.0,
   "runtime": "procedural_rig",
   "semanticMap": {
@@ -73,5 +117,6 @@
     ]
   },
   "morphMap": {},
-  "notes": "semanticMap / clipAliases / morphMap are optional overrides for the production model.glb; empty morphMap uses the defaults from BLENDER_GUIDE §6 (eye_happy, eye_blink, eye_wide, eye_squint, mouth_smile, mouth_open, mouth_pout, cheek_puff)."
+  "notes": "semanticMap / clipAliases / morphMap are optional overrides for the production model.glb; empty morphMap uses the defaults from BLENDER_GUIDE §6 (eye_happy, eye_blink, eye_wide, eye_squint, mouth_smile, mouth_open, mouth_pout, cheek_puff).",
+  "soundCredits": "Recorded CC0 sounds from Freesound — sources, authors and processing in art/dog_boba/audio/SOURCES.json"
 }

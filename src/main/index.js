@@ -3,7 +3,7 @@
  * Wires: SettingsStore · SecretStore · NotificationPipeline · AdapterHub · HTTP server
  *        · transparent overlay window (3D pet) · native Control Center window · tray.
  */
-const { app, BrowserWindow, screen, ipcMain, Tray, Menu, shell, nativeImage, safeStorage, powerMonitor, dialog, systemPreferences } = require('electron');
+const { app, BrowserWindow, screen, ipcMain, Tray, Menu, shell, nativeImage, safeStorage, powerMonitor, dialog, systemPreferences, Notification } = require('electron');
 const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -14,6 +14,8 @@ const { SecretStore } = require('../core/secret-store');
 const { IntegrationsManager } = require('../integrations');
 const { BreakReminder } = require('../core/break-reminder');
 let breaks = null;
+const { Pomodoro } = require('../core/pomodoro');
+let pomodoro = null;
 const { NotificationPipeline } = require('../core/notification-pipeline');
 const { InboxStore, badgeFilter } = require('../core/inbox-store');
 const { ContactDirectory } = require('../core/contact-directory');
@@ -21,7 +23,7 @@ const { ChatSources } = require('../integrations/chat-sources');
 const { MessagingApps } = require('./messaging-apps');
 const { FOCUS_MODES, PRIORITIES } = require('../core/attention-engine');
 const { PERSONALITY_PRESETS, DEFAULT_APP_RULES, DEFAULT_KEYWORD_RULES } = require('../core/emotion-engine');
-const { EMOTION_SCHEMA, POSITIONS } = require('../shared/emotion-constants');
+const { EMOTION_SCHEMA, POSITIONS, COMPANION_MODE_AVAILABLE } = require('../shared/emotion-constants');
 const { SAMPLE_NOTIFICATIONS } = require('../shared/sample-notifications');
 const { AdapterHub } = require('../adapters');
 const { startNotificationServer } = require('./server');
@@ -51,6 +53,10 @@ let activateReady = false;
 // A second launch only asks the running copy to show its Control Center, then quits. app.quit() is
 // asynchronous, so boot() must be skipped explicitly — otherwise the second copy starts its own
 // server, hits "port 3721 in use" and shows an error box (seen on Windows).
+// Windows: the app's own toasts ("▶ Xem thử" of mode 1) must carry the installer's AppUserModelID —
+// otherwise they show as "electron.app.Cute Pet Companion" and the toast listener can't recognise
+// them as ours (it skips AUMIDs containing "cutepet").
+if (process.platform === 'win32') app.setAppUserModelId('com.cutepet.companion');
 const isPrimaryInstance = app.requestSingleInstanceLock();
 if (!isPrimaryInstance) {
   app.quit();
@@ -163,7 +169,9 @@ function overlayPayload() {
     effective: effectiveState(),
     assetBase: `http://127.0.0.1:${PORT}/assets/`,
     platform: process.platform,
-    bannerZone: bannerZone(s)
+    bannerZone: bannerZone(s),
+    bannerMs: systemBannerMs,
+    pomodoro: pomodoro ? pomodoro.state() : null
   };
 }
 
@@ -178,10 +186,27 @@ function bannerZone(s) {
   const d = targetDisplay();
   if (d.id !== screen.getPrimaryDisplay().id) return null;
   const { width, height } = d.workArea;
-  const w = Math.min(400, width);
-  if (process.platform === 'win32') { const h = Math.min(240, height); return { x: width - w, y: height - h, w, h, edge: 'bottom' }; }
-  if (process.platform === 'darwin') return { x: width - w, y: 0, w, h: Math.min(110, height), edge: 'top' };
+  // Default banner geometry (DIP): Windows 11 toast 364 wide, 12 px from the work-area edges, a
+  // one-message toast ≈ 150 tall; macOS banner ≈ 344 × 80, 10 px under the menu bar / from the right.
+  if (process.platform === 'win32') { const w = Math.min(364, width), h = Math.min(150, height); return { x: width - w - 12, y: height - h - 12, w, h, edge: 'bottom' }; }
+  if (process.platform === 'darwin') { const w = Math.min(344, width), h = Math.min(80, height); return { x: width - w - 10, y: 10, w, h, edge: 'top' }; }
   return null;
+}
+
+/**
+ * How long the OS keeps a banner on screen, so the Mode 1 pet leaves together with it.
+ * Windows: Settings → Accessibility → Visual effects → "Dismiss notifications after this amount of
+ * time" (HKCU\Control Panel\Accessibility\MessageDuration, seconds, default 5). macOS banners: ~5 s.
+ */
+let systemBannerMs = 5000;
+function readSystemBannerMs() {
+  if (process.platform !== 'win32') return;
+  require('child_process').execFile('reg', ['query', 'HKCU\\Control Panel\\Accessibility', '/v', 'MessageDuration'], { timeout: 3000, windowsHide: true }, (err, out) => {
+    const m = !err && /MessageDuration\s+REG_DWORD\s+0x([0-9a-f]+)/i.exec(String(out));
+    const sec = m ? parseInt(m[1], 16) : 5;
+    const ms = Math.min(300, Math.max(3, sec || 5)) * 1000;
+    if (ms !== systemBannerMs) { systemBannerMs = ms; sendOverlay('overlay:config', overlayPayload()); }
+  });
 }
 
 /** Re-evaluate presence/focus (quiet hours can start on their own) and propagate changes. */
@@ -284,6 +309,8 @@ function applyMouseCapture() {
   if (!ignore) lastOverlayUse = Date.now(); // pressing / dragging the pet counts as using the overlay
   if (ignore === overlayIgnoring) return;
   overlayIgnoring = ignore;
+  // Diagnostics while a card is up (no content): whether the window takes the mouse, and why.
+  if (hitRects.length) log(`[mouse] ${ignore ? 'click-through' : 'captured'} (renderer=${rendererWantsMouse} cursorInCard=${cursorInRect})`);
   if (ignore) {
     overlay.setIgnoreMouseEvents(true, { forward: true });
   } else {
@@ -337,13 +364,13 @@ function openControlCenter(section) {
     return;
   }
   controlWin = new BrowserWindow({
-    width: 1220,
-    height: 820,
-    minWidth: 980,
-    minHeight: 660,
+    width: 1120, // MASTER_UIUX_SPEC_V2 §1.2: 1120 × 740, min 1080 × 700
+    height: 740,
+    minWidth: 1080,
+    minHeight: 700,
     title: 'Cute Pet Companion — Control Center',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    backgroundColor: settings && settings.get().appearance.uiTheme === 'midnight' ? '#17151F' : '#FFF7F2',
+    backgroundColor: settings && settings.get().appearance.uiTheme === 'midnight' ? '#17151F' : settings && settings.get().appearance.uiTheme === 'lavender' ? '#F4F1FF' : '#FFF7F2',
     show: false,
     icon: process.platform === 'darwin' ? undefined : APP_ICON,
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true }
@@ -430,6 +457,22 @@ function buildTrayMenu() {
         label: `${FOCUS_MODES[id].emoji} ${label}`, type: 'radio', checked: s.system.focusMode === id, click: () => updateSettings({ system: { focusMode: id } })
       }))
     },
+    (() => {
+      const st = pomodoro ? pomodoro.state() : { phase: 'idle' };
+      const running = st.phase !== 'idle';
+      const left = Math.ceil((st.remainingMs || 0) / 60000);
+      return {
+        label: running ? `🍅 ${st.phase === 'focus' ? L('Đang tập trung', 'Focusing') : L('Đang nghỉ', 'On a break')} (${left}′)${st.paused ? ' ⏸' : ''}` : '🍅 Pomodoro',
+        submenu: running ? [
+          st.paused ? { label: L('▶ Tiếp tục', '▶ Resume'), click: () => pomodoroAction('resume') } : { label: L('⏸ Tạm dừng', '⏸ Pause'), click: () => pomodoroAction('pause') },
+          { label: L('⏭ Bỏ qua pha này', '⏭ Skip this phase'), click: () => pomodoroAction('skip') },
+          { label: L('⏹ Dừng', '⏹ Stop'), click: () => pomodoroAction('stop') }
+        ] : [
+          { label: L('▶ Bắt đầu Pomodoro', '▶ Start Pomodoro'), click: () => pomodoroAction('start', 'pomodoro') },
+          { label: L('📚 Học tập (50/10)', '📚 Study (50/10)'), click: () => pomodoroAction('start', 'study') }
+        ]
+      };
+    })(),
     { label: `📥 Inbox (${inbox ? inbox.unreadCount() : 0} ${L('chưa đọc', 'unread')})`, click: () => openControlCenter('inbox') },
     { label: L('🌙 Không làm phiền', '🌙 Do Not Disturb'), type: 'checkbox', checked: s.dnd.enabled, click: (i) => updateSettings({ dnd: { enabled: i.checked } }) },
     { label: L('🙈 Ẩn nội dung thông báo (khi chia sẻ màn hình)', '🙈 Hide notification content (screen sharing)'), type: 'checkbox', checked: s.privacy.displayMode !== 'full_content', click: (i) => updateSettings({ privacy: { displayMode: i.checked ? 'source_only' : 'full_content' } }) },
@@ -447,17 +490,69 @@ function updateSettings(patch) {
   return next;
 }
 
+/**
+ * This app's own system banners (Mode 1 preview). Windows gives them no AppInfo (empty name and
+ * AUMID) in the notification listener, so the adapter's name filter can't recognise them and the
+ * same toast came back ~0.2 s later as a "windows_nc" event: the pet restarted its stay (outliving
+ * the banner) and the unread badge grew. Recognised here by their text instead. The Notification
+ * objects are also kept referenced until they close: a collected one never emits 'close' / 'click'.
+ */
+const ownBanners = new Map(); // banner → { key, at }
+const bannerKey = (title, body) => `${title || ''}|${body || ''}`.replace(/\s+/g, ' ').trim();
+function isOwnBanner(payload) {
+  const now = Date.now();
+  for (const [b, x] of ownBanners) if (now - x.at > 10 * 60000) ownBanners.delete(b);
+  const key = bannerKey(payload && payload.title, payload && payload.message);
+  for (const x of ownBanners.values()) if (x.key === key) return true;
+  return false;
+}
+
 function testNotify(body = {}) {
   const emotion = SAMPLE_NOTIFICATIONS[body.emotion] ? body.emotion : 'happy';
   const sample = SAMPLE_NOTIFICATIONS[emotion];
+  // "▶ Xem thử" of Mode 1: show a REAL system notification of this app, then the pet companion for it
+  // (the listeners skip the app's own toasts, so this is the only event).
+  const companion = body.preview === 'companion' && settings.get().notifications.bannerMode === 'companion';
+  if (companion) readSystemBannerMs();
+  let systemShown = false;
+  let banner = null;
+  if (companion) {
+    try {
+      if (Notification.isSupported()) {
+        banner = new Notification({ title: sample.title, body: sample.message || '' });
+        ownBanners.set(banner, { key: bannerKey(sample.title, sample.message), at: Date.now() });
+        banner.show();
+        systemShown = true;
+      }
+    } catch (err) { log(`[test] system notification failed: ${err.message}`); }
+  }
   const r = pipeline.ingest({
     ...sample,
     forceEmotion: emotion,
     presentationMode: body.presentationMode,
     pet: body.pet,
-    priority: body.priority
+    priority: body.priority,
+    previewCompanion: companion
   }, 'test', { bypassDedupe: true, defaults: { deliveryMode: 'manual', provider: 'test' } });
-  return { accepted: r.accepted, suppressed: !!r.suppressed, inboxed: !!r.inboxed, reason: r.reason, id: r.item.id, emotion: r.item.emotion, priority: r.item.priority };
+  if (banner && r.item && r.item.companion) {
+    // The user closed / clicked the real banner: the pet leaves with it (not when its timer runs out).
+    const leave = () => { const cur = pipeline.current; if (cur && cur.id === r.item.id) sendOverlay('notification:dismiss', { reason: 'banner_closed' }); };
+    banner.on('close', leave);
+    banner.on('click', leave);
+  }
+  if (banner) {
+    // Stop matching its text a little after it closed (Action Center copy is already captured or skipped).
+    banner.on('close', () => { const x = ownBanners.get(banner); if (x) setTimeout(() => ownBanners.delete(banner), 30000); });
+  }
+  return { accepted: r.accepted, suppressed: !!r.suppressed, inboxed: !!r.inboxed, reason: r.reason, id: r.item.id, emotion: r.item.emotion, priority: r.item.priority, companion: !!r.item.companion, systemShown };
+}
+
+/** Control Center / tray: start | pause | resume | skip | stop the Pomodoro timer. */
+function pomodoroAction(action, preset) {
+  if (!pomodoro) return null;
+  if (action === 'start') return pomodoro.start(preset === 'study' ? 'study' : 'pomodoro');
+  if (['pause', 'resume', 'skip', 'stop'].includes(action)) return pomodoro[action]();
+  return pomodoro.state();
 }
 
 function getState() {
@@ -486,6 +581,8 @@ function getState() {
     install: installInfo(),
     pipeline: pipeline.snapshot(),
     effective: effectiveState(),
+    pomodoro: pomodoro ? pomodoro.state() : null,
+    companionModeAvailable: COMPANION_MODE_AVAILABLE,
     focusModes: FOCUS_MODES,
     priorities: PRIORITIES,
     autoLaunchSupported: process.platform === 'darwin' || process.platform === 'win32'
@@ -546,11 +643,11 @@ function registerIpc() {
     if (!overlay || e.sender !== overlay.webContents) return;
     lastOverlayUse = Date.now();
     const { action, id, url, source, externalId } = msg;
-    if (!['rendered', 'finished'].includes(action)) lastCardUse = lastOverlayUse; // a button on the card
-    if (action === 'click') {
-      if (typeof url === 'string' && /^https?:\/\//.test(url)) shell.openExternal(url);
-      if (source) hub.handleAction(source, 'open', externalId);
-      // The unread badge counts down: what the user just opened (same app/chat) is read now.
+    if (!['rendered', 'finished'].includes(action)) { lastCardUse = lastOverlayUse; log(`[overlay] card action: ${String(action).slice(0, 20)}`); } // a button on the card (no content)
+    if (action === 'click' || action === 'read') {
+      if (action === 'click' && typeof url === 'string' && /^https?:\/\//.test(url)) shell.openExternal(url);
+      if (action === 'click' && source) hub.handleAction(source, 'open', externalId);
+      // The unread badge counts down: what the user just opened / marked read (same app/chat) is read now.
       const opened = (pipeline.current && pipeline.current.id === id) ? pipeline.current : pipeline.history.find(h => h.id === id);
       if (opened && inbox) {
         const masked = (it) => it.privacy && it.privacy !== 'full_content';
@@ -682,7 +779,7 @@ function quickAssignMenu(item) {
       ]
     });
   }
-  menu.push({ type: 'separator' }, { label: L('⚙️ Chỉnh chi tiết trong Người quen…', '⚙️ Edit in Familiar contacts…'), click: () => openControlCenter('pet') });
+  menu.push({ type: 'separator' }, { label: L('⚙️ Chỉnh chi tiết trong Người quen…', '⚙️ Edit in Familiar contacts…'), click: () => openControlCenter('contacts') });
   return menu;
 }
 
@@ -700,7 +797,32 @@ async function boot() {
       if (!/•••/.test(it.title || '') && !/^🔒/.test(it.message || '')) directory.learn(it, it.receivedAt || Date.now());
     }
   }
-  pipeline = new NotificationPipeline({ getSettings: () => settings.get(), inbox, directory });
+  pomodoro = new Pomodoro({ getSettings: () => settings.get() });
+  pipeline = new NotificationPipeline({ getSettings: () => settings.get(), inbox, directory, getRuntime: () => ({ pomodoroQuiet: pomodoro.wantsQuiet() }) });
+  pomodoro.on('change', (st) => {
+    refreshEffectiveState(true); // focus phase = deep-focus attention; the overlay shows the countdown
+    bus.emit('event', 'pomodoro', st);
+    buildTrayMenu();
+  });
+  pomodoro.on('phase-end', ({ ended, next, minutes, preset }) => {
+    const study = preset === 'study';
+    const msg = ended === 'focus'
+      ? { title: L(`🍅 Xong ${study ? 'phiên học' : 'phiên tập trung'}! Nghỉ ${minutes} phút nhé`, `🍅 ${study ? 'Study' : 'Focus'} session done! Take ${minutes} minutes off`),
+          message: L('Đứng dậy vươn vai, uống ngụm nước, nhìn ra xa một chút.', 'Stand up, stretch, sip some water, look into the distance.'), emotion: 'love' }
+      : { title: L(`⏰ Hết giờ nghỉ — vào phiên ${minutes} phút mới nhé`, `⏰ Break's over — next ${minutes}-minute session`),
+          message: L('Bé ngồi học cùng bạn đây.', 'Your pet is right here with you.'), emotion: 'excited' };
+    pipeline.ingest({ title: msg.title, message: msg.message, app: 'wellbeing', appName: 'Pomodoro', forceEmotion: msg.emotion, priority: 'critical', duration: 12000, sourceEventId: `pomodoro:${Date.now()}` },
+      'wellbeing', { bypassDedupe: true, defaults: { deliveryMode: 'native_os', provider: 'pomodoro' } });
+    log(`[pomodoro] ${ended} → ${next}`);
+  });
+  let pomoMinute = -1;
+  setInterval(() => {
+    pomodoro.tick();
+    // Keep the tray label's minutes current (cheap: only when the minute changes).
+    const st = pomodoro.state();
+    const m = st.phase === 'idle' ? -1 : Math.ceil(st.remainingMs / 60000);
+    if (m !== pomoMinute) { pomoMinute = m; buildTrayMenu(); }
+  }, 1000).unref();
   integrations = new IntegrationsManager({ settings, secrets, log, dataDir: dir, openExternal: (u) => shell.openExternal(u), pollSeconds: () => settings.get().integrations.pollSeconds });
   integrations.on('notification', (payload) => {
     const r = pipeline.ingest(payload, 'composio', { defaults: { deliveryMode: 'near_realtime_poll', provider: 'composio' } });
@@ -717,6 +839,7 @@ async function boot() {
   chatSources = new ChatSources({ integrations, hub, secrets, settings, dir });
 
   hub.on('notification', (payload, source, meta) => {
+    if (source === 'windows_nc' && isOwnBanner(payload)) return; // our own Mode 1 preview banner
     const r = pipeline.ingest(payload, source, { defaults: meta || {} });
     pushBadge();
     // Technical log only — no notification content (privacy).
@@ -777,6 +900,7 @@ async function boot() {
       ingest: (payload, source) => pipeline.ingest(payload, source, { defaults: { deliveryMode: 'realtime_push', provider: 'webhook' } }),
       previewClassify: (payload) => pipeline.preview(payload),
       testNotify,
+      pomodoro: pomodoroAction,
       webhookEnabled: () => hub.get('webhook').enabledForIngest,
       getWebhookSecret: () => secrets.get('webhook.secret'),
       clearHistory: () => pipeline.clearHistory(),
@@ -821,7 +945,8 @@ async function boot() {
   breaks = new BreakReminder({
     getSettings: () => settings.get(),
     getIdleSeconds: () => { try { return powerMonitor.getSystemIdleTime(); } catch { return 0; } },
-    getModeId: () => pipeline.attention.mode().id
+    // A running Pomodoro owns the rhythm: no second reminder on top of it.
+    getModeId: () => (pomodoro && pomodoro.phase !== 'idle' ? 'focus' : pipeline.attention.mode().id)
   });
   breaks.on('remind', ({ usedMinutes, breakMinutes }) => {
     pipeline.ingest({
@@ -842,8 +967,9 @@ async function boot() {
   // Quiet hours can begin without any user action → re-evaluate periodically.
   setInterval(() => refreshEffectiveState(), 30 * 1000).unref();
 
-  const recoverOverlay = () => {
+  const recoverOverlay = (why) => {
     if (!overlay || overlay.isDestroyed()) return;
+    log(`[overlay] recover (${typeof why === 'string' ? why : 'display change'})`);
     fitOverlayToDisplay();
     if (process.platform === 'darwin') {
       overlay.setAlwaysOnTop(true, 'screen-saver');
@@ -859,13 +985,14 @@ async function boot() {
 
   powerMonitor.on('resume', () => {
     if (breaks) breaks.rested();
-    recoverOverlay();
+    recoverOverlay('resume');
   });
   powerMonitor.on('unlock-screen', () => {
-    recoverOverlay();
+    recoverOverlay('unlock');
   });
   refreshEffectiveState(true);
 
+  readSystemBannerMs(); // and again before each Mode 1 test: the user may have just changed it
   screen.on('display-metrics-changed', recoverOverlay);
   screen.on('display-added', recoverOverlay);
   screen.on('display-removed', recoverOverlay);
@@ -875,13 +1002,35 @@ async function boot() {
 
   // First run: greet & open Control Center so new users see where everything is.
   const firstRunFlag = path.join(app.getPath('userData'), '.welcomed');
+  const justInstalled = consumeInstallMarker();
   if (!fs.existsSync(firstRunFlag)) {
     fs.writeFileSync(firstRunFlag, String(Date.now()));
     setTimeout(() => {
       pipeline.ingest({ title: 'Mèo Mochi chào sen! 🐾', message: 'Mình sẽ mang thông báo tới cho bạn. Mở Control Center từ icon dấu chân trên thanh menu nhé!', app: 'default', forceEmotion: 'love', priority: 'important' }, 'system', { bypassDedupe: true, defaults: { deliveryMode: 'native_os' } });
       if (httpServer) openControlCenter();
     }, 1500);
+  } else if (justInstalled) {
+    // A finished install / reinstall / update opens the Control Center once, like the first run.
+    setTimeout(() => { if (httpServer) openControlCenter(); }, 1500);
   }
+}
+
+/**
+ * True once right after an install: the Windows installer leaves `.just-installed` in userData
+ * (build/installer.nsh, customInstall) — also on a reinstall of the same version. Packaged builds
+ * without an installer hook (macOS DMG) count a version change instead. Dev runs never do.
+ */
+function consumeInstallMarker() {
+  if (!app.isPackaged) return false;
+  const dir = app.getPath('userData');
+  const marker = path.join(dir, '.just-installed');
+  const verFile = path.join(dir, '.last-version');
+  let installed = false;
+  try { if (fs.existsSync(marker)) { fs.unlinkSync(marker); installed = true; } } catch { /* cannot delete: do not reopen on every launch */ }
+  let last = null;
+  try { last = fs.readFileSync(verFile, 'utf8').trim(); } catch { /* none yet */ }
+  try { if (last !== app.getVersion()) fs.writeFileSync(verFile, app.getVersion()); } catch { /* read-only: just skip */ }
+  return installed || (last !== null && last !== app.getVersion());
 }
 
 /**

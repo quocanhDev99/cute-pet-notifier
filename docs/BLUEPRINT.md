@@ -96,23 +96,81 @@ Các thao tác, lọc, ưu tiên, giờ yên tĩnh, Focus, cảm xúc, âm thanh
 ## 4. Blueprint mobile app
 
 ### Mục tiêu và phạm vi
-Ứng dụng mobile là **companion cho hệ sinh thái**, không phải bản sao desktop thu nhỏ và không hứa thay notification system. Cung cấp pet 2D nhẹ, inbox, cảm xúc/rule cơ bản, quản lý focus và kết nối thiết bị; tận dụng push do chính dịch vụ tích hợp gửi tới app khi có quyền. Mobile không thể đọc toàn bộ notification ứng dụng khác trên iOS; Android có thể nhận qua Notification Listener opt-in nhưng cần đánh giá riêng quyền riêng tư, phân phối và pin.
+Mở rộng mobile theo thứ tự **iOS trước, Android sau**. Mục tiêu là dùng chung chức năng sản phẩm và dữ liệu với desktop; giao diện, push và quyền hệ thống dùng adapter riêng theo nền tảng. iOS app có pet tương tác, emotion/rule, Focus, privacy, inbox/digest, contact preferences, âm thanh và connector theo khả năng; iOS không thể đọc notification từ app khác, thay banner của app khác hoặc cho pet nổi trên toàn hệ thống. Android chỉ bắt đầu sau khi iOS MVP và backend vận hành ổn định; Notification Listener nếu có là quyền tùy chọn cần đánh giá riêng.
 
-### MVP mobile (ưu tiên Android/iOS chung)
-1. Onboarding, chọn pet/tính cách, quyền thông báo của chính app, cài đặt riêng tư và giải thích đồng bộ.
-2. Home pet 2D nhẹ, trạng thái và tương tác cơ bản; không cần 3D realtime ở bản đầu.
+### iOS MVP (mục tiêu mobile đầu tiên)
+1. Onboarding iOS, chọn pet/tính cách, xin quyền notification của chính app đúng lúc có ngữ cảnh, cài đặt riêng tư và giải thích đồng bộ.
+2. Home pet tương tác; mục tiêu là render cùng GLB/animation contract desktop sau khi model production được kiểm chứng trên iPhone. Dùng bộ 2D concept làm fallback nhẹ cho máy không đạt ngân sách tài nguyên, trạng thái giảm chuyển động và notification extension.
 3. Inbox/Digest dùng chung schema, trạng thái đã xem/lưu trữ, lọc nguồn và search cục bộ.
 4. Quy tắc cơ bản: nguồn, từ khóa, ưu tiên, Focus/Quiet Hours; thêm người quen thủ công. Advanced AND/OR và học tự động để sau.
-5. Push cho sự kiện do backend/connector hợp pháp hỗ trợ; deep link về app và nguồn gốc khi adapter có URL.
+5. Push qua APNs cho sự kiện backend/connector được phép gửi; payload tối thiểu, nội dung nhạy cảm chỉ tải sau khi mở app nếu người dùng bật sync; deep link về app/nguồn khi adapter có URL.
 6. Đồng bộ tùy chọn, có chọn trường dữ liệu, mã hóa khi truyền/lưu, quản lý phiên đăng nhập và thu hồi thiết bị.
-7. Accessibility: Dynamic Type/font scaling, screen reader, reduced motion, dark mode, haptic opt-in, pin/data controls.
+7. Accessibility: Dynamic Type/font scaling, VoiceOver, reduced motion, dark mode, haptics opt-in, pin/data controls; hỗ trợ iPhone trước, iPad sau khi luồng chính ổn định.
 
-### Mobile sau MVP (Post-MVP)
-- Android notification access opt-in: ingest metadata theo allowlist, preview trước khi bật, per-app denylist, pause, xóa cục bộ, không upload raw notification mặc định.
-- Widget pet/inbox; Android notification shortcuts và iOS widgets/Live Activities chỉ cho dữ liệu/sự kiện thuộc app và theo giới hạn nền tảng.
-- Sync rule/settings; conflict resolution theo thời gian + nguồn thiết bị, không đồng bộ secrets/token trong export.
+### Sau iOS MVP: Android và khả năng mở rộng
+- Android app là nền tảng mobile thứ hai: trước hết pet/inbox/push riêng; Notification Listener opt-in chỉ sau đánh giá chính sách, UX quyền, pin và bảo mật.
+- iOS widgets/Live Activities chỉ cho dữ liệu và hoạt động của chính app, theo giới hạn nền tảng; widget không phải pet overlay luôn chạy.
+- Android notification shortcuts/widgets và selective sync; conflict resolution theo thời gian + nguồn thiết bị, không đồng bộ secrets/token trong export.
 - Pet 3D mobile hoặc AR chỉ sau benchmark pin/nhiệt, kích thước tải xuống và thiết bị hỗ trợ.
 - Không làm overlay universal trên iOS; Android floating pet/overlay là thử nghiệm sau MVP, không phải cam kết parity.
+
+### Đồng bộ chức năng desktop/iOS
+
+Định nghĩa **parity ở cấp sản phẩm**: cùng user account, pet IDs, 8 emotion IDs, attention/priority semantics, privacy modes, contact groups, basic rules, Focus/Quiet Hours, inbox/read state, sound preferences và connector events khi nguồn hỗ trợ. Duy trì capability matrix theo feature để UI giải thích rõ tính năng nào dùng được trên từng OS.
+
+- Dùng chung event/settings schema, rule fixtures, emotion test vectors và API contracts. Chia sẻ thư viện domain logic nếu dependency audit chứng minh nó chạy an toàn trên Node và iOS; không buộc chia sẻ UI hoặc renderer.
+- Settings và inbox sync có versioning, conflict policy, offline behavior, opt-out, revoke và delete. Notification payload không phải database; raw content chỉ sync theo lựa chọn riêng của người dùng.
+- Desktop capture, Windows registry/banner adapter, macOS Accessibility, iOS APNs/notification content extension và Android listener là platform-specific capabilities; không hứa các quyền hệ thống giống nhau.
+- Connector chỉ được hiển thị trên mobile nếu có API/backend delivery phù hợp. Trạng thái polling, độ trễ, lỗi và quyền cần ghi rõ; không giả lập event native của app khác.
+- Feature parity không có nghĩa mọi màn hình hoặc thao tác giống hệt. Giữ cùng kết quả nghiệp vụ, dùng UX phù hợp iPhone; thiếu capability thì ghi `Unsupported on this platform` và cung cấp fallback.
+
+### Dùng chung pet 3D desktop/iOS
+
+Mục tiêu là **một character identity, cùng hành vi và dùng lại tối đa renderer/asset source**, không bắt buộc cùng render engine. Desktop hiện dùng Three.js với procedural rig; `assets/pet-manifest.json` đánh dấu cả bốn nhân vật `productionReady: false` và chưa có GLB production, nên hiện chưa có model production hoàn chỉnh để đóng gói lên iPhone. Có thể thử chạy các module pet Three.js hiện tại trong WKWebView để giữ hình dáng/animation desktop; đây là feasibility spike, chưa phải quyết định renderer mobile.
+
+1. Hoàn thiện Mochi GLB production trước: rig, morph/clip map theo semantic contract, scale/pivot, texture/material và license.
+2. Spike reuse Three.js pet stage hiện tại trong WKWebView trước; so sánh với native renderer/asset conversion cho cùng GLB/animation set. Đo thời gian mở, memory, frame-time, nhiệt và pin trên iPhone đời thấp/mục tiêu; không chốt theo cảm giác trên simulator.
+3. Chia sẻ character ID, emotion mapping và logic trạng thái; renderer desktop/iOS có thể khác nhau nhưng phản ứng 8 cảm xúc và tương tác phải tương đương.
+4. Dùng LOD, texture nén, giới hạn animation, reduced motion và 2D fallback. Notification banner ngắn/Lock Screen dùng hình tĩnh gọn; 3D pet realtime chạy trong app foreground, không chạy nổi trên toàn iOS.
+5. Chỉ mở rộng Boba/Cloud/Pip khi Mochi đạt asset QA trên desktop và iPhone; asset lỗi hoặc máy yếu phải chuyển fallback mà Inbox/notification tiếp tục hoạt động.
+
+
+### Chuẩn bị bắt buộc trước khi bắt đầu iOS
+
+**Sản phẩm và phạm vi**
+
+- Chốt iOS MVP là companion cho notification do chính app/backend hoặc connector hợp lệ tạo; không đưa “đọc notification từ Zalo/Slack/Gmail khác” hay “pet nổi trên mọi app” vào tiêu chí iOS.
+- Chọn use cases đầu tiên: pet + inbox; notification/push từ connector đã xác minh; mở deep link hợp lệ; cài đặt privacy/focus và đồng bộ tùy chọn.
+- Chốt các nội dung được phép đưa lên lock screen. Mặc định chỉ gửi source/title tối thiểu hoặc generic alert; nội dung chi tiết được tải trong app sau privacy gate.
+
+**Tài khoản, công cụ và thiết bị**
+
+- Apple Account và Mac có Xcode; tài khoản miễn phí đủ để bắt đầu development/test trên thiết bị cá nhân. Phân phối beta qua TestFlight/App Store cần Apple Developer Program membership, App Store Connect và signing/provisioning phù hợp. Xác minh yêu cầu/cước phí enrollment tại thời điểm đăng ký.
+- iPhone thật để kiểm tra quyền notification, lock screen, Focus, offline/background, token rotation, font size, VoiceOver, reduced motion và pin; chuẩn bị tối thiểu một thiết bị đời thấp mục tiêu và một iOS mới nhất. Simulator không thay thế kiểm tra push/background trên thiết bị thật.
+- Quyết định cá nhân hay tổ chức đứng tên app, bundle ID, tên hiển thị, website/support URL, privacy policy, icon/screenshots và nhóm TestFlight nội bộ/bên ngoài.
+
+**Kiến trúc và backend**
+
+- Repo hiện tại là Electron/Node desktop; chưa có iOS target, APNs sender hoặc mobile API chuyên dụng. `gateway/server.js` hiện xử lý luồng gateway hiện tại, không được mặc định coi là backend mobile sẵn sàng.
+- Chốt spike framework trước đầu tư UI. Khuyến nghị **Flutter cho mobile iOS/Android**, giữ desktop Electron; dùng Swift cho iOS Notification Content Extension và native bridges cần thiết. Đo release size/performance và thử pet Three.js trong WKWebView trước khi khóa renderer.
+- Thiết kế backend authenticated API + APNs provider: device registration, token rotation, per-device revoke, environment separation (dev/prod), retry/rate limit, observability không chứa notification content, account deletion và idempotency.
+- APNs delivery là best effort, không đảm bảo thời điểm nhận. App phải đồng bộ trạng thái khi mở lại, xử lý push trùng/mất/thứ tự khác, token hết hiệu lực và user tắt quyền.
+- Không nhúng Composio/API secrets vào app. Connector credentials giữ ở desktop hoặc backend theo scope tối thiểu; mobile chỉ nhận event được phép. Chốt rõ backend giữ dữ liệu gì, nơi lưu, retention, mã hóa và quy trình xóa tài khoản/dữ liệu.
+
+**Dữ liệu và quyền riêng tư**
+
+- Định nghĩa mobile event schema phiên bản hóa: `eventId`, `source`, `createdAt`, `privacyMode`, `safePreview`, `deepLink`, `expiresAt`; không gửi raw body mặc định. Payload push phải nhỏ và không được dùng như database.
+- Cho phép tắt sync; chọn riêng sync settings, metadata và inbox; mô tả rõ dữ liệu nào rời desktop. Xóa/đăng xuất phải revoke device token và phiên backend.
+- Viết threat model cho lock-screen leakage, thiết bị mất, log/crash, shared account, token theft, replay và connector compromise; kiểm tra notification privacy ở mọi display mode.
+- Quyền notification xin trong ngữ cảnh giải thích giá trị; cho phép tiếp tục dùng pet/inbox khi người dùng từ chối, với trạng thái hướng dẫn bật lại trong Settings.
+
+**Quyết định release**
+
+- Chọn minimum iOS version sau khi khảo sát thiết bị mục tiêu và API cần dùng; không chốt theo phỏng đoán.
+- Hoàn thiện app icon, onboarding/privacy copy, support page, privacy policy, App Store metadata, screenshots, age/content declarations và support process trước beta công khai.
+- Đặt gate: TestFlight nội bộ → nhóm người dùng nhỏ → sửa crash/permission/privacy UX → beta rộng. Thu telemetry vận hành opt-in/tối thiểu; không gửi nội dung thông báo.
+
+Tham khảo chính thức: [Apple User Notifications](https://developer.apple.com/documentation/usernotifications), [Apple Developer Program membership](https://developer.apple.com/help/account/membership/programs-overview/), [WidgetKit interactivity](https://developer.apple.com/documentation/widgetkit/adding-interactivity-to-widgets-and-live-activities) và [Apple Human Interface Guidelines — Live Activities](https://developer.apple.com/design/human-interface-guidelines/live-activities).
 
 ### Ranh giới dữ liệu desktop/mobile
 
@@ -132,9 +190,9 @@ Các thao tác, lọc, ưu tiên, giờ yên tĩnh, Focus, cảm xúc, âm thanh
 | 4a — Trải nghiệm người mới | P1 | Onboarding tối thiểu (pet → Mode → riêng tư → giờ yên tĩnh); chuột phải trên thẻ có Undo + 4 preset; Mode B mặc định cho bản cài mới. | Người mới thiết lập được trong vài phút không cần tài liệu (UX gate §11.3). |
 | 4b — Độ bền chạy nền | P1 | Script soak test 8 giờ + đo idle. | Trên máy văn phòng tham chiếu, 8 giờ không có xu hướng tăng RAM liên tục, không có CPU wakeup/render loop đáng kể khi idle, pet ngủ đúng chính sách, quạt không tăng rõ rệt so với baseline; lưu RAM đầu/cuối, CPU trung bình/p95, wakeups. |
 | 4c — Phát hành | P1 | Ký app, auto-update có chữ ký + rollback, tích hợp phổ thông đã xác minh bằng tài khoản thật (Lịch, Outlook, GitHub). Gọn Control Center chỉ sau khi có bảng ánh xạ tính năng. | Build Windows/macOS ký đúng quy trình (closed beta được miễn, xem §10.6); cập nhật/rollback được kiểm chứng; connector công bố đều có verified account test. |
-| 5 — Mobile foundation và MVP | P2 | Chỉ sau khi desktop beta cung cấp tín hiệu nhu cầu: chọn framework, domain model/API, app shell, pet 2D nhẹ, inbox và push cho sự kiện của chính app. | iOS/Android MVP dùng được không cần quyền đọc notification; offline inbox, session revoke và xóa dữ liệu được định nghĩa. |
-| 6 — Mobile notification capability và selective sync | P2 | Android listener opt-in với kiểm soát theo app; iOS push/widget/Live Activities cho sự kiện app được phép; đồng bộ chọn lọc settings/metadata. | Preview quyền, pause/revoke/delete; kiểm tra pin/riêng tư; iOS không đọc notification bên thứ ba; sync có thể tắt độc lập. |
-| 7 — Personalization mở rộng | P2 | Rule AND/OR, simulator, học phản hồi opt-in, âm thanh file, theme/phụ kiện, asset packs cộng đồng sau khi có mô hình an toàn. | Chỉ tiến hành khi adoption/support metrics cho thấy giá trị; mọi học tự động có giải thích và undo. |
+| 5 — iOS foundation và shared feature MVP | P1 | Bắt đầu sau khi event/privacy contracts ổn định: Flutter app shell iPhone, parity matrix, inbox/offline, domain API, production GLB feasibility và 2D fallback. | Có thể dùng các chức năng lõi không cần quyền đọc notification bên thứ ba; cùng emotion/rule/privacy fixtures với desktop; session revoke, xóa dữ liệu và TestFlight flow được xác định. |
+| 6 — iOS APNs, integrations, 3D pet và selective sync | P1 | APNs provider, device tokens, deep links, integrations, sync chọn lọc và cùng asset GLB với desktop nếu đạt mobile performance gate. | Permission denied/offline/logout/delete xử lý đúng; push dedupe; parity matrix được xác minh; frame-time/pin/nhiệt đạt ngân sách thiết bị; fallback không mất chức năng. |
+| 7 — Android feasibility and MVP | P2 | Chỉ sau khi iOS MVP ổn định: app Android dùng shared schema/API và pet asset; Notification Listener là nghiên cứu opt-in riêng. | Không ảnh hưởng iOS cadence; quyền nhạy cảm có preview/revoke; benchmark pin, OEM, privacy trước khi bật listener. |
 
 ## 6. Tiêu chí đo lường mới
 
@@ -156,6 +214,8 @@ Các thao tác, lọc, ưu tiên, giờ yên tĩnh, Focus, cảm xúc, âm thanh
 
 
 ## 8. Chuẩn sản xuất pet tự nhiên, giàu sức sống và nhất quán chức năng
+
+> **Spec chi tiết & task:** `docs/character-production/` — bắt đầu từ `00_AUDIT_AND_TASKS.md` (bản đồ module thật, quyết định, task CP-xx). Mục 8 này là nguồn chuẩn khi có mâu thuẫn.
 
 ### 8.1 Mục tiêu nghệ thuật
 
@@ -203,7 +263,8 @@ Hướng đến **stylized-realistic**: vật liệu, ánh sáng, tỷ lệ và 
 - Không để asset pack thực thi code; chỉ đọc model/texture/audio đã validate. User import phải sandbox hóa, giới hạn kích thước/định dạng và có reset về default.
 - Mode “thay banner” và “system banner + pet companion” dùng cùng pet renderer/animation/audio controller; presentation adapter không sở hữu logic cảm xúc, privacy, Inbox hay quick action.
 - Không lưu notification content trong asset logs/crash report; log asset chỉ gồm ID, version và mã lỗi kỹ thuật.
-- Với mobile, dùng cùng character IDs/emotion semantics nhưng cho phép asset LOD/mobile pack, clip rút gọn và 2D fallback; không bắt mobile render model desktop.
+- Với mobile, dùng cùng character IDs/emotion semantics và ưu tiên tái sử dụng pet 3D Three.js/GLB; cho phép LOD/mobile pack, clip rút gọn và 2D fallback khi máy yếu hoặc trong notification extension.
+- Bộ hình 2D ban đầu tại `assets/concepts/mobile-pets/` là concept art tham khảo, chưa phải sprite sheet/animation production. Cần duyệt likeness, palette và quyền sử dụng trước khi chuyển thành asset phát hành.
 
 ### 8.7 Quy trình duyệt và tiêu chí nghiệm thu asset
 
@@ -306,7 +367,7 @@ Asset chỉ đạt khi:
 
 Cute Pet Companion nên được giới thiệu trước tiên như **pet đồng hành giúp quản lý thông báo nhẹ nhàng**, thay vì một bảng điều khiển tự động hóa công việc. Lợi thế sản phẩm cần được chứng minh bằng trải nghiệm thực tế: pet có cá tính, người dùng kiểm soát được điều gì làm gián đoạn mình, và dữ liệu nhạy cảm được xử lý minh bạch. Không dùng tuyên bố tuyệt đối như “bảo mật tuyệt đối/on-device hoàn toàn” khi một số connector hoặc luồng đồng bộ có xử lý ngoài thiết bị.
 
-**Ưu tiên phát hành:** Desktop Windows/macOS trước; mobile chuyển thành giai đoạn sau khi desktop beta chứng minh được nhu cầu và năng lực vận hành. Đây là quyết định phân bổ nguồn lực, không phải hủy mobile. iOS/Android có thể tiếp tục discovery/technical spike nhỏ, nhưng chưa xây đồng thời backend đồng bộ và hai ứng dụng hoàn chỉnh trong P0/P1.
+**Ưu tiên phát hành:** tiếp tục ổn định desktop, đồng thời bắt đầu iOS sau khi event/privacy contract P0 được chốt; iOS là nền tảng mobile đầu tiên và Android theo sau khi iOS MVP ổn định. Không chờ hoàn tất toàn bộ desktop roadmap mới bắt đầu iOS. Giữ chung chức năng nghiệp vụ ở cấp core; UI, notification delivery/capture và system permissions có adapter riêng theo OS.
 
 ### 10.2 Onboarding 5 phút và cấu hình theo tầng
 
@@ -320,19 +381,18 @@ Luồng lần đầu chỉ hỏi thông tin thiết yếu:
 
 Preset chỉ khởi tạo cấu hình có thể xem/sửa, không tự xin quyền, kết nối tài khoản hoặc bật đọc notification. Cần có “Bỏ qua”, “Đặt lại mặc định” và đường dẫn giải thích vì sao một thông báo bị lọc.
 
-### 10.3 Thu gọn Control Center và khái niệm
+### 10.3 Chuẩn Hóa Control Center 6 Tabs & Chế Độ Đồng Hành Hệ Thống (Concept v2.0)
 
-Đề xuất điều hướng người dùng thành 5 khu vực:
+> **Bản đặc tả thiết kế 100% Concept Render:** Xem tại [MASTER_UIUX_SPEC_V2.md](design/uiux-v2/MASTER_UIUX_SPEC_V2.md) và [NOTIFICATION_MODE_REDESIGN_SPEC.md](product/notifications/NOTIFICATION_MODE_REDESIGN_SPEC.md).
 
-- **Trang chủ & Pet:** trạng thái, chọn nhân vật, tương tác, preview.
-- **Thông báo & Tập trung:** Mode A/B, nguồn, ưu tiên, giờ yên tĩnh, inbox/digest.
-- **Người quen & Quy tắc:** danh sách người/nhóm, preset dễ hiểu, quy tắc cơ bản; nâng cao nằm sau “Tùy chỉnh nâng cao”.
-- **Kết nối:** app/service, trạng thái quyền và độ trễ, kết nối/tắt kết nối.
-- **Cài đặt:** riêng tư, âm thanh, giao diện, accessibility, cập nhật, dữ liệu.
-
-Đây là cấu trúc UX mục tiêu; trước khi gộp tab hiện có phải lập bảng ánh xạ tính năng để không làm mất capability. **Lối cấu hình ưu tiên số 1 cho người mới là chuột phải lên thẻ thông báo → Xếp nhóm/đặt mức ưu tiên** (đã có: `quickAssignMenu` trong `src/main/index.js`, gán nhóm quan hệ cho người/nhóm chat; việc còn lại là Undo, giải thích kết quả và gom về 4 preset dưới đây — preset ánh xạ vào nhóm quan hệ sẵn có, không đổi dữ liệu cũ): thao tác này tạo hoặc cập nhật quy tắc đơn giản ngay tại ngữ cảnh, có Undo và giải thích kết quả; không bắt người dùng mở Control Center để xử lý lần đầu. Thay vì buộc chọn trong 11 loại quan hệ, cung cấp 4 preset dễ hiểu: **Ưu tiên cao**, **Công việc**, **Cá nhân**, **Im lặng**; “nhãn tùy chỉnh” là lựa chọn mở rộng. Thay vì nhiều Focus mode ngang cấp, trình bày 3 chế độ: **Bình thường**, **Tập trung**, **Im lặng/Họp**; các ngoại lệ và lịch tự động là cài đặt phụ. Các trạng thái hiện diện (Full/Minimal/Hidden) là cách hiển thị pet, không phải Focus mode.
-
-Giữ tối đa 2 giao diện mặc định ở public beta (**Sáng**, **Tối**, có thể theo hệ thống); theme trang trí thêm sau khi kiểm tra contrast, reduced motion và bảo trì.
+Cấu trúc điều hướng thanh Sidebar được chuẩn hóa thành **6 tabs duy nhất** theo phong cách Pastel Glassmorphism:
+- 🏠 **Trang chủ:** Lời chào, thẻ ngày giờ `12:29 ☀️`, 3D Pet Showcase với bục đệm tròn + `< Boba >`, Lưới 3×2 Chế độ đồng hành (Focus, Pomodoro 25-5, Break, Study, Work, Sleep), Card Thông báo (2 tùy chọn nguồn), Card Hoạt động hôm nay (8 thông báo, 5 tác vụ, 2h 30m).
+- 🐱 **Thú cưng:** Chọn thú cưng (Mochi, Boba, Cloud, Pip), sân khấu 3D live, panel tùy chỉnh (Thái độ, Kích thước 100%, Sinh động 1.0x, Âm thanh).
+- 🔔 **Thông báo (Khớp 100% Hình 1):** Gồm 5 khối hoàn chỉnh: Dual OS Live Preview (Windows 11 Teams & macOS GitHub); 2 Card chọn chế độ có nút bắn thử riêng (`[ ▶ Thử thông báo hệ thống ]` & `[ ▶ Thử thẻ Cute Pet ]`); 4 kiểu bám (Ôm bảng, Ló đầu, Nghỉ ngơi, Đưa thư); Chuỗi hoạt ảnh 6 bước; 4 Biến thể thực tế (Email, Tin nhắn, Lịch, Hệ thống); Bộ tùy chỉnh nhanh.
+- 📥 **Hộp thư:** Badge số `2`, 4 tab filter (Tất cả, Tin nhắn, Công việc, Quan trọng), danh sách notification rows, nút `✓ Đánh dấu đã đọc tất cả`.
+- 🔌 **Kết nối:** Danh sách app (GitHub, Gmail, Teams, Notion) kèm công tắc bật/tắt trực tiếp, nút `+ Thêm ứng dụng khác`.
+- ⚙️ **Cài đặt:** 4 nút tròn chọn theme (Oải hương, Xanh biển, Bạc hà, Đêm), Ngôn ngữ Tiếng Việt, Khởi động cùng máy, Giảm chuyển động, Slider âm lượng 70%.
+*(Tab nâng cao "Theo dõi" chỉ xuất hiện khi người dùng kích hoạt Chế độ Nâng cao trong Cài đặt).*
 
 ### 10.4 Ưu tiên tích hợp theo nhu cầu, không theo độ phức tạp kỹ thuật
 
@@ -349,7 +409,7 @@ Break reminder và Pomodoro có thể tăng giá trị khi ít notification, nh�
 
 ### 10.6 Phát hành, cập nhật và đo lường
 
-- **Code signing/notarization:** điều kiện phát hành rộng, với chứng chỉ và quy trình phù hợp nền tảng; nếu chưa sẵn sàng, beta cần ghi rõ cách cài và giới hạn trust. **Quyết định hiện hành:** closed beta chấp nhận cảnh báo SmartScreen (Windows) / Gatekeeper (macOS) kèm hướng dẫn trong `docs/INSTALL.md`; chọn chứng chỉ là điều kiện trước *public* beta. Không khẳng định một loại EV certificate là bắt buộc cho mọi luồng phân phối Windows.
+- **Code signing/notarization:** điều kiện phát hành rộng, với chứng chỉ và quy trình phù hợp nền tảng; nếu chưa sẵn sàng, beta cần ghi rõ cách cài và giới hạn trust. **Quyết định hiện hành:** closed beta chấp nhận cảnh báo SmartScreen (Windows) / Gatekeeper (macOS) kèm hướng dẫn trong `docs/guides/release/INSTALL.md`; chọn chứng chỉ là điều kiện trước *public* beta. Không khẳng định một loại EV certificate là bắt buộc cho mọi luồng phân phối Windows.
 - **Auto-update:** ký xác thực gói update, kiểm tra tương thích, rollout theo kênh, có fallback/rollback và ghi chú phiên bản. Không update asset/runtime nếu manifest/checksum sai.
 - **Telemetry:** mặc định tối thiểu và opt-in rõ; chỉ thu số liệu vận hành đã loại nội dung notification (crash code, latency bucket, OS/app version, asset load success); có màn hình xem/xóa/tắt và retention. Không thu raw title/body, danh bạ, chat hay ảnh màn hình.
 - **Public beta:** bắt đầu với Mochi (rig procedural hiện có, đã trau chuốt — **GLB production theo §8 không phải điều kiện beta**, là track song song), Mode B mặc định, chức năng nền đáng tin cậy, onboarding gọn và connector đã xác minh. Các pet và tính năng khác chỉ mở rộng sau khi chi phí asset/support được hiểu rõ.
@@ -364,7 +424,8 @@ Break reminder và Pomodoro có thể tăng giá trị khi ít notification, nh�
 | Rule AND/OR + simulator | Hoãn khỏi public beta cơ bản | Feedback cho thấy người dùng thực sự cần; UX nâng cao không làm phức tạp luồng mặc định. |
 | 11 loại quan hệ, nhiều Focus mode, 5 theme | Giữ logic dưới lõi; thu gọn cách trình bày ban đầu | Cho phép nhãn/preset tùy chỉnh từ màn hình nâng cao; giữ migration cho thiết lập cũ. |
 | Boba/Cloud/Pip, asset marketplace | Hoãn sau Mochi pilot | Pipeline asset, license, validator, moderation, compatibility và hỗ trợ import đã sẵn sàng. Không mở marketplace trước khi threat model và vận hành được duyệt. |
-| Mobile app đầy đủ | Hoãn sau Desktop PMF/public beta learning | Có nhu cầu được chứng minh, kiến trúc sync/privacy được duyệt, ngân sách bảo trì và khác biệt iOS/Android được chấp nhận. |
+| iOS app | Ưu tiên phát triển song song sau khi P0 event/privacy contract ổn định | Chốt parity matrix, backend/APNs, sync/privacy và renderer/pet 3D feasibility; TestFlight beta đạt quality gate. |
+| Android app | Hoãn tới khi iOS MVP ổn định | Dùng lại shared schema/API/assets; đánh giá riêng notification listener, policy, OEM, pin và maintenance. |
 | Cozy productivity | Chỉ làm nhắc nghỉ/timer đơn giản, opt-in | Dữ liệu beta chứng minh giữ chân mà không tăng notification fatigue. |
 
 ### 10.8 Giả thuyết cần kiểm chứng
@@ -419,7 +480,9 @@ Trước khi sửa code, xác định module hiện có và mở rộng nó thay
 | 3 | 9 | Xác minh Lịch/Outlook/GitHub bằng tài khoản thật; mở link cuộc họp | 4c | §10.4 P0/P1. |
 | 3 | 10 | Mode B macOS theo capability | 2 | Sau khi Windows ổn định. |
 
-**Hoãn (không chặn beta):** GLB/asset pipeline §8 (track song song), tái cấu trúc Control Center 5 khu, rule AND/OR + simulator, mobile (Phase 5–6), telemetry, thu gọn theme (chỉ ẩn bớt, không xóa).
+**Track nhân vật (song song, không chặn beta):** theo `docs/character-production/00_AUDIT_AND_TASKS.md` — làm trước CP-05 AudioController và CP-06 micro-behaviour (không cần asset); GLB/âm thanh Mochi (CP-20…22) chờ họa sĩ và nguồn âm thanh có license.
+
+**Hoãn (không chặn desktop beta):** Android (Phase 7), mở rộng asset/GLB ngoài pilot Mochi §8, tái cấu trúc Control Center 5 khu, rule AND/OR + simulator, telemetry mở rộng và thu gọn theme (chỉ ẩn bớt, không xóa). iOS Phase 5–6 bắt đầu sau khi P0 event/privacy contract ổn định và chạy song song với desktop P1; iOS beta không chặn desktop beta.
 
 ## 13. Nhật ký quyết định
 
@@ -431,3 +494,7 @@ Trước khi sửa code, xác định module hiện có và mở rộng nó thay
 | 21/11/2026 | Migration: người dùng hiện tại giữ hành vi cũ (Mode A nếu đang bật suppress); bản cài mới mặc định Mode B. |
 | 21/11/2026 | Phase 4 tách thành 4a (người mới) / 4b (chạy nền) / 4c (phát hành). GLB Mochi không phải điều kiện beta. |
 | 21/11/2026 | Closed beta chấp nhận cảnh báo SmartScreen/Gatekeeper kèm hướng dẫn; chứng chỉ ký là điều kiện public beta. |
+| 21/11/2026 | UI/UX JSON v2 (v3.8.0): theme Oải hương + kính mờ là mặc định cho bản cài mới; route **Chế độ** riêng; thẻ thông báo gọn 340 px mặc định (thẻ đầy đủ vẫn chọn được); kiểu gắn Bám góc mặc định cho bản cài mới. Chưa làm: lưu trữ Hộp thư, vuốt để đóng thẻ, thời lượng tự tắt cho Focus/Work/Sleep. Chi tiết: `docs/design/uiux-v2/IMPLEMENTATION_AUDIT.md`. |
+| 21/11/2026 | Notification redesign (Concept v2, v3.7.0): chế độ 1 trình bày "chỉ có bé" cho tin đã có banner hệ thống (không thẻ trùng); Pomodoro là timer cơ bản opt-in theo §10.5, Học tập = preset 50/10; thêm `petOpacity`, `petClickThrough`, nút "✓ Đã đọc". Chi tiết: `docs/product/notifications/NOTIFICATION_MODE_REDESIGN_SPEC.md`. |
+| 21/11/2026 | Character production: giữ bản sắc hiện tại của 4 nhân vật (`species.js`); phong cách stylized-realism thay "art toy" của BLENDER_GUIDE; QA ở chiều cao 72/126/210/400 px; file nguồn ở `art/{id}/` (không đóng gói); giọng nói hệ thống thành opt-in cho bản cài mới. |
+

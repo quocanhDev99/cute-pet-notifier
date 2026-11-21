@@ -3,6 +3,9 @@
 ## Identity
 ID: `dog_boba`. Friendly, energetic, playful. Bouncy movement, expressive ears, tail and paws. Audio: friendly short vocalizations, playful bark/whine/sniff/pant where appropriate.
 
+## Locked identity (`species.js`)
+Corgi: golden-honey coat with snow-white muzzle/chest, **upright pointed ears**, **stub tail** ("tail wag" = rump wiggle), short legs, bean brows, light-blue bandana.
+
 ## Visual audit
 Silhouette, body proportions, eyes, ears, mouth, paws, tail, optional collar/accessory. Ensure materials, rig and facial capability meet art direction.
 

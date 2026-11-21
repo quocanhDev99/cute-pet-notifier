@@ -30,6 +30,16 @@ html, body {
   transition: opacity .35s ease, transform .45s cubic-bezier(.2,.9,.3,1.2), translate .4s cubic-bezier(.2,.9,.3,1);
 }
 .dock.hidden { opacity: 0; pointer-events: none; visibility: hidden; }
+/* Mode 1 companion trip (Approach / Release): a longer, softer move than the 0.4 s banner lift. */
+.dock.traveling { transition: opacity .35s ease, transform .45s cubic-bezier(.2,.9,.3,1.2), translate .7s cubic-bezier(.33,.75,.3,1); }
+.companion-ghost { display: none !important; }
+/* Pomodoro countdown chip above the pet */
+.pomo-chip { position: absolute; left: 50%; top: -6px; transform: translateX(-50%); z-index: 6; pointer-events: none;
+  padding: 3px 9px; border-radius: 999px; font: 700 12px/1.3 system-ui, sans-serif; color: #fff; white-space: nowrap;
+  background: linear-gradient(135deg, #ff7a6b, #f2545b); box-shadow: 0 4px 12px rgba(242, 84, 91, .35); }
+.pomo-chip.break { background: linear-gradient(135deg, #5fc9a0, #36a57c); box-shadow: 0 4px 12px rgba(54, 165, 124, .35); }
+.pomo-chip.paused { opacity: .7; }
+.pomo-chip[hidden] { display: none; }
 .dock.leaving { opacity: 0; transform: translateY(30px) scale(.9); }
 .dock.size-sm { --pet: calc(170px * var(--pet-scale)); --card-w: 270px; }
 .dock.size-lg { --pet: calc(250px * var(--pet-scale)); --card-w: 380px; }
@@ -50,7 +60,10 @@ html, body {
   flex: 0 0 auto;
   z-index: 3;
   filter: drop-shadow(0 10px 18px rgba(120, 60, 90, .18));
+  /* Cling / resting / banner cut (clipPet): glides with the pose instead of snapping. */
+  transition: clip-path .32s cubic-bezier(.22, 1, .36, 1);
 }
+body.reduced-motion .pet-slot { transition: none; }
 .pet-stage { position: absolute; inset: 0; }
 .pet-stage canvas { width: 100%; height: 100%; display: block; }
 
@@ -409,7 +422,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 .dock.accent-ui.theme-pastel[data-ui="peach"] .card { --bg: linear-gradient(150deg, rgba(255,255,255,.97), rgba(255,244,246,.95) 55%, rgba(255,232,236,.94)); --edge1: #F6DDE2; --edge2: #EBC5CD; }
 .dock.accent-ui[data-ui="mint"] .card { --c: #2FBF8F; --c2: #7FD6B0; }
 .dock.accent-ui.theme-pastel[data-ui="mint"] .card { --bg: linear-gradient(150deg, rgba(255,255,255,.97), rgba(240,251,246,.95) 55%, rgba(222,245,234,.94)); --edge1: #D3EDE1; --edge2: #B9E0CE; }
-.dock.accent-ui[data-ui="lavender"] .card { --c: #8B6CF0; --c2: #C49BFA; }
+.dock.accent-ui[data-ui="lavender"] .card { --c: #8B5CF6; --c2: #60A5FA; }
 .dock.accent-ui.theme-pastel[data-ui="lavender"] .card { --bg: linear-gradient(150deg, rgba(255,255,255,.97), rgba(246,242,255,.95) 55%, rgba(235,228,255,.94)); --edge1: #E2DAF6; --edge2: #CFC2EE; }
 .dock.accent-ui[data-ui="ocean"] .card { --c: #3B82F6; --c2: #5EC8F2; }
 .dock.accent-ui.theme-pastel[data-ui="ocean"] .card { --bg: linear-gradient(150deg, rgba(255,255,255,.97), rgba(240,247,255,.95) 55%, rgba(225,238,255,.94)); --edge1: #D6E3F5; --edge2: #BED2EE; }
@@ -480,3 +493,55 @@ body.reduced-motion .pet-badge.bump { animation: none; }
 }
 @keyframes dust-puff { to { transform: scale(calc(var(--s, 1) * 1.25)) translateY(-6px); opacity: 0; } }
 
+
+/* ==========================================================================
+   UI/UX JSON v2 — compact notification card + cling / resting attachment
+   ========================================================================== */
+.dock { --card-w: 340px; }
+.dock.size-sm { --card-w: 300px; }
+.dock.size-lg { --card-w: 380px; }
+.card.compact { width: var(--card-w); min-width: 0; max-width: min(var(--card-w), calc((100vw - 24px) / var(--card-scale, 1))); }
+.card.compact .card-inner { padding: 14px; }
+.card.compact header { flex-wrap: nowrap; gap: 6px; margin-bottom: 8px; padding-right: 0; }
+.card.compact .app-ico { width: 22px; height: 22px; flex: 0 0 22px; display: grid; place-items: center; border-radius: 7px; background: rgba(255,255,255,.85); box-shadow: inset 0 0 0 1px rgba(0,0,0,.05); font-size: 13px; }
+.card.compact .app-name { font-size: 12.5px; font-weight: 800; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; }
+.card.compact .chip.emo { padding: 2px 8px; font-size: 11px; flex: 0 0 auto; }
+.card.compact .card-time { position: static; margin-left: auto; font-size: 11px; font-weight: 700; color: var(--muted); white-space: nowrap; flex: 0 0 auto; }
+.card.compact .prio-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 8px; background: #F59E0B; }
+.card.compact .prio-dot.prio-critical { background: #EF4444; }
+.card.compact .icon-btn { width: 24px; height: 24px; flex: 0 0 24px; border-radius: 50%; border: 0; cursor: pointer; background: rgba(0,0,0,.05); color: var(--muted); font-size: 11px; display: grid; place-items: center; margin-left: 0; }
+.card.compact .icon-btn:hover { background: rgba(0,0,0,.1); }
+.card.compact .icon-btn.kick-ico { font-size: 12px; }
+.card.compact header .icon-btn.close { position: static; transform: none; }
+.card.compact .title { font-size: 15px; font-weight: 800; margin-bottom: 2px; -webkit-line-clamp: 1; line-clamp: 1; transform: none; }
+.card.compact .message { font-size: 13px; font-weight: 600; -webkit-line-clamp: 2; line-clamp: 2; }
+.card.compact footer { margin-top: 10px; flex-wrap: nowrap; }
+.card.compact footer .btn { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 8px 10px; font-size: 12.5px; }
+.card.compact footer .btn[hidden] { display: none; }
+.card.compact .hint { display: none; }
+
+/* Cling: the pet's head and paws come up at the card's TOP CORNER (behind the card, so it can
+   never cover text or buttons). Resting: same corner, sunk lower — chin on the edge. */
+.dock.mode-cling, .dock.mode-resting { flex-direction: column-reverse !important; }
+.dock.mode-cling.side-left, .dock.mode-resting.side-left { align-items: flex-end !important; }
+.dock.mode-cling.side-right, .dock.mode-resting.side-right { align-items: flex-start !important; }
+.dock.mode-cling .pet-slot, .dock.mode-resting .pet-slot { z-index: 1; filter: none; }
+.dock.mode-cling .pet-slot { margin-bottom: calc(var(--pet) * -0.3); }
+.dock.mode-resting .pet-slot { margin-bottom: calc(var(--pet) * -0.36); }
+.dock.mode-cling.side-left .pet-slot, .dock.mode-resting.side-left .pet-slot { margin-right: -6px; }
+.dock.mode-cling.side-right .pet-slot, .dock.mode-resting.side-right .pet-slot { margin-left: -6px; }
+.dock.mode-cling .card-slot, .dock.mode-resting .card-slot { z-index: 2; }
+.dock.mode-cling .pet-slot, .dock.mode-resting .pet-slot { z-index: 5; }
+/* Paws rest on the top edge: the header starts below them. */
+.dock.mode-cling .card.compact .card-inner, .dock.mode-resting .card.compact .card-inner { padding-top: 22px; }
+
+/* v3.8.2: cling / resting with room to breathe — pet inset from the corner, header clear of the
+   paws, no unread badge on top of the card's buttons while the pet holds the card. */
+.dock.mode-cling.side-left .pet-slot, .dock.mode-resting.side-left .pet-slot { margin-right: 22px; }
+.dock.mode-cling.side-right .pet-slot, .dock.mode-resting.side-right .pet-slot { margin-left: 22px; }
+.dock.mode-cling .card.compact .card-inner, .dock.mode-resting .card.compact .card-inner { padding-top: 28px; }
+.dock.has-card.mode-cling .pet-badge, .dock.has-card.mode-resting .pet-badge { visibility: hidden; }
+
+/* MASTER §5.1: primary action = bold violet, secondary = thin outline */
+.card.compact footer .btn.primary { background: linear-gradient(135deg, #9D76FA, #8B5CF6); color: #fff; box-shadow: 0 4px 12px -4px rgba(139, 92, 246, .6); border: 0; }
+.card.compact footer .btn:not(.primary) { background: #fff; color: #3B3560; border: 1px solid #DDD6FE; box-shadow: none; }

@@ -1,0 +1,31 @@
+{
+  "globalPolicies": [
+    "RespectDoNotDisturb",
+    "RespectFocusMode",
+    "RespectReducedMotion",
+    "RespectMute",
+    "RespectPrivacySettings",
+    "NoNotificationAudioDuplication"
+  ],
+  "notificationRules": {
+    "preferCompact": true,
+    "truncateContent": true,
+    "hiddenContentNeverStored": true,
+    "petAnimationDoesNotBlockActions": true,
+    "fallbackWithoutPetAnimation": true
+  },
+  "modeSwitch": {
+    "confirmOnlyWhenRiskOfLosingState": true,
+    "persistModeSettings": true
+  },
+  "petInteraction": {
+    "actions": [
+      "pet",
+      "wave",
+      "play",
+      "dragIfSupported"
+    ],
+    "feedback": "short animation and optional sound",
+    "cooldownPolicy": "avoid repetitive spam"
+  }
+}

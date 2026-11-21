@@ -1,7 +1,8 @@
 /**
  * Tiny procedural sound kit (Web Audio) — no audio assets needed.
  * Character voices: meow (cat), woof (dog), squeak (bunny), chirp (penguin).
- * If assets/pets/{id}/sounds/{name}.mp3 exists it can be added later; synthesis is the default.
+ * Played through AudioController (audio-controller.js), which prefers the character's recorded
+ * files (assets/pets/{id}/sounds/*.ogg) and falls back to these sounds.
  */
 export class SoundKit {
   constructor() {
@@ -73,7 +74,8 @@ export class SoundKit {
     [2637, 3520, 5274].forEach((f, i) => this.tone({ f0: f, f1: f * 0.995, dur: 0.6 - i * 0.12, type: 'sine', gain: 0.07 / (i + 1), delay: i * 0.01 }));
   }
 
-  emotion(emotion, kind) {
+  /** Short notification chime per emotion (no pet voice). Used by AudioController. */
+  chime(emotion) {
     switch (emotion) {
       case 'happy': [660, 880, 1320].forEach((f, i) => this.tone({ f0: f, dur: 0.14, type: 'triangle', gain: 0.12, delay: i * 0.08 })); break;
       case 'excited': [880, 1175, 1568, 1760].forEach((f, i) => this.tone({ f0: f, dur: 0.1, type: 'square', gain: 0.05, delay: i * 0.06 })); break;
@@ -82,10 +84,15 @@ export class SoundKit {
       case 'angry': this.tone({ f0: 180, f1: 140, dur: 0.3, type: 'sawtooth', gain: 0.08, filter: 600 }); break;
       case 'sad': [523, 466, 392].forEach((f, i) => this.tone({ f0: f, f1: f * 0.97, dur: 0.28, type: 'sine', gain: 0.1, delay: i * 0.2 })); break;
       case 'thinking': [700, 760].forEach((f, i) => this.tone({ f0: f, dur: 0.1, type: 'sine', gain: 0.08, delay: i * 0.16 })); break;
-      case 'sleeping': this.tone({ f0: 300, f1: 220, dur: 0.8, type: 'sine', gain: 0.06 }); return;
+      case 'sleeping': this.tone({ f0: 300, f1: 220, dur: 0.8, type: 'sine', gain: 0.06 }); break;
       default: break;
     }
-    setTimeout(() => this.voice(kind, emotion), 260);
+  }
+
+  /** Chime + procedural pet voice (the original behaviour; kept for callers outside AudioController). */
+  emotion(emotion, kind) {
+    this.chime(emotion);
+    if (emotion !== 'sleeping') setTimeout(() => this.voice(kind, emotion), 260);
   }
 
   purr() {

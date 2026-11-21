@@ -8,6 +8,9 @@
  *   3. Interaction grabbed (sustained)        (user, highest priority)
  *   4. Actions     pet · reject · kick · wave · jolt · land · pop (one-shot, additive envelopes)
  *   5. Face        eyes / mouth / fx — swapped behind a blink at mid-transition (no pops)
+ *   6. Idle        micro-behaviours while nothing else happens: look around, head tilt, weight
+ *                  shift, slow / double blink (docs/character-production/07, CP-06). Additive,
+ *                  faded in/out, cancelled smoothly by anything with a higher layer.
  *
  * Every change of target starts a timed transition from the *current blended pose*
  * (never from a stale pose), so retargeting mid-transition is seamless.
@@ -21,6 +24,23 @@ const OSCILLATION_KEYS = ['bounce', 'shake', 'sway', 'stomp', 'armWave'];
 export const ACTION_DURATIONS = Object.freeze({ pet: 0.75, reject: 0.9, kick: 0.9, wave: 1.4, jolt: 0.45, land: 0.5, pop: 0.28 });
 /** User-initiated actions outrank notification-driven ones (guide §A5). */
 const ACTION_PRIORITY = Object.freeze({ kick: 6, reject: 6, pet: 6, land: 6, wave: 3, jolt: 4, pop: 2 });
+
+/**
+ * Idle micro-behaviours. weight = how often it is picked, d = seconds, cooldown = seconds before the
+ * same one may play again, gentle = still allowed with Reduced Motion.
+ */
+export const IDLE_BEHAVIOURS = Object.freeze({
+  lookAround: { weight: 3, d: 2.6, cooldown: 7, gentle: false },
+  headTilt: { weight: 2, d: 1.9, cooldown: 9, gentle: false },
+  weightShift: { weight: 2, d: 2.4, cooldown: 10, gentle: false },
+  slowBlink: { weight: 2, d: 1.3, cooldown: 8, gentle: true },
+  doubleBlink: { weight: 1, d: 0.55, cooldown: 6, gentle: true }
+});
+const IDLE_FADE = 0.3; // seconds to fade an idle behaviour out when something more important starts
+
+/** 0..1..0 with a held top: smooth in over the first 25 %, out over the last 25 %. */
+const plateau = (u) => (u <= 0 || u >= 1 ? 0 : u < 0.25 ? smooth(u / 0.25) : u > 0.75 ? smooth((1 - u) / 0.25) : 1);
+const smooth = (x) => x * x * (3 - 2 * x);
 
 const easeInOut = (u) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
 
@@ -68,6 +88,76 @@ export class AnimationController {
     this.transition = null;      // { from, to, toFace, t, d, profile, swapped }
     this.lastProfile = null;
     this.suspendedFrames = 0;
+    this.idle = null;            // { name, t, d, dir, weight } — the playing idle behaviour
+    this.idleLastAt = {};        // name → this.time when it last started
+    this.idleLast = null;
+  }
+
+  /* ------------------------------------------------------------ idle micro-behaviours */
+
+  /** Only a pet with nothing else to do fidgets: base idle, no card, not held, no action running. */
+  idleAllowed() {
+    return this.base === 'idle' && !this.reaction && !this.hold && !this.grabbed && this.grabWeight === 0
+      && !this.transition && Object.keys(this.actions).length === 0;
+  }
+
+  /**
+   * Pick the next idle behaviour (weighted, cooldowns, never the same twice in a row, gentle ones only
+   * with Reduced Motion). Returns its name or null. `random` is injectable for tests.
+   */
+  pickIdle(random = Math.random) {
+    if (this.idle || !this.idleAllowed()) return null;
+    const ok = Object.entries(IDLE_BEHAVIOURS).filter(([name, b]) => name !== this.idleLast
+      && (!this.reducedMotion || b.gentle)
+      && this.time - (this.idleLastAt[name] ?? -Infinity) >= b.cooldown);
+    const total = ok.reduce((sum, [, b]) => sum + b.weight, 0);
+    if (!total) return null;
+    let r = random() * total;
+    for (const [name, b] of ok) { r -= b.weight; if (r < 0) return name; }
+    return ok[ok.length - 1][0];
+  }
+
+  /** Start an idle behaviour; returns its duration in seconds (0 when refused). */
+  startIdle(name, random = Math.random) {
+    const b = IDLE_BEHAVIOURS[name];
+    if (!b || this.idle || !this.idleAllowed()) return 0;
+    this.idle = { name, t: 0, d: b.d, dir: random() < 0.5 ? -1 : 1, weight: 1 };
+    this.idleLastAt[name] = this.time;
+    this.idleLast = name;
+    this.onEvent('idle', { name });
+    return b.d;
+  }
+
+  /** Additive pose offsets + extra eyelid closure of the playing idle behaviour (internal). */
+  idleOffsets(dt) {
+    const id = this.idle;
+    if (!id) return null;
+    id.t += dt;
+    // Something more important started: fade out instead of popping back.
+    if (!this.idleAllowed()) id.weight = Math.max(0, id.weight - dt / IDLE_FADE);
+    if (id.t >= id.d || id.weight <= 0) { this.idle = null; this.onEvent('idle-done', { name: id.name }); return null; }
+    const u = id.t / id.d, w = id.weight, dir = id.dir;
+    const o = { blink: 1 };
+    switch (id.name) {
+      case 'lookAround': {
+        // Glance to one side, a quick look at the other, back to centre.
+        const a = u < 0.55 ? plateau(u / 0.55) : -0.6 * plateau((u - 0.55) / 0.45);
+        o.yaw = dir * 0.5 * a * w;
+        o.pitch = -0.06 * Math.abs(a) * w;
+        o.lookX = dir * 0.6 * a * w;
+        break;
+      }
+      case 'headTilt': o.tilt = dir * 0.24 * plateau(u) * w; o.earLift = 0.12 * plateau(u) * w; break;
+      case 'weightShift': {
+        const e = plateau(u) * w;
+        o.bodyYaw = dir * 0.14 * e; o.lean = 0.035 * e; o.tilt = -dir * 0.05 * e;
+        break;
+      }
+      case 'slowBlink': o.blink = 1 - 0.94 * Math.pow(Math.sin(Math.min(1, u) * Math.PI), 0.6) * w; break; // the "cat kiss"
+      case 'doubleBlink': o.blink = 1 - 0.92 * Math.abs(Math.sin(u * Math.PI * 2)) * w; break;
+      default: break;
+    }
+    return o;
   }
 
   /* ------------------------------------------------------------ requests */
@@ -174,12 +264,27 @@ export class AnimationController {
     // Reduced motion: scale oscillation amplitudes down instead of removing life entirely.
     if (this.reducedMotion) for (const k of OSCILLATION_KEYS) out[k] *= 0.2;
 
-    return { dt, time: this.time, pose: out, face, faceBlink, grab: this.grabWeight, fx: this.fx };
+    // Idle micro-behaviour (additive on top of everything; fades out when something else starts).
+    // idleBlink closes the eyelids only (faceBlink also hides face swaps and shrinks the mouth).
+    let look = null, idleBlink = 1;
+    const io = this.idleOffsets(dt);
+    if (io) {
+      for (const k of ['yaw', 'pitch', 'tilt', 'earLift', 'bodyYaw', 'lean']) if (io[k]) out[k] += io[k];
+      idleBlink = io.blink;
+      if (io.lookX) look = { x: io.lookX, y: 0 };
+    }
+
+    return { dt, time: this.time, pose: out, face, faceBlink, idleBlink, grab: this.grabWeight, fx: this.fx, idle: this.idle ? this.idle.name : null, look };
   }
 
   /** True while anything is still moving toward a target (render loop must keep running). */
   get busy() {
-    return !!this.transition || Object.keys(this.actions).length > 0 || this.grabbed || (this.grabWeight > 0 && this.grabWeight < 1);
+    return !!this.transition || Object.keys(this.actions).length > 0 || this.grabbed || (this.grabWeight > 0 && this.grabWeight < 1) || !!this.idle;
+  }
+
+  /** Only an idle micro-behaviour is moving (the stage may render it at the gentle frame rate). */
+  get idleOnly() {
+    return !!this.idle && !this.transition && Object.keys(this.actions).length === 0 && !this.grabbed && this.grabWeight === 0;
   }
 }
 

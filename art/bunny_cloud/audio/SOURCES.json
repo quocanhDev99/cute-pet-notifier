@@ -1,0 +1,205 @@
+{
+  "character": "bunny_cloud",
+  "generatedBy": "process_audio.py (Cute Pet Companion asset pipeline, 21/11/2026)",
+  "note": "All sources are CC0 (no attribution required); credits kept anyway. Not yet reviewed by ear — see humanListened.",
+  "files": [
+    {
+      "file": "sounds/squeak_01.ogg",
+      "name": "squeak_01",
+      "source": {
+        "site": "Freesound",
+        "id": 435748,
+        "title": "Guineapig",
+        "author": "RICHERlandTV",
+        "url": "https://freesound.org/people/RICHERlandTV/sounds/435748/",
+        "license": "CC0 1.0 (Creative Commons 0)",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "retrieved": "2026-11-21",
+        "retrievedFile": "source/435748.mp3 (Freesound HQ preview, 128 kbps MP3)"
+      },
+      "processing": {
+        "window_s": [
+          0.08,
+          0.38
+        ],
+        "bandpass_hz": [
+          300,
+          10000
+        ],
+        "gainOffset_db": -4,
+        "target_active_rms_dbfs": -22.0,
+        "encode": "Opus 64 kb/s, 48 kHz mono"
+      },
+      "duration_s": 0.29,
+      "peak_dbfs": -9.2,
+      "active_rms_dbfs": -22.0,
+      "bytes": 2919,
+      "humanListened": false
+    },
+    {
+      "file": "sounds/squeak_02.ogg",
+      "name": "squeak_02",
+      "source": {
+        "site": "Freesound",
+        "id": 435748,
+        "title": "Guineapig",
+        "author": "RICHERlandTV",
+        "url": "https://freesound.org/people/RICHERlandTV/sounds/435748/",
+        "license": "CC0 1.0 (Creative Commons 0)",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "retrieved": "2026-11-21",
+        "retrievedFile": "source/435748.mp3 (Freesound HQ preview, 128 kbps MP3)"
+      },
+      "processing": {
+        "window_s": [
+          0.42,
+          0.78
+        ],
+        "bandpass_hz": [
+          300,
+          10000
+        ],
+        "gainOffset_db": -4,
+        "target_active_rms_dbfs": -22.0,
+        "encode": "Opus 64 kb/s, 48 kHz mono"
+      },
+      "duration_s": 0.36,
+      "peak_dbfs": -6.2,
+      "active_rms_dbfs": -22.0,
+      "bytes": 3349,
+      "humanListened": false
+    },
+    {
+      "file": "sounds/squeak_03.ogg",
+      "name": "squeak_03",
+      "source": {
+        "site": "Freesound",
+        "id": 435748,
+        "title": "Guineapig",
+        "author": "RICHERlandTV",
+        "url": "https://freesound.org/people/RICHERlandTV/sounds/435748/",
+        "license": "CC0 1.0 (Creative Commons 0)",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "retrieved": "2026-11-21",
+        "retrievedFile": "source/435748.mp3 (Freesound HQ preview, 128 kbps MP3)"
+      },
+      "processing": {
+        "window_s": [
+          0.84,
+          1.18
+        ],
+        "bandpass_hz": [
+          300,
+          10000
+        ],
+        "gainOffset_db": -4,
+        "target_active_rms_dbfs": -22.0,
+        "encode": "Opus 64 kb/s, 48 kHz mono"
+      },
+      "duration_s": 0.31,
+      "peak_dbfs": -8.3,
+      "active_rms_dbfs": -22.0,
+      "bytes": 3068,
+      "humanListened": false
+    },
+    {
+      "file": "sounds/squeak_triple.ogg",
+      "name": "squeak_triple",
+      "source": {
+        "site": "Freesound",
+        "id": 435748,
+        "title": "Guineapig",
+        "author": "RICHERlandTV",
+        "url": "https://freesound.org/people/RICHERlandTV/sounds/435748/",
+        "license": "CC0 1.0 (Creative Commons 0)",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "retrieved": "2026-11-21",
+        "retrievedFile": "source/435748.mp3 (Freesound HQ preview, 128 kbps MP3)"
+      },
+      "processing": {
+        "window_s": [
+          0.05,
+          1.2
+        ],
+        "bandpass_hz": [
+          300,
+          10000
+        ],
+        "gainOffset_db": -5,
+        "target_active_rms_dbfs": -23.0,
+        "encode": "Opus 64 kb/s, 48 kHz mono"
+      },
+      "duration_s": 1.082,
+      "peak_dbfs": -8.5,
+      "active_rms_dbfs": -23.0,
+      "bytes": 9141,
+      "humanListened": false
+    },
+    {
+      "file": "sounds/squeak_tiny.ogg",
+      "name": "squeak_tiny",
+      "source": {
+        "site": "Freesound",
+        "id": 800274,
+        "title": "Mouse Rodent Squeak Whistle",
+        "author": "SecureSubset",
+        "url": "https://freesound.org/people/SecureSubset/sounds/800274/",
+        "license": "CC0 1.0 (Creative Commons 0)",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "retrieved": "2026-11-21",
+        "retrievedFile": "source/800274.mp3 (Freesound HQ preview, 128 kbps MP3)"
+      },
+      "processing": {
+        "window_s": [
+          0.0,
+          0.24
+        ],
+        "bandpass_hz": [
+          500,
+          12000
+        ],
+        "gainOffset_db": -6,
+        "target_active_rms_dbfs": -24.0,
+        "encode": "Opus 64 kb/s, 48 kHz mono"
+      },
+      "duration_s": 0.24,
+      "peak_dbfs": -13.2,
+      "active_rms_dbfs": -24.0,
+      "bytes": 2517,
+      "humanListened": false
+    },
+    {
+      "file": "sounds/sneeze_01.ogg",
+      "name": "sneeze_01",
+      "source": {
+        "site": "Freesound",
+        "id": 205576,
+        "title": "bunny sneeze",
+        "author": "lucyve",
+        "url": "https://freesound.org/people/lucyve/sounds/205576/",
+        "license": "CC0 1.0 (Creative Commons 0)",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "retrieved": "2026-11-21",
+        "retrievedFile": "source/205576.mp3 (Freesound HQ preview, 128 kbps MP3)"
+      },
+      "processing": {
+        "window_s": [
+          0.52,
+          0.9
+        ],
+        "bandpass_hz": [
+          300,
+          11000
+        ],
+        "gainOffset_db": -6,
+        "target_active_rms_dbfs": -24.0,
+        "encode": "Opus 64 kb/s, 48 kHz mono"
+      },
+      "duration_s": 0.38,
+      "peak_dbfs": -6.1,
+      "active_rms_dbfs": -24.0,
+      "bytes": 4005,
+      "humanListened": false
+    }
+  ]
+}

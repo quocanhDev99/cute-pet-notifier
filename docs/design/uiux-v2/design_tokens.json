@@ -1,0 +1,69 @@
+{
+  "colors": {
+    "brandPrimary": "#8B5CF6",
+    "brandSecondary": "#60A5FA",
+    "accentPeach": "#FDBA74",
+    "accentMint": "#6EE7B7",
+    "accentPink": "#F9A8D4",
+    "surface": "#FFFFFF",
+    "surfaceSoft": "#F6F4FF",
+    "surfaceGlass": "rgba(255,255,255,0.76)",
+    "textPrimary": "#242044",
+    "textSecondary": "#777493",
+    "border": "#DFD9FF",
+    "success": "#22C55E",
+    "warning": "#F59E0B",
+    "danger": "#F87171"
+  },
+  "radius": {
+    "sm": 10,
+    "md": 16,
+    "lg": 22,
+    "xl": 28,
+    "pill": 999
+  },
+  "spacing": {
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 40
+  },
+  "typography": {
+    "fontFamily": "system-ui, Inter, SF Pro Display, Segoe UI",
+    "h1": {
+      "size": 28,
+      "weight": 750
+    },
+    "h2": {
+      "size": 20,
+      "weight": 700
+    },
+    "body": {
+      "size": 14,
+      "weight": 500
+    },
+    "caption": {
+      "size": 12,
+      "weight": 500
+    }
+  },
+  "effects": {
+    "cardShadow": "soft layered shadow",
+    "glassBlur": 18,
+    "motionDurationMs": {
+      "fast": 140,
+      "normal": 220,
+      "slow": 360
+    }
+  },
+  "layout": {
+    "windowMinWidth": 1080,
+    "windowMinHeight": 720,
+    "sidebarWidth": 244,
+    "contentPadding": 24,
+    "compactNotificationWidth": 340
+  }
+}

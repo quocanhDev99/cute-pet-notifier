@@ -38,13 +38,13 @@ const opts = { skip: !canRun && 'Electron cannot open a window here', timeout: 3
 
 test('overlay e2e: the pet stays where the user put it, with any card, mode and size', opts, () => {
   const placed = of('card-placement'), closed = of('after-card-closes');
-  assert.strictEqual(placed.length, 12, 'billboard/peeker/courier × left/right × sm/lg');
+  assert.strictEqual(placed.length, 20, 'billboard/peeker/courier/cling/resting × left/right × sm/lg');
   for (const r of [...placed, ...closed]) {
     const where = `${r.check} ${r.mode} / ${r.side} / ${r.size}`;
     assert.ok(r.pet, `${where}: pet rendered`);
     assert.ok(near(r.pet.l, r.pos.x), `${where}: pet x ${r.pet.l} ≠ saved ${r.pos.x}`);
     // Peeker lifts the pet above the card while it shows (x only); everything else keeps x and y.
-    if (!(r.check === 'card-placement' && r.mode === 'peeker')) assert.ok(near(r.pet.t, r.pos.y), `${where}: pet y ${r.pet.t} ≠ saved ${r.pos.y}`);
+    if (!(r.check === 'card-placement' && ['peeker', 'cling', 'resting'].includes(r.mode))) assert.ok(near(r.pet.t, r.pos.y), `${where}: pet y ${r.pet.t} ≠ saved ${r.pos.y}`);
   }
 });
 
@@ -59,6 +59,20 @@ test('overlay e2e: the card hugs the pet\'s real body (no gap), Peeker card sits
       assert.ok(r.card.t > r.body.t && r.card.t < r.body.b, `${where}: card top crosses the pet's body`);
       continue;
     }
+    if (r.mode === 'cling' || r.mode === 'resting') {
+      // UI/UX v2 petAttachment: the pet comes up at the card's top corner on the pet's side…
+      const corner = r.side === 'right' ? Math.abs(r.pet.r - r.card.r) : Math.abs(r.pet.l - r.card.l);
+      assert.ok(corner <= W * 0.15, `${where}: pet is not at the card's top corner (${corner}px off)`);
+      assert.ok(r.card.t > r.body.t && r.card.t < r.body.b, `${where}: card top edge does not cross the pet`);
+      // …in FRONT of the card with only its paws over the edge (concept v2): everything lower is
+      // clipped, so it can never cover the title, body or buttons.
+      const visibleBottom = r.pet.b - r.clip;
+      const shift = r.card.t - r.cardLayoutTop; // entrance transform still applied in the test window
+      assert.ok(r.clip > 0, `${where}: the pet is not clipped at the card edge`);
+      assert.ok(visibleBottom > r.cardLayoutTop && visibleBottom <= r.cardLayoutTop + 16, `${where}: paws reach ${visibleBottom - r.cardLayoutTop}px over the edge`);
+      assert.ok(r.title && r.title.t - shift >= visibleBottom - 1, `${where}: the pet covers the title`);
+      continue;
+    }
     // Card on the pet's left when the pet is on the right of the screen, and vice versa. The body is
     // animated (arms, breathing): judge the typical (median) overlap over several samples.
     const overlaps = r.bodies.filter(Boolean).map(b => (r.side === 'right' ? r.card.r - b.l : b.r - r.card.l)).sort((a, b) => a - b);
@@ -68,6 +82,15 @@ test('overlay e2e: the card hugs the pet\'s real body (no gap), Peeker card sits
     const minOverlap = r.mode === 'billboard' ? W * 0.02 : -W * 0.05;
     assert.ok(overlap >= minOverlap, `${where}: gap between card and pet (overlap ${overlap}px, min ${Math.round(minOverlap)}px)`);
     assert.ok(overlap <= W * 0.35, `${where}: pet covers too much of the card (overlap ${overlap}px)`);
+  }
+});
+
+test('overlay e2e: the card never sits flush on the taskbar (pet parked at the bottom, any style, margin 0)', opts, () => {
+  const rows = of('card-taskbar');
+  assert.strictEqual(rows.length, 7);
+  for (const r of rows) {
+    assert.ok(r.cardLayoutBottom !== null, `${r.mode}: card rendered`);
+    assert.ok(r.cardLayoutBottom <= r.vh - 16, `${r.mode}: card bottom ${r.cardLayoutBottom} is ${r.vh - r.cardLayoutBottom}px above the taskbar (min 16)`);
   }
 });
 
@@ -114,6 +137,44 @@ test('overlay e2e: Mode B — a card for a system-banner event keeps clear of th
   assert.ok(z.lifted.pet.t >= 0, 'lifted dock stays on screen');
   assert.ok(near(z.cloud.pet.b, z.rest.pet.b, 2), 'a card without a system banner does not move the pet');
   assert.ok(near(z.after.pet.b, z.rest.pet.b, 2) && near(z.after.pet.l, z.rest.pet.l, 2), 'the pet is back in place after the card closes');
+});
+
+test('overlay e2e: Mode 1 companion — pet only, paws on the banner edge (never over its text), then back in place', opts, () => {
+  const [c] = of('companion');
+  const z = c.zone;
+  assert.strictEqual(c.at.card, null, 'a card was drawn for an event that already has a system banner');
+  const p = c.at.pet;
+  // Windows: the pet clings to the toast's top edge — head and paws above it, the rest clipped.
+  const visibleBottom = p.b - c.at.clip;
+  assert.ok(c.at.clip > 0, 'the pet is not clipped at the banner edge');
+  assert.ok(visibleBottom > z.y && visibleBottom <= z.y + 16, `paws reach ${visibleBottom - z.y}px into the banner (max 16)`);
+  assert.ok(p.l >= z.x - 4 && p.r <= z.x + z.w + 4, `pet is not over the banner: ${JSON.stringify(p)}`);
+  assert.ok(near(c.back.pet.l, c.rest.pet.l, 2) && near(c.back.pet.b, c.rest.pet.b, 2), 'pet did not walk back to where it was');
+  assert.ok(c.actions.includes('rendered') && c.actions.includes('finished'), `lifecycle actions: ${c.actions}`);
+  assert.ok(near(c.reduced.pet.l, c.reducedRest.pet.l, 2) && near(c.reduced.pet.b, c.reducedRest.pet.b, 2), 'Reduced Motion: away from the banner the pet must react in place');
+  // Reduced Motion, pet parked under the banner area (the case that hid it behind the real Windows toast):
+  const q = c.reducedCovered.pet;
+  assert.ok(c.reducedCovered.clip > 0 && q.b - c.reducedCovered.clip <= z.y + 16 && q.b - c.reducedCovered.clip > z.y, `Reduced Motion: a pet under the banner must move to its top edge, got ${JSON.stringify(c.reducedCovered)}`);
+});
+
+test('overlay e2e: pet opacity touches only the pet; click-through lets the mouse pass over it', opts, () => {
+  const [o] = of('pet-opacity-clickthrough');
+  assert.strictEqual(Number(o.opacity.pet), 0.5);
+  assert.strictEqual(Number(o.opacity.card), 1);
+  assert.strictEqual(o.capturedNormally, true, 'hovering the pet should capture the mouse (petting, dragging)');
+  assert.strictEqual(o.capturedThrough, false, 'click-through on: the pet must not capture the mouse');
+});
+
+test('overlay e2e: after main resets click-through (display change / resume), hovering a card takes the mouse again', opts, () => {
+  const [r] = of('capture-resync');
+  assert.strictEqual(r.before, true, 'hovering a card captures the mouse');
+  assert.strictEqual(r.after, true, 'after a reset the card must capture again (otherwise every click falls through)');
+});
+
+test('overlay e2e: every shipped pet sound decodes in Chromium (Ogg Opus)', opts, () => {
+  const [d] = of('sounds-decode');
+  assert.ok(d.decoded.length >= 20, `only ${d.decoded.length} sounds found`);
+  for (const s of d.decoded) assert.ok(s.dur > 0.1 && s.dur < 3, `${s.file} did not decode (duration ${s.dur})`);
 });
 
 test('overlay e2e: no script errors while doing all of the above', opts, () => {

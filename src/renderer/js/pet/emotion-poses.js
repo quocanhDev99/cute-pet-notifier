@@ -80,6 +80,9 @@ export const HOLD_POSES = {
     ? { armRx: -1.2, armRz: 1.2, bodyYaw: -0.32 }
     : { armLx: -1.2, armLz: 1.2, bodyYaw: 0.32 },
   peeker: () => ({ armLx: -1.6, armLz: -0.1, armRx: -1.6, armRz: -0.1, lean: 0.04 }),
+  // Cling: both paws up on the card's top edge at a corner. Resting: chin on the edge, paws low.
+  cling: () => ({ armLx: -2.35, armLz: -0.32, armRx: -2.35, armRz: -0.32, lean: 0.1, tilt: 0.06 }),
+  resting: () => ({ armLx: -0.9, armLz: 0.1, armRx: -0.9, armRz: 0.1, lean: 0.12, pitch: 0.12, eyeSquint: 0.85 }),
   courierRun: () => ({ lean: 0.3, armLx: -1.45, armLz: -0.25, armRx: -1.45, armRz: -0.25, bounce: 0.08, bounceFreq: 14, envelope: true, tailSpeed: 12 }),
   courierPresent: () => ({ armLx: -2.0, armLz: -0.2, armRx: -2.0, armRz: -0.2, envelope: true })
 };

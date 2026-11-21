@@ -39,7 +39,15 @@ const NOTIFICATION_EVENT_MAPPINGS = Object.freeze({
   IDLE_DND: 'sleeping'
 });
 
-const PRESENTATION_MODES = Object.freeze(['billboard', 'peeker', 'courier']);
+// cling / resting: UI/UX JSON v2 components.petAttachment (pet at a top corner / chin on the edge).
+/**
+ * Mode 1 "System notification + pet companion" (notifications.bannerMode = 'companion') is
+ * temporarily switched off — "Sắp ra mắt" in the UI. Every place that offers or applies it reads
+ * this one flag; its code stays in place. While off, 'companion' is stored/applied as 'replace'.
+ */
+const COMPANION_MODE_AVAILABLE = true;
+
+const PRESENTATION_MODES = Object.freeze(['billboard', 'peeker', 'courier', 'cling', 'resting']);
 
 const POSITIONS = Object.freeze([
   'top-left', 'top-center', 'top-right',
@@ -57,6 +65,7 @@ module.exports = {
   EMOTION_SCHEMA,
   NOTIFICATION_EVENT_MAPPINGS,
   PRESENTATION_MODES,
+  COMPANION_MODE_AVAILABLE,
   POSITIONS,
   isEmotion
 };
